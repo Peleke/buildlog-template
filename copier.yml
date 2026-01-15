@@ -1,0 +1,35 @@
+# buildlog-template: Engineering notebook for AI-assisted development
+# https://github.com/peleke/buildlog-template
+
+_min_copier_version: "9.0.0"
+_subdirectory: template
+
+# Questions
+project_name:
+  type: str
+  help: Project name (used in templates)
+  default: "{{ _copier_conf.dst_path | basename }}"
+
+include_ai_reflection:
+  type: bool
+  help: Include AI Experience Reflection section in template?
+  default: true
+
+update_claude_md:
+  type: bool
+  help: Add buildlog instructions to CLAUDE.md if it exists?
+  default: true
+
+# Post-generation tasks
+_tasks:
+  - "{{ 'python3 post_gen.py' if update_claude_md else 'echo Skipping CLAUDE.md update' }}"
+
+_message_after_copy: |
+  Build journal installed!
+
+  Usage:
+    1. Copy template: cp buildlog/_TEMPLATE.md buildlog/$(date +%Y-%m-%d)-your-slug.md
+    2. Fill in sections as you work
+    3. Quality bar: Publishable as a $500+ tutorial
+
+  Update template later: copier update
