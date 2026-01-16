@@ -182,14 +182,15 @@ def iter_buildlog_entries(
         if not date_str:
             continue
 
-        if since:
-            try:
-                entry_date = date.fromisoformat(date_str)
-                if entry_date < since:
-                    continue
-            except ValueError:
-                logger.warning("Invalid date in filename: %s", entry_path.name)
-                continue
+        # Always validate the date, not just when filtering
+        try:
+            entry_date = date.fromisoformat(date_str)
+        except ValueError:
+            logger.warning("Invalid date in filename: %s", entry_path.name)
+            continue
+
+        if since and entry_date < since:
+            continue
 
         yield entry_path, date_str
 

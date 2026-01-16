@@ -3,6 +3,7 @@
 import json
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -142,3 +143,118 @@ class TestFormatJson:
         output = format_json(stats)
         parsed = json.loads(output)
         assert "generated_at" in parsed
+
+
+class TestCalculateStreakWithMockedDate:
+    """Tests for streak calculation with controlled dates (no flakiness)."""
+
+    def test_consecutive_days_with_mocked_today(self):
+        """Should count consecutive days correctly with mocked date."""
+        # Fix "today" to 2026-01-15 to avoid midnight flakiness
+        fixed_today = date(2026, 1, 15)
+        dates = [fixed_today - timedelta(days=i) for i in range(5)]
+
+        with patch("buildlog.stats.date") as mock_date:
+            mock_date.today.return_value = fixed_today
+            mock_date.fromisoformat = date.fromisoformat
+            current, longest = calculate_streak(dates)
+
+        assert current == 5
+        assert longest == 5
+
+    def test_old_entries_no_current_streak_with_mocked_today(self):
+        """Old entries should have no current streak."""
+        fixed_today = date(2026, 1, 15)
+        # Entries from a week ago - no current streak
+        dates = [date(2026, 1, 5), date(2026, 1, 6), date(2026, 1, 7)]
+
+        with patch("buildlog.stats.date") as mock_date:
+            mock_date.today.return_value = fixed_today
+            mock_date.fromisoformat = date.fromisoformat
+            current, longest = calculate_streak(dates)
+
+        assert current == 0  # Too old for current streak
+        assert longest == 3  # But still the longest run
+
+    def test_yesterday_counts_as_current(self):
+        """Entry from yesterday should count toward current streak."""
+        fixed_today = date(2026, 1, 15)
+        dates = [date(2026, 1, 14)]  # Just yesterday
+
+        with patch("buildlog.stats.date") as mock_date:
+            mock_date.today.return_value = fixed_today
+            mock_date.fromisoformat = date.fromisoformat
+            current, longest = calculate_streak(dates)
+
+        assert current == 1  # Yesterday counts
+        assert longest == 1
+
+
+class TestFormatDashboardDetailed:
+    """Tests for format_dashboard with detailed=True."""
+
+    def test_detailed_includes_top_sources(self, fixtures_dir):
+        """Detailed mode should show top sources."""
+        stats = calculate_stats(fixtures_dir)
+        output = format_dashboard(stats, detailed=True)
+        assert "Top Sources:" in output
+        assert "2026-01-01-test-entry.md" in output
+
+    def test_detailed_includes_warnings(self, fixtures_dir):
+        """Detailed mode should show quality warnings."""
+        stats = calculate_stats(fixtures_dir)
+        output = format_dashboard(stats, detailed=True)
+        assert "Quality Warnings:" in output
+
+
+class TestErrorHandling:
+    """Tests for error handling edge cases."""
+
+    def test_nonexistent_directory_raises(self):
+        """Non-existent directory should raise an error or return empty."""
+        nonexistent = Path("/nonexistent/path/that/does/not/exist")
+        # The glob will return empty, not raise, so we get empty stats
+        stats = calculate_stats(nonexistent)
+        assert stats.entries.total == 0
+        assert "No buildlog entries found" in stats.warnings
+
+    def test_handles_invalid_utf8_file(self, tmp_path):
+        """Should skip files with invalid UTF-8 gracefully."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Create a valid entry
+        valid_file = buildlog_dir / "2026-01-01-valid.md"
+        valid_file.write_text("# Build Journal: Valid\n\n## Improvements\n\n### Architectural\n\n- Valid insight")
+
+        # Create a file with invalid UTF-8 bytes
+        invalid_file = buildlog_dir / "2026-01-02-invalid-utf8.md"
+        invalid_file.write_bytes(b"# Build Journal: Invalid\n\n\xff\xfe Invalid UTF-8 bytes")
+
+        stats = calculate_stats(buildlog_dir)
+        # Should process the valid file and skip the invalid one
+        assert stats.entries.total == 1
+
+    def test_handles_invalid_date_in_filename(self, tmp_path):
+        """Should skip files with invalid dates in filename."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Create a valid entry
+        valid_file = buildlog_dir / "2026-01-15-valid.md"
+        valid_file.write_text("# Build Journal: Valid\n\n## Improvements\n\n### Architectural\n\n- Insight")
+
+        # Create a file with impossible date (matches glob but fails fromisoformat)
+        invalid_date_file = buildlog_dir / "2026-99-99-impossible-date.md"
+        invalid_date_file.write_text("# Build Journal: Invalid Date\n\nContent")
+
+        stats = calculate_stats(buildlog_dir)
+        # Should only count the valid entry
+        assert stats.entries.total == 1
+
+    def test_since_date_in_future(self, fixtures_dir):
+        """Future since_date should return no entries with warning."""
+        future_date = date(2099, 1, 1)
+        stats = calculate_stats(fixtures_dir, since_date=future_date)
+        assert stats.entries.total == 0
+        assert any("No entries found since" in w for w in stats.warnings)
