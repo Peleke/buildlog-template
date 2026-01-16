@@ -114,6 +114,42 @@ def extract_title_and_context(content: str) -> str:
     return ""
 
 
+def _parse_bullet_content(category_content: str) -> list[str]:
+    """Parse bullet points from category content, handling multi-line bullets.
+
+    A bullet can span multiple lines if continuation lines are indented.
+    Example:
+        - This is a long insight that
+          continues on the next line
+
+    Returns:
+        List of complete bullet point texts.
+    """
+    bullets: list[str] = []
+    current_bullet: list[str] = []
+
+    for line in category_content.split("\n"):
+        # New bullet point starts with optional whitespace, dash, space, then content
+        bullet_match = re.match(r"^\s*-\s+(.+)$", line)
+        if bullet_match:
+            # Save previous bullet if exists
+            if current_bullet:
+                bullets.append(" ".join(current_bullet))
+            current_bullet = [bullet_match.group(1).strip()]
+        elif current_bullet and line.strip():
+            # Continuation line: non-empty, not a new bullet
+            # Must be indented (starts with whitespace) to be a continuation
+            if line.startswith((" ", "\t")):
+                current_bullet.append(line.strip())
+            # Otherwise it's unrelated content, ignore it
+
+    # Don't forget the last bullet
+    if current_bullet:
+        bullets.append(" ".join(current_bullet))
+
+    return bullets
+
+
 def parse_improvements(content: str) -> dict[str, list[str]]:
     """Extract Improvements section from buildlog markdown.
 
@@ -136,10 +172,10 @@ def parse_improvements(content: str) -> dict[str, list[str]]:
 
     improvements_section = improvements_match.group(1)
 
+    # Match H3 headers but NOT H4+ (use negative lookahead for 4th #)
     category_pattern = re.compile(
-        r"^###\s+([^\n]+)\s*\n(.*?)(?=^###|\Z)", re.MULTILINE | re.DOTALL
+        r"^###(?!#)\s+([^\n]+)\s*\n(.*?)(?=^###(?!#)|\Z)", re.MULTILINE | re.DOTALL
     )
-    bullet_pattern = re.compile(r"^\s*-\s+(.+)$", re.MULTILINE)
 
     for category_match in category_pattern.finditer(improvements_section):
         raw_category = category_match.group(1).strip().lower()
@@ -148,8 +184,8 @@ def parse_improvements(content: str) -> dict[str, list[str]]:
             continue
 
         category_content = category_match.group(2)
-        insights = (m.group(1).strip() for m in bullet_pattern.finditer(category_content))
-        result[normalized] = list(filter(_is_valid_insight, insights))
+        bullets = _parse_bullet_content(category_content)
+        result[normalized] = list(filter(_is_valid_insight, bullets))
 
     return result
 

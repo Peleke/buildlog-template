@@ -151,6 +151,80 @@ Something.
         result = parse_improvements(content)
         assert len(result["domain_knowledge"]) == 1
 
+    def test_handles_multi_line_bullets(self):
+        """Should join continuation lines into single insight."""
+        content = """
+## Improvements
+
+### Architectural
+
+- This is a long insight that
+  continues on the next line
+  and even a third line
+- Short insight
+"""
+        result = parse_improvements(content)
+
+        assert len(result["architectural"]) == 2
+        assert "This is a long insight that continues on the next line and even a third line" in result["architectural"]
+        assert "Short insight" in result["architectural"]
+
+    def test_handles_nested_h4_headers(self):
+        """Should parse insights under H4 subheaders within a category."""
+        content = """
+## Improvements
+
+### Architectural
+
+#### Subcategory
+
+- Insight under H4 should be captured
+
+#### Another Subcategory
+
+- Another insight here
+"""
+        result = parse_improvements(content)
+
+        # Both insights should be captured despite the H4 headers
+        assert len(result["architectural"]) == 2
+        assert "Insight under H4 should be captured" in result["architectural"]
+        assert "Another insight here" in result["architectural"]
+
+    def test_handles_empty_bullet_gracefully(self):
+        """Should skip empty bullets without corrupting data."""
+        content = """
+## Improvements
+
+### Architectural
+
+-
+- Valid insight after empty bullet
+-
+- Another valid insight
+"""
+        result = parse_improvements(content)
+
+        # Should only have the two valid insights
+        assert len(result["architectural"]) == 2
+        assert "Valid insight after empty bullet" in result["architectural"]
+        assert "Another valid insight" in result["architectural"]
+
+    def test_partial_brackets_preserved(self):
+        """Should preserve insights with brackets in the middle."""
+        content = """
+## Improvements
+
+### Tool Usage
+
+- Use the [option] flag for better output
+- Configure [settings] in the config file
+"""
+        result = parse_improvements(content)
+
+        assert len(result["tool_usage"]) == 2
+        assert "Use the [option] flag for better output" in result["tool_usage"]
+
 
 class TestParseDateFromFilename:
     """Tests for parse_date_from_filename function."""
