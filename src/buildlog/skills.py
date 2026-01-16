@@ -167,8 +167,33 @@ def _extract_tags(rule: str) -> list[str]:
         "jwt", "oauth", "plugin", "middleware", "async", "sync",
     }
 
+    # Word variants that map to canonical tags
+    tag_variants = {
+        "caching": "cache",
+        "cached": "cache",
+        "databases": "database",
+        "tests": "test",
+        "tested": "test",
+        "pytest": "test",
+        "unittest": "test",
+        "deploying": "deploy",
+        "deployed": "deploy",
+        "deployment": "deploy",
+        "errors": "error",
+        "retries": "retry",
+        "retrying": "retry",
+    }
+
     words = set(rule.lower().replace("-", " ").replace("_", " ").split())
-    return sorted(words & known_tags)
+
+    tags = set()
+    for word in words:
+        if word in known_tags:
+            tags.add(word)
+        elif word in tag_variants:
+            tags.add(tag_variants[word])
+
+    return sorted(tags)
 
 
 def _deduplicate_insights(

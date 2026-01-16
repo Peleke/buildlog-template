@@ -91,12 +91,18 @@ SYNONYMS: Final[dict[str, str]] = {
     "executing": "run",
     # Checking
     "check": "check",
+    "checker": "check",
     "checking": "check",
     "checks": "check",
     "verify": "check",
     "verifying": "check",
     "validate": "check",
     "validating": "check",
+    # Type checking
+    "type": "type",
+    "types": "type",
+    "typed": "type",
+    "typing": "type",
 }
 
 
