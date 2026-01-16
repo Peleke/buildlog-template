@@ -161,8 +161,9 @@ def parse_improvements(content: str) -> dict[str, list[str]]:
     """
     result: dict[str, list[str]] = {cat: [] for cat in CATEGORIES}
 
+    # Stop at any H1 or H2 header (not H3+), or end of string
     improvements_match = re.search(
-        r"^##\s+Improvements\s*\n(.*?)(?=^##\s+[^#]|\Z)",
+        r"^##\s+Improvements\s*\n(.*?)(?=^#{1,2}\s|\Z)",
         content,
         re.MULTILINE | re.DOTALL,
     )

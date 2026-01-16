@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from itertools import takewhile
 from pathlib import Path
-from typing import Any, Final, NamedTuple, TypedDict
+from typing import Final, NamedTuple, TypedDict
 
 from buildlog.distill import (
     CATEGORIES,
@@ -96,7 +96,11 @@ class EntryStats:
 
 @dataclass(frozen=True, slots=True)
 class InsightStats:
-    """Statistics about insights/learnings."""
+    """Statistics about insights/learnings.
+
+    Note: frozen=True prevents attribute reassignment but dict contents
+    are still mutable (Python limitation). Treat as immutable by convention.
+    """
 
     total: int = 0
     by_category: dict[str, int] = field(default_factory=dict)
@@ -142,7 +146,7 @@ class BuildlogStats:
     generated_at: str
     entries: EntryStats
     insights: InsightStats
-    top_sources: list[dict[str, Any]]
+    top_sources: list[SourceDict]
     pipeline: PipelineStats
     streak: StreakStats
     warnings: list[str]
@@ -284,14 +288,14 @@ def _aggregate_insights(entries: list[ParsedEntry]) -> tuple[dict[str, int], int
     return insight_totals, total_insights
 
 
-def _compute_top_sources(entries: list[ParsedEntry]) -> list[dict[str, Any]]:
+def _compute_top_sources(entries: list[ParsedEntry]) -> list[SourceDict]:
     """Compute top sources by insight count."""
     entries_with_insights = [
         (e, e.insight_count) for e in entries if e.insight_count > 0
     ]
     entries_with_insights.sort(key=lambda x: x[1], reverse=True)
     return [
-        {"name": e.name, "insights": count}
+        SourceDict(name=e.name, insights=count)
         for e, count in entries_with_insights[:TOP_SOURCES_LIMIT]
     ]
 

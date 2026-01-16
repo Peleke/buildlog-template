@@ -225,6 +225,33 @@ Something.
         assert len(result["tool_usage"]) == 2
         assert "Use the [option] flag for better output" in result["tool_usage"]
 
+    def test_stops_at_h1_heading(self):
+        """Should not capture content after an H1 heading."""
+        content = """
+## Improvements
+
+### Architectural
+
+- Valid insight in Improvements
+
+# UNRELATED H1 SECTION
+
+This content should NOT be captured.
+
+- This should NOT appear as an insight
+
+## Another H2
+
+More unrelated content.
+"""
+        result = parse_improvements(content)
+
+        assert len(result["architectural"]) == 1
+        assert "Valid insight in Improvements" in result["architectural"]
+        # Make sure none of the H1 content leaked in
+        assert not any("UNRELATED" in i for i in result["architectural"])
+        assert not any("should NOT" in i for i in result["architectural"])
+
 
 class TestParseDateFromFilename:
     """Tests for parse_date_from_filename function."""
