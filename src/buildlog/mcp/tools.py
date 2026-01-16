@@ -12,6 +12,11 @@ from typing import Literal
 from buildlog.core import diff, promote, reject, status
 
 
+def _validate_skill_ids(skill_ids: list[str]) -> list[str]:
+    """Filter out invalid skill IDs (empty strings, None, whitespace)."""
+    return [sid for sid in skill_ids if sid and isinstance(sid, str) and sid.strip()]
+
+
 def buildlog_status(
     buildlog_dir: str = "buildlog",
     min_confidence: Literal["low", "medium", "high"] = "low",
@@ -50,7 +55,8 @@ def buildlog_promote(
     Returns:
         Confirmation with promoted skills
     """
-    result = promote(Path(buildlog_dir), skill_ids, target)
+    validated_ids = _validate_skill_ids(skill_ids)
+    result = promote(Path(buildlog_dir), validated_ids, target)
     return asdict(result)
 
 
@@ -69,7 +75,8 @@ def buildlog_reject(
     Returns:
         Confirmation with rejected skill IDs
     """
-    result = reject(Path(buildlog_dir), skill_ids)
+    validated_ids = _validate_skill_ids(skill_ids)
+    result = reject(Path(buildlog_dir), validated_ids)
     return asdict(result)
 
 

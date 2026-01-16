@@ -57,10 +57,13 @@ class SettingsJsonRenderer:
                 rules.append(rule)
                 added += 1
 
-        # Update buildlog metadata
+        # Update buildlog metadata (accumulate, don't replace)
+        buildlog_meta = settings.get("_buildlog", {"promoted_skill_ids": []})
+        existing_ids = set(buildlog_meta.get("promoted_skill_ids", []))
+        new_ids = existing_ids | {s.id for s in skills}
         settings["_buildlog"] = {
             "last_updated": datetime.now().isoformat(),
-            "promoted_skill_ids": [s.id for s in skills],
+            "promoted_skill_ids": sorted(new_ids),
         }
 
         # Write back
@@ -75,11 +78,13 @@ class SettingsJsonRenderer:
         """Track which skills have been promoted."""
         self.tracking_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Load existing tracking data
+        # Load existing tracking data (handle corrupt JSON)
+        tracking = {"skill_ids": [], "promoted_at": {}}
         if self.tracking_path.exists():
-            tracking = json.loads(self.tracking_path.read_text())
-        else:
-            tracking = {"skill_ids": [], "promoted_at": {}}
+            try:
+                tracking = json.loads(self.tracking_path.read_text())
+            except json.JSONDecodeError:
+                pass  # Start fresh if corrupted
 
         # Add new skill IDs
         now = datetime.now().isoformat()

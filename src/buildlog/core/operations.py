@@ -217,10 +217,13 @@ def status(
         if category_skills:
             filtered[category] = category_skills
 
+    # Calculate actual total (sum of by_confidence, which excludes rejected)
+    actual_total = sum(by_confidence.values())
+
     return StatusResult(
         skills=filtered,
         total_entries=skill_set.source_entries,
-        total_skills=skill_set.total_skills - len(rejected_ids),
+        total_skills=actual_total,
         by_confidence=by_confidence,
         promotable_ids=promotable,
     )
