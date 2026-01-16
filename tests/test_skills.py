@@ -276,6 +276,29 @@ class TestFormatSkills:
         assert "## Learned Skills" in output
         assert "Generated:" in output
 
+    def test_rules_format(self):
+        """Should produce CLAUDE.md-ready rules."""
+        skill_set = generate_skills(FIXTURES_DIR)
+        output = format_skills(skill_set, "rules")
+
+        assert "# Project Rules" in output
+        assert "Auto-generated from" in output
+        # Should have at least one confidence section
+        assert "Confidence)" in output or "Insights" in output
+
+    def test_settings_format(self):
+        """Should produce .claude/settings.json compatible output."""
+        import json
+
+        skill_set = generate_skills(FIXTURES_DIR)
+        output = format_skills(skill_set, "settings")
+
+        # Should parse as valid JSON
+        data = json.loads(output)
+        assert "rules" in data
+        assert isinstance(data["rules"], list)
+        assert "_generated" in data
+
     def test_invalid_format_raises(self):
         """Should raise ValueError for invalid format."""
         skill_set = generate_skills(FIXTURES_DIR)

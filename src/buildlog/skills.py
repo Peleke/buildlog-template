@@ -29,7 +29,7 @@ HIGH_CONFIDENCE_RECENCY_DAYS: Final[int] = 30
 MEDIUM_CONFIDENCE_FREQUENCY: Final[int] = 2
 
 # Type definitions
-OutputFormat = Literal["yaml", "json", "markdown"]
+OutputFormat = Literal["yaml", "json", "markdown", "rules", "settings"]
 ConfidenceLevel = Literal["high", "medium", "low"]
 
 
@@ -389,6 +389,86 @@ def _format_markdown(skill_set: SkillSet) -> str:
     return "\n".join(lines)
 
 
+def _format_rules(skill_set: SkillSet) -> str:
+    """Format skills as CLAUDE.md-ready rules.
+
+    Transforms skills into imperative rules grouped by confidence level.
+    High-confidence rules become "Always/Never" imperatives.
+    """
+    lines: list[str] = []
+
+    lines.append("# Project Rules")
+    lines.append("")
+    lines.append(f"*Auto-generated from {skill_set.source_entries} buildlog entries. "
+                 f"{skill_set.total_skills} rules extracted.*")
+    lines.append("")
+
+    # Collect all skills, sort by confidence then frequency
+    all_skills: list[Skill] = []
+    for skills in skill_set.skills.values():
+        all_skills.extend(skills)
+
+    high_conf = [s for s in all_skills if s.confidence == "high"]
+    med_conf = [s for s in all_skills if s.confidence == "medium"]
+    low_conf = [s for s in all_skills if s.confidence == "low"]
+
+    if high_conf:
+        lines.append("## Core Rules (High Confidence)")
+        lines.append("")
+        lines.append("These patterns have been reinforced multiple times recently.")
+        lines.append("")
+        for skill in sorted(high_conf, key=lambda s: -s.frequency):
+            lines.append(f"- {skill.rule}")
+        lines.append("")
+
+    if med_conf:
+        lines.append("## Established Patterns (Medium Confidence)")
+        lines.append("")
+        lines.append("These patterns appear consistently across sessions.")
+        lines.append("")
+        for skill in sorted(med_conf, key=lambda s: -s.frequency):
+            lines.append(f"- {skill.rule}")
+        lines.append("")
+
+    if low_conf:
+        lines.append("## Emerging Insights (Low Confidence)")
+        lines.append("")
+        lines.append("Recently observed patterns that may become rules.")
+        lines.append("")
+        for skill in sorted(low_conf, key=lambda s: -s.frequency):
+            lines.append(f"- {skill.rule}")
+        lines.append("")
+
+    lines.append("---")
+    lines.append(f"*Generated: {skill_set.generated_at}*")
+
+    return "\n".join(lines)
+
+
+def _format_settings(skill_set: SkillSet) -> str:
+    """Format skills as .claude/settings.json compatible rules array.
+
+    Only includes high and medium confidence rules by default,
+    as these are established enough to influence agent behavior.
+    """
+    rules: list[str] = []
+
+    for skills in skill_set.skills.values():
+        for skill in skills:
+            # Only include high/medium confidence as agent rules
+            if skill.confidence in ("high", "medium"):
+                rules.append(skill.rule)
+
+    # Sort by frequency (embedded in skill order)
+    output = {
+        "_comment": f"Auto-generated from {skill_set.source_entries} buildlog entries",
+        "_generated": skill_set.generated_at,
+        "rules": rules,
+    }
+
+    return json.dumps(output, indent=2, ensure_ascii=False)
+
+
 def format_skills(skill_set: SkillSet, fmt: OutputFormat = "yaml") -> str:
     """Format skills in the specified format.
 
@@ -406,6 +486,8 @@ def format_skills(skill_set: SkillSet, fmt: OutputFormat = "yaml") -> str:
         "yaml": _format_yaml,
         "json": _format_json,
         "markdown": _format_markdown,
+        "rules": _format_rules,
+        "settings": _format_settings,
     }
 
     formatter = formatters.get(fmt)

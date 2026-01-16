@@ -337,9 +337,9 @@ def stats(output_json: bool, detailed: bool, since_date: str | None):
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["yaml", "json", "markdown"]),
+    type=click.Choice(["yaml", "json", "markdown", "rules", "settings"]),
     default="yaml",
-    help="Output format (default: yaml)",
+    help="Output format: yaml, json, markdown, rules (CLAUDE.md), settings (.claude/settings.json)",
 )
 @click.option(
     "--min-frequency",
