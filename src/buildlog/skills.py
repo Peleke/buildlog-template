@@ -5,6 +5,11 @@ from __future__ import annotations
 __all__ = [
     "Skill",
     "SkillSet",
+    "_deduplicate_insights",
+    "_calculate_confidence",
+    "_extract_tags",
+    "_generate_skill_id",
+    "_to_imperative",
     "generate_skills",
     "format_skills",
 ]
@@ -12,6 +17,7 @@ __all__ = [
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -389,6 +395,139 @@ def _format_markdown(skill_set: SkillSet) -> str:
     return "\n".join(lines)
 
 
+# Pre-compiled patterns for _to_imperative (module-level for efficiency)
+_NEGATIVE_PATTERNS = tuple(
+    re.compile(p) for p in (
+        r"\bdon't\b", r"\bdo not\b", r"\bnever\b", r"\bavoid\b",
+        r"\bstop\b", r"\bshouldn't\b", r"\bshould not\b",
+    )
+)
+
+# Comparison patterns - intentionally narrow to avoid false positives
+# "over" alone matches "all over", "game over" etc. so we require context
+_COMPARISON_PATTERNS = tuple(
+    re.compile(p) for p in (
+        r"\binstead of\b",
+        r"\brather than\b",
+        r"\bbetter than\b",
+        r"\b\w+\s+over\s+\w+\b",  # "X over Y" pattern
+    )
+)
+
+# Verbs that need -ing form when following "Avoid" or bare "Prefer"
+_VERB_TO_GERUND: Final[dict[str, str]] = {
+    "use": "using", "run": "running", "make": "making", "write": "writing",
+    "read": "reading", "put": "putting", "get": "getting", "set": "setting",
+    "add": "adding", "create": "creating", "delete": "deleting", "call": "calling",
+    "pass": "passing", "send": "sending", "store": "storing", "cache": "caching",
+}
+
+
+def _to_imperative(rule: str, confidence: ConfidenceLevel) -> str:
+    """Transform a rule into imperative form.
+
+    High confidence → "Always X" or "Never Y"
+    Medium confidence → "Prefer X" or "Avoid Y"
+    Low confidence → "Consider: X" (stays as observation)
+
+    Args:
+        rule: The rule text to transform.
+        confidence: Must be "high", "medium", or "low".
+
+    Returns:
+        Transformed rule with appropriate confidence prefix.
+
+    Raises:
+        ValueError: If confidence is not a valid ConfidenceLevel.
+    """
+    # Validate confidence parameter
+    valid_confidence: set[ConfidenceLevel] = {"high", "medium", "low"}
+    if confidence not in valid_confidence:
+        raise ValueError(
+            f"Invalid confidence level: {confidence!r}. "
+            f"Must be one of: {valid_confidence}"
+        )
+
+    rule = rule.strip()
+    if not rule:
+        return ""
+
+    rule_lower = rule.lower()
+
+    # Already has a confidence modifier - just capitalize and return
+    confidence_modifiers = (
+        "always", "never", "prefer", "avoid", "consider", "remember",
+        "don't", "do not",
+    )
+    if any(rule_lower.startswith(word) for word in confidence_modifiers):
+        return rule[0].upper() + rule[1:]
+
+    # Detect patterns using pre-compiled regexes
+    is_negative = any(pat.search(rule_lower) for pat in _NEGATIVE_PATTERNS)
+    is_comparison = any(pat.search(rule_lower) for pat in _COMPARISON_PATTERNS)
+
+    # Choose prefix based on confidence and pattern
+    if confidence == "high":
+        if is_negative:
+            prefix = "Never"
+        else:
+            prefix = "Always"
+    elif confidence == "medium":
+        if is_negative:
+            prefix = "Avoid"
+        elif is_comparison:
+            prefix = "Prefer"
+        else:
+            prefix = "Prefer to"
+    else:  # low - already validated above
+        return f"Consider: {rule}"
+
+    # Clean up the rule for prefixing
+    # Remove leading "should" type words (order matters - longer first)
+    cleaners = [
+        "you shouldn't ", "we shouldn't ", "shouldn't ",
+        "you should not ", "we should not ", "should not ",
+        "you should ", "we should ", "should ",
+        "it's better to ", "it is better to ",
+    ]
+    cleaned = rule
+    cleaned_lower = rule_lower
+    for cleaner in cleaners:
+        if cleaned_lower.startswith(cleaner):
+            cleaned = cleaned[len(cleaner):]
+            cleaned_lower = cleaned.lower()
+            break
+
+    # If we're adding a negative prefix, remove leading "not " from cleaned
+    if prefix in ("Never", "Avoid") and cleaned_lower.startswith("not "):
+        cleaned = cleaned[4:]
+        cleaned_lower = cleaned.lower()
+
+    # Avoid double words: "Avoid avoid using..." -> "Avoid using..."
+    prefix_lower = prefix.lower()
+    if cleaned_lower.startswith(prefix_lower + " ") or cleaned_lower.startswith(prefix_lower + "ing "):
+        first_space = cleaned.find(" ")
+        if first_space > 0:
+            cleaned = cleaned[first_space + 1:]
+            cleaned_lower = cleaned.lower()
+
+    # For "Avoid" and bare "Prefer", convert leading verbs to gerund form
+    # "Avoid use eval" -> "Avoid using eval"
+    # "Prefer use X over Y" -> "Prefer using X over Y"
+    if prefix in ("Avoid", "Prefer"):
+        first_word = cleaned_lower.split()[0] if cleaned_lower else ""
+        if first_word in _VERB_TO_GERUND:
+            gerund = _VERB_TO_GERUND[first_word]
+            cleaned = gerund + cleaned[len(first_word):]
+            cleaned_lower = cleaned.lower()
+
+    # Lowercase first char if we're adding a prefix (but not for gerunds which are already lower)
+    if cleaned and cleaned[0].isupper():
+        cleaned = cleaned[0].lower() + cleaned[1:]
+
+    return f"{prefix} {cleaned}"
+
+
 def _format_rules(skill_set: SkillSet) -> str:
     """Format skills as CLAUDE.md-ready rules.
 
@@ -413,30 +552,24 @@ def _format_rules(skill_set: SkillSet) -> str:
     low_conf = [s for s in all_skills if s.confidence == "low"]
 
     if high_conf:
-        lines.append("## Core Rules (High Confidence)")
-        lines.append("")
-        lines.append("These patterns have been reinforced multiple times recently.")
+        lines.append("## Core Rules")
         lines.append("")
         for skill in sorted(high_conf, key=lambda s: -s.frequency):
-            lines.append(f"- {skill.rule}")
+            lines.append(f"- {_to_imperative(skill.rule, 'high')}")
         lines.append("")
 
     if med_conf:
-        lines.append("## Established Patterns (Medium Confidence)")
-        lines.append("")
-        lines.append("These patterns appear consistently across sessions.")
+        lines.append("## Established Patterns")
         lines.append("")
         for skill in sorted(med_conf, key=lambda s: -s.frequency):
-            lines.append(f"- {skill.rule}")
+            lines.append(f"- {_to_imperative(skill.rule, 'medium')}")
         lines.append("")
 
     if low_conf:
-        lines.append("## Emerging Insights (Low Confidence)")
-        lines.append("")
-        lines.append("Recently observed patterns that may become rules.")
+        lines.append("## Considerations")
         lines.append("")
         for skill in sorted(low_conf, key=lambda s: -s.frequency):
-            lines.append(f"- {skill.rule}")
+            lines.append(f"- {_to_imperative(skill.rule, 'low')}")
         lines.append("")
 
     lines.append("---")
