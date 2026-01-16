@@ -5,7 +5,7 @@
 ### Engineering Notebook for AI-Assisted Development
 
 [![PyPI](https://img.shields.io/badge/PyPI-0.1.0-blue?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/buildlog/)
-[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 **Capture your work as publishable content. Include the fuckups.**
@@ -352,7 +352,15 @@ buildlog/
 ├── distill.py          # Pattern extraction from markdown
 ├── stats.py            # Analytics and coverage metrics
 ├── skills.py           # Skill generation with deduplication
-└── embeddings.py       # Pluggable similarity backends
+├── embeddings.py       # Pluggable similarity backends
+├── core/               # Core business logic
+│   └── operations.py   # status, promote, reject, diff
+├── render/             # Output adapters
+│   ├── claude_md.py    # Append rules to CLAUDE.md
+│   └── settings_json.py# Merge rules into settings.json
+└── mcp/                # MCP server (thin wrappers)
+    ├── server.py       # FastMCP server setup
+    └── tools.py        # Tool implementations
 
 User's Project/
 └── buildlog/
@@ -402,7 +410,87 @@ pip install buildlog[all]
 
 # Development
 pip install buildlog[dev]
+
+# With MCP server for Claude Code integration
+pip install buildlog[mcp]
 ```
+
+---
+
+## 🔗 MCP Server (Claude Code Integration)
+
+The MCP server lets Claude Code interact with your buildlog skills directly. Your agent can review learned patterns, promote them to rules, or reject false positives—all through natural conversation.
+
+### Setup
+
+1. Install with MCP support:
+   ```bash
+   pip install buildlog[mcp]
+   ```
+
+2. Add to your Claude Desktop config (`~/.config/claude/claude_desktop_config.json`):
+   ```json
+   {
+     "mcpServers": {
+       "buildlog": {
+         "command": "buildlog-mcp",
+         "args": []
+       }
+     }
+   }
+   ```
+
+3. Restart Claude Desktop.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `buildlog_status` | Get skills grouped by category with confidence scores |
+| `buildlog_promote` | Write high-confidence skills to CLAUDE.md or settings.json |
+| `buildlog_reject` | Mark skills to exclude from future suggestions |
+| `buildlog_diff` | Show skills pending review (not yet promoted/rejected) |
+
+### Example Conversation
+
+```
+You: What patterns have I learned?
+
+Claude: [calls buildlog_status]
+        Based on 23 buildlog entries, you have 31 skills:
+
+        High confidence (ready to promote):
+        - arch-b0fcb62a1e: "Always validate inputs at the boundary"
+        - wf-96f12966f1: "Run tests before committing"
+
+        Would you like me to add these to your CLAUDE.md?
+
+You: Yes, promote the high-confidence ones.
+
+Claude: [calls buildlog_promote]
+        Added 8 rules to CLAUDE.md. These patterns will now
+        influence my behavior in future sessions.
+```
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Claude Code Session                          │
+│                                                                  │
+│  1. Claude calls buildlog_status                                │
+│     → Runs generate_skills() on-demand                          │
+│     → Returns skills with confidence scores                     │
+│                                                                  │
+│  2. User reviews and approves                                   │
+│                                                                  │
+│  3. Claude calls buildlog_promote                               │
+│     → Appends rules to CLAUDE.md                                │
+│     → Tracks promoted IDs in .buildlog/promoted.json            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+The MCP server is **stateless**—skills are generated fresh on each request from your buildlog entries. No daemon, no database, no background processes.
 
 ---
 
