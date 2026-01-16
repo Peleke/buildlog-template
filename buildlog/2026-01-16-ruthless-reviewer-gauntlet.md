@@ -445,6 +445,16 @@ After the second brutal review, we fixed three critical parsing bugs:
 | Empty bullets corrupt data | No handling for `- \n` | Regex requires content: `r"(.+)$"` |
 | H4 headers break parsing | `(?=^###\|\Z)` matches `####` | Negative lookahead: `(?=^###(?!#)\|\Z)` |
 
+### VIOLENT Final Review Pass
+
+A fourth, even more brutal reviewer ("The Gatekeeper") found additional issues:
+
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| H1 headings break section parsing | Critical | Changed regex to `(?=^#{1,2}\s\|\Z)` |
+| Type annotation mismatch (top_sources) | High | Changed to `list[SourceDict]` |
+| Mutable dict in frozen dataclass | Medium | Documented as Python limitation |
+
 ---
 
-*Final tally: 49 tests passing, 3 review passes, 2 bugs found by test-writing, 3 bugs found by brutal reviewer*
+*Final tally: 50 tests passing, 4 review passes, 2 bugs found by test-writing, 4 bugs found by brutal reviewers*
