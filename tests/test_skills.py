@@ -51,24 +51,31 @@ class TestSkillIdGeneration:
 
 
 class TestConfidenceScoring:
-    """Tests for confidence level calculation."""
+    """Tests for confidence level calculation.
+
+    Uses explicit reference_date for deterministic, time-independent tests.
+    """
 
     def test_high_confidence(self):
         """High frequency + recent = high confidence."""
-        recent = date.today()
-        assert _calculate_confidence(3, recent) == "high"
-        assert _calculate_confidence(5, recent) == "high"
+        reference = date(2026, 2, 1)
+        recent = date(2026, 1, 20)  # 12 days before reference (within 30 days)
+        assert _calculate_confidence(3, recent, reference_date=reference) == "high"
+        assert _calculate_confidence(5, recent, reference_date=reference) == "high"
 
     def test_medium_confidence(self):
-        """Medium frequency = medium confidence."""
-        old = date(2020, 1, 1)
-        assert _calculate_confidence(2, old) == "medium"
-        assert _calculate_confidence(3, old) == "medium"
+        """Medium frequency = medium confidence (regardless of recency)."""
+        reference = date(2026, 2, 1)
+        old = date(2020, 1, 1)  # Old date (outside 30-day window)
+        assert _calculate_confidence(2, old, reference_date=reference) == "medium"
+        assert _calculate_confidence(3, old, reference_date=reference) == "medium"
 
     def test_low_confidence(self):
         """Low frequency = low confidence."""
-        assert _calculate_confidence(1, date.today()) == "low"
-        assert _calculate_confidence(1, None) == "low"
+        reference = date(2026, 2, 1)
+        recent = date(2026, 1, 20)
+        assert _calculate_confidence(1, recent, reference_date=reference) == "low"
+        assert _calculate_confidence(1, None, reference_date=reference) == "low"
 
 
 class TestTagExtraction:
@@ -289,3 +296,13 @@ class TestGetBackend:
         """Should raise ValueError for unknown backend."""
         with pytest.raises(ValueError, match="Unknown embedding backend"):
             get_backend("nonexistent")
+
+    def test_openai_backend_requires_api_key(self, monkeypatch):
+        """OpenAI backend should fail without API key."""
+        from buildlog.embeddings import OpenAIBackend
+
+        # Ensure API key is not set
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+            OpenAIBackend()

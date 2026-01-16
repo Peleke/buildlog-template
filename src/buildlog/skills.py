@@ -113,6 +113,8 @@ def _generate_skill_id(category: str, rule: str) -> str:
     """Generate a stable ID for a skill.
 
     The ID is deterministic - same category+rule always produces same ID.
+    Uses SHA-256 (truncated to 10 chars = 40 bits) for collision resistance.
+    At 40 bits, collision probability is ~0.5 after ~1 million unique rules.
     """
     prefix_map = {
         "architectural": "arch",
@@ -121,7 +123,8 @@ def _generate_skill_id(category: str, rule: str) -> str:
         "domain_knowledge": "dk",
     }
     prefix = prefix_map.get(category, "sk")
-    rule_hash = hashlib.md5(rule.lower().encode()).hexdigest()[:6]
+    # SHA-256 is more robust than MD5; 10 chars provides good collision resistance
+    rule_hash = hashlib.sha256(rule.lower().encode()).hexdigest()[:10]
     return f"{prefix}-{rule_hash}"
 
 
@@ -130,19 +133,30 @@ def _generate_skill_id(category: str, rule: str) -> str:
 def _calculate_confidence(
     frequency: int,
     most_recent_date: date | None,
+    reference_date: date | None = None,
 ) -> ConfidenceLevel:
     """Calculate confidence level based on frequency and recency.
 
     Args:
         frequency: How many times this pattern was seen.
         most_recent_date: Date of most recent occurrence.
+        reference_date: Date to calculate recency from. Defaults to today.
+            Pass explicitly for deterministic testing.
 
     Returns:
         Confidence level: high, medium, or low.
+
+    Confidence is determined by:
+        - high: frequency >= 3 AND seen within last 30 days
+        - medium: frequency >= 2
+        - low: frequency < 2 or no frequency data
     """
+    if reference_date is None:
+        reference_date = date.today()
+
     recency_days = float("inf")
     if most_recent_date:
-        recency_days = (date.today() - most_recent_date).days
+        recency_days = (reference_date - most_recent_date).days
 
     if frequency >= HIGH_CONFIDENCE_FREQUENCY and recency_days < HIGH_CONFIDENCE_RECENCY_DAYS:
         return "high"

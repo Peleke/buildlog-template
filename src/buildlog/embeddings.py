@@ -31,9 +31,10 @@ __all__ = [
 ]
 
 import logging
+import os
 import re
+import threading
 from abc import ABC, abstractmethod
-from functools import lru_cache
 from typing import Final, Literal
 
 import numpy as np
@@ -55,7 +56,7 @@ STOP_WORDS: Final[frozenset[str]] = frozenset({
     "here", "there", "when", "where", "why", "how", "all", "each", "few",
     "more", "most", "other", "some", "such", "no", "nor", "not", "only",
     "own", "same", "so", "than", "too", "very", "just", "also", "now",
-    "always", "never", "often", "still", "already", "ever", "always",
+    "always", "never", "often", "still", "already", "ever",
     "it", "its", "this", "that", "these", "those", "i", "you", "he",
     "she", "we", "they", "what", "which", "who", "whom", "whose",
 })
@@ -270,7 +271,15 @@ class OpenAIBackend(EmbeddingBackend):
 
         Args:
             model: OpenAI embedding model name.
+
+        Raises:
+            ValueError: If OPENAI_API_KEY is not set.
         """
+        if not os.getenv("OPENAI_API_KEY"):
+            raise ValueError(
+                "OpenAI backend requires OPENAI_API_KEY environment variable. "
+                "Set it with: export OPENAI_API_KEY=your-key"
+            )
         self._model = model
         self._client = None
 
@@ -307,8 +316,9 @@ _BACKENDS: dict[BackendName, type[EmbeddingBackend]] = {
     "openai": OpenAIBackend,
 }
 
-# Default backend instance (singleton)
+# Default backend instance (singleton) with thread safety
 _default_backend: EmbeddingBackend | None = None
+_default_backend_lock = threading.Lock()
 
 
 def get_backend(name: BackendName = "token", **kwargs) -> EmbeddingBackend:
@@ -335,10 +345,16 @@ def get_backend(name: BackendName = "token", **kwargs) -> EmbeddingBackend:
 
 
 def get_default_backend() -> EmbeddingBackend:
-    """Get the default backend (token-based)."""
+    """Get the default backend (token-based).
+
+    Thread-safe singleton pattern.
+    """
     global _default_backend
     if _default_backend is None:
-        _default_backend = TokenBackend()
+        with _default_backend_lock:
+            # Double-check after acquiring lock
+            if _default_backend is None:
+                _default_backend = TokenBackend()
     return _default_backend
 
 
