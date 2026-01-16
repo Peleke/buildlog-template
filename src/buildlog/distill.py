@@ -2,21 +2,37 @@
 
 from __future__ import annotations
 
-import re
-import warnings
-from dataclasses import dataclass, field
-from datetime import date, datetime
-from pathlib import Path
-from typing import TYPE_CHECKING
+__all__ = [
+    "CATEGORIES",
+    "DistillResult",
+    "distill_all",
+    "format_output",
+    "parse_improvements",
+    "parse_date_from_filename",
+    "iter_buildlog_entries",
+]
 
-if TYPE_CHECKING:
-    from typing import Iterator
+import json
+import logging
+import re
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
+from pathlib import Path
+from typing import Final, Literal, TypedDict
+
+logger = logging.getLogger(__name__)
 
 # Valid improvement categories (lowercase for matching)
-CATEGORIES = ["architectural", "workflow", "tool_usage", "domain_knowledge"]
+CATEGORIES: Final[tuple[str, ...]] = (
+    "architectural",
+    "workflow",
+    "tool_usage",
+    "domain_knowledge",
+)
 
 # Map from markdown heading to normalized category name
-CATEGORY_MAP = {
+CATEGORY_MAP: Final[dict[str, str]] = {
     "architectural": "architectural",
     "workflow": "workflow",
     "tool usage": "tool_usage",
@@ -25,15 +41,37 @@ CATEGORY_MAP = {
     "domain_knowledge": "domain_knowledge",
 }
 
+# File matching pattern for buildlog entries
+BUILDLOG_GLOB_PATTERN: Final[str] = "20??-??-??-*.md"
 
-@dataclass
-class Pattern:
-    """A single improvement pattern extracted from a buildlog entry."""
+# Type definitions
+OutputFormat = Literal["json", "yaml"]
+
+
+class PatternDict(TypedDict):
+    """Type for a single pattern dictionary."""
 
     insight: str
     source: str
     date: str
-    context: str = ""
+    context: str
+
+
+class StatisticsDict(TypedDict):
+    """Type for statistics dictionary."""
+
+    total_patterns: int
+    by_category: dict[str, int]
+    by_month: dict[str, int]
+
+
+class DistillResultDict(TypedDict):
+    """Type for full distill result dictionary."""
+
+    extracted_at: str
+    entry_count: int
+    patterns: dict[str, list[PatternDict]]
+    statistics: StatisticsDict
 
 
 @dataclass
@@ -42,10 +80,10 @@ class DistillResult:
 
     extracted_at: str
     entry_count: int
-    patterns: dict[str, list[dict]] = field(default_factory=dict)
-    statistics: dict = field(default_factory=dict)
+    patterns: dict[str, list[PatternDict]] = field(default_factory=dict)
+    statistics: StatisticsDict = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> DistillResultDict:
         """Convert to dictionary for JSON/YAML serialization."""
         return {
             "extracted_at": self.extracted_at,
@@ -55,9 +93,19 @@ class DistillResult:
         }
 
 
+def _is_valid_insight(insight: str) -> bool:
+    """Filter predicate for valid insights (not placeholders)."""
+    if not insight:
+        return False
+    if insight.startswith("[") and insight.endswith("]"):
+        return False
+    if insight.startswith("e.g.,"):
+        return False
+    return True
+
+
 def extract_title_and_context(content: str) -> str:
     """Extract a context description from the entry title."""
-    # Look for "# Build Journal: <title>" pattern
     match = re.search(r"^#\s+Build Journal:\s*(.+)$", content, re.MULTILINE)
     if match:
         title = match.group(1).strip()
@@ -77,7 +125,6 @@ def parse_improvements(content: str) -> dict[str, list[str]]:
     """
     result: dict[str, list[str]] = {cat: [] for cat in CATEGORIES}
 
-    # Find the ## Improvements section
     improvements_match = re.search(
         r"^##\s+Improvements\s*\n(.*?)(?=^##\s+[^#]|\Z)",
         content,
@@ -89,45 +136,33 @@ def parse_improvements(content: str) -> dict[str, list[str]]:
 
     improvements_section = improvements_match.group(1)
 
-    # Find each ### Category subsection
-    # Pattern matches ### followed by category name, then content until next ### or end
     category_pattern = re.compile(
         r"^###\s+([^\n]+)\s*\n(.*?)(?=^###|\Z)", re.MULTILINE | re.DOTALL
     )
+    bullet_pattern = re.compile(r"^\s*-\s+(.+)$", re.MULTILINE)
 
     for category_match in category_pattern.finditer(improvements_section):
         raw_category = category_match.group(1).strip().lower()
-        category_content = category_match.group(2)
-
-        # Normalize category name
         normalized = CATEGORY_MAP.get(raw_category)
         if not normalized:
             continue
 
-        # Extract bullet points (lines starting with - )
-        bullet_pattern = re.compile(r"^\s*-\s+(.+)$", re.MULTILINE)
-        for bullet_match in bullet_pattern.finditer(category_content):
-            insight = bullet_match.group(1).strip()
-            # Skip placeholder text
-            if insight.startswith("[") and insight.endswith("]"):
-                continue
-            if insight.startswith("e.g.,"):
-                continue
-            if insight:
-                result[normalized].append(insight)
+        category_content = category_match.group(2)
+        insights = (m.group(1).strip() for m in bullet_pattern.finditer(category_content))
+        result[normalized] = list(filter(_is_valid_insight, insights))
 
     return result
 
 
 def parse_date_from_filename(filename: str) -> str | None:
-    """Extract date from buildlog filename.
-
-    Expected format: YYYY-MM-DD-slug.md
-    """
+    """Extract date from buildlog filename (YYYY-MM-DD-slug.md format)."""
     match = re.match(r"^(\d{4}-\d{2}-\d{2})-", filename)
-    if match:
-        return match.group(1)
-    return None
+    return match.group(1) if match else None
+
+
+def _extract_month_key(date_str: str) -> str:
+    """Extract YYYY-MM month key from YYYY-MM-DD date string."""
+    return date_str[:7]
 
 
 def iter_buildlog_entries(
@@ -142,9 +177,7 @@ def iter_buildlog_entries(
     Yields:
         Tuples of (file_path, date_string) for each matching entry.
     """
-    pattern = "20??-??-??-*.md"
-
-    for entry_path in sorted(buildlog_dir.glob(pattern)):
+    for entry_path in sorted(buildlog_dir.glob(BUILDLOG_GLOB_PATTERN)):
         date_str = parse_date_from_filename(entry_path.name)
         if not date_str:
             continue
@@ -155,10 +188,64 @@ def iter_buildlog_entries(
                 if entry_date < since:
                     continue
             except ValueError:
-                warnings.warn(f"Invalid date in filename: {entry_path.name}")
+                logger.warning("Invalid date in filename: %s", entry_path.name)
                 continue
 
         yield entry_path, date_str
+
+
+def _create_patterns_for_entry(
+    improvements: dict[str, list[str]],
+    source: str,
+    date_str: str,
+    context: str,
+) -> dict[str, list[PatternDict]]:
+    """Create pattern dicts from improvements - pure function."""
+    return {
+        category: [
+            PatternDict(
+                insight=insight,
+                source=source,
+                date=date_str,
+                context=context,
+            )
+            for insight in insights
+        ]
+        for category, insights in improvements.items()
+    }
+
+
+def _merge_patterns(
+    target: dict[str, list[PatternDict]],
+    source: dict[str, list[PatternDict]],
+) -> None:
+    """Merge source patterns into target (mutates target)."""
+    for category, patterns in source.items():
+        if category in target:
+            target[category].extend(patterns)
+
+
+def _apply_category_filter(
+    patterns: dict[str, list[PatternDict]],
+    category: str | None,
+) -> dict[str, list[PatternDict]]:
+    """Filter patterns to single category if specified."""
+    if category is None:
+        return patterns
+    return {category: patterns.get(category, [])}
+
+
+def _compute_statistics(
+    patterns: dict[str, list[PatternDict]],
+    by_month: dict[str, int],
+) -> StatisticsDict:
+    """Compute statistics from aggregated patterns."""
+    by_category = {cat: len(items) for cat, items in patterns.items()}
+    return {
+        "total_patterns": sum(by_category.values()),
+        "by_category": by_category,
+        "by_month": dict(sorted(by_month.items())),
+    }
 
 
 def distill_all(
@@ -176,66 +263,46 @@ def distill_all(
     Returns:
         DistillResult with aggregated patterns and statistics.
     """
-    patterns: dict[str, list[dict]] = {cat: [] for cat in CATEGORIES}
+    patterns: dict[str, list[PatternDict]] = {cat: [] for cat in CATEGORIES}
     by_month: dict[str, int] = {}
     entry_count = 0
 
     for entry_path, date_str in iter_buildlog_entries(buildlog_dir, since):
         try:
             content = entry_path.read_text(encoding="utf-8")
-        except Exception as e:
-            warnings.warn(f"Failed to read {entry_path}: {e}")
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning("Failed to read %s: %s", entry_path, e)
             continue
 
         entry_count += 1
         context = extract_title_and_context(content)
 
-        # Track by month
-        month_key = date_str[:7]  # YYYY-MM
+        month_key = _extract_month_key(date_str)
         by_month[month_key] = by_month.get(month_key, 0) + 1
 
-        # Parse improvements
         try:
             improvements = parse_improvements(content)
-        except Exception as e:
-            warnings.warn(f"Failed to parse improvements in {entry_path}: {e}")
+        except re.error as e:
+            logger.warning("Failed to parse improvements in %s: %s", entry_path, e)
             continue
 
-        # Add patterns with metadata
-        source = str(entry_path)
-        for category, insights in improvements.items():
-            for insight in insights:
-                patterns[category].append(
-                    {
-                        "insight": insight,
-                        "source": source,
-                        "date": date_str,
-                        "context": context,
-                    }
-                )
+        entry_patterns = _create_patterns_for_entry(
+            improvements, str(entry_path), date_str, context
+        )
+        _merge_patterns(patterns, entry_patterns)
 
-    # Apply category filter if specified
-    if category_filter:
-        filtered_patterns = {category_filter: patterns.get(category_filter, [])}
-        patterns = filtered_patterns
-
-    # Calculate statistics
-    by_category = {cat: len(items) for cat, items in patterns.items()}
-    total_patterns = sum(by_category.values())
+    patterns = _apply_category_filter(patterns, category_filter)
+    statistics = _compute_statistics(patterns, by_month)
 
     return DistillResult(
-        extracted_at=datetime.utcnow().isoformat() + "Z",
+        extracted_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         entry_count=entry_count,
         patterns=patterns,
-        statistics={
-            "total_patterns": total_patterns,
-            "by_category": by_category,
-            "by_month": dict(sorted(by_month.items())),
-        },
+        statistics=statistics,
     )
 
 
-def format_output(result: DistillResult, fmt: str = "json") -> str:
+def format_output(result: DistillResult, fmt: OutputFormat = "json") -> str:
     """Format the distill result as JSON or YAML.
 
     Args:
@@ -244,21 +311,26 @@ def format_output(result: DistillResult, fmt: str = "json") -> str:
 
     Returns:
         Formatted string representation.
-    """
-    import json
 
+    Raises:
+        ValueError: If format is not recognized.
+        ImportError: If PyYAML is required but not installed.
+    """
     data = result.to_dict()
 
     if fmt == "json":
         return json.dumps(data, indent=2, ensure_ascii=False)
-    elif fmt == "yaml":
+
+    if fmt == "yaml":
         try:
             import yaml
-
-            return yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "PyYAML is required for YAML output. Install it with: pip install pyyaml"
-            )
-    else:
-        raise ValueError(f"Unknown format: {fmt}")
+            ) from e
+        return yaml.dump(
+            data, default_flow_style=False, allow_unicode=True, sort_keys=False
+        )
+
+    # This should be unreachable due to Literal type, but defensive coding
+    raise ValueError(f"Unknown format: {fmt}")
