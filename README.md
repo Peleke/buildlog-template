@@ -421,14 +421,53 @@ pip install buildlog[mcp]
 
 The MCP server lets Claude Code interact with your buildlog skills directly. Your agent can review learned patterns, promote them to rules, or reject false positives—all through natural conversation.
 
-### Setup
+### Setup for Claude Code CLI
+
+1. Install with MCP support:
+   ```bash
+   pip install buildlog[mcp]
+   # or with uv
+   uv pip install buildlog[mcp]
+   ```
+
+2. Add to your Claude Code settings (`~/.claude/settings.json`):
+   ```json
+   {
+     "mcpServers": {
+       "buildlog": {
+         "command": "buildlog-mcp",
+         "args": []
+       }
+     }
+   }
+   ```
+
+   Or for project-specific config (`.claude/settings.json` in your repo):
+   ```json
+   {
+     "mcpServers": {
+       "buildlog": {
+         "command": "buildlog-mcp",
+         "args": []
+       }
+     }
+   }
+   ```
+
+3. Start a new Claude Code session. The buildlog tools will be available.
+
+### Setup for Claude Desktop
 
 1. Install with MCP support:
    ```bash
    pip install buildlog[mcp]
    ```
 
-2. Add to your Claude Desktop config (`~/.config/claude/claude_desktop_config.json`):
+2. Add to your Claude Desktop config:
+   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+   - **Linux**: `~/.config/claude/claude_desktop_config.json`
+
    ```json
    {
      "mcpServers": {
@@ -441,6 +480,49 @@ The MCP server lets Claude Code interact with your buildlog skills directly. You
    ```
 
 3. Restart Claude Desktop.
+
+### Local Development / Dogfooding
+
+For dogfooding buildlog in your own projects during development:
+
+```bash
+# From the buildlog-template repo, install in editable mode
+uv pip install -e ".[mcp,dev]"
+
+# Verify the MCP server runs
+buildlog-mcp --help  # Should show MCP server info
+
+# Test that skills generation works
+cd /path/to/your/project
+buildlog init  # if not already initialized
+buildlog skills  # verify skills are generated
+```
+
+Then add to your project's `.claude/settings.json`:
+```json
+{
+  "mcpServers": {
+    "buildlog": {
+      "command": "buildlog-mcp"
+    }
+  }
+}
+```
+
+### Troubleshooting
+
+**"buildlog-mcp: command not found"**
+- Ensure the package is installed: `pip show buildlog`
+- Check your PATH includes pip's bin directory
+- Try using the full path: `which buildlog-mcp` or `python -m buildlog.mcp.server`
+
+**"No buildlog directory found"**
+- Run `buildlog init` in your project first
+- The MCP server looks for `./buildlog/` by default
+
+**Skills not appearing**
+- Ensure you have buildlog entries with **Improvements** sections
+- Run `buildlog stats` to check coverage
 
 ### Available Tools
 
