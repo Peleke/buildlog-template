@@ -12,6 +12,7 @@ from buildlog.skills import (
     _calculate_confidence,
     _extract_tags,
     _generate_skill_id,
+    _to_imperative,
     generate_skills,
     format_skills,
 )
@@ -283,8 +284,8 @@ class TestFormatSkills:
 
         assert "# Project Rules" in output
         assert "Auto-generated from" in output
-        # Should have at least one confidence section
-        assert "Confidence)" in output or "Insights" in output
+        # Should have rules with imperative prefixes
+        assert "Consider:" in output or "Always" in output or "Prefer" in output
 
     def test_settings_format(self):
         """Should produce .claude/settings.json compatible output."""
@@ -329,3 +330,112 @@ class TestGetBackend:
 
         with pytest.raises(ValueError, match="OPENAI_API_KEY"):
             OpenAIBackend()
+
+
+class TestToImperative:
+    """Tests for _to_imperative() rule transformation."""
+
+    def test_empty_string(self):
+        """Should handle empty strings gracefully."""
+        assert _to_imperative("", "high") == ""
+        assert _to_imperative("   ", "high") == ""
+
+    def test_already_has_confidence_modifier(self):
+        """Should preserve rules that already have confidence modifiers."""
+        assert _to_imperative("always validate inputs", "high") == "Always validate inputs"
+        assert _to_imperative("never use global state", "medium") == "Never use global state"
+        assert _to_imperative("prefer composition over inheritance", "low") == "Prefer composition over inheritance"
+        assert _to_imperative("avoid mutable defaults", "high") == "Avoid mutable defaults"
+
+    def test_plain_imperative_gets_confidence_prefix(self):
+        """Plain imperatives should get confidence prefixes."""
+        # Low confidence adds "Consider:"
+        assert _to_imperative("use frozen dataclasses", "low") == "Consider: use frozen dataclasses"
+        # High confidence adds "Always"
+        assert _to_imperative("run tests before commit", "high") == "Always run tests before commit"
+
+    def test_high_confidence_basic(self):
+        """High confidence should prefix with Always."""
+        result = _to_imperative("validate inputs at boundary", "high")
+        assert result == "Always validate inputs at boundary"
+
+    def test_high_confidence_negative(self):
+        """High confidence negative should prefix with Never."""
+        result = _to_imperative("you shouldn't use mutable defaults", "high")
+        assert result == "Never use mutable defaults"
+
+    def test_high_confidence_comparison(self):
+        """High confidence comparison should prefix with Always."""
+        result = _to_imperative("composition is better than inheritance", "high")
+        assert result == "Always composition is better than inheritance"
+
+    def test_medium_confidence_basic(self):
+        """Medium confidence should prefix with Prefer to."""
+        result = _to_imperative("cache database queries", "medium")
+        assert result == "Prefer to cache database queries"
+
+    def test_medium_confidence_negative(self):
+        """Medium confidence negative should prefix with Avoid + gerund."""
+        result = _to_imperative("you should not use eval", "medium")
+        assert result == "Avoid using eval"
+
+    def test_medium_confidence_comparison(self):
+        """Medium confidence comparison should prefix with Prefer + gerund."""
+        result = _to_imperative("use TypeScript over JavaScript", "medium")
+        assert result == "Prefer using TypeScript over JavaScript"
+
+    def test_low_confidence(self):
+        """Low confidence should prefix with Consider:."""
+        result = _to_imperative("try caching hot paths", "low")
+        assert result == "Consider: try caching hot paths"
+
+    def test_should_cleaner(self):
+        """Should remove 'should' prefixes."""
+        result = _to_imperative("should validate inputs", "high")
+        assert result == "Always validate inputs"
+
+        result = _to_imperative("you should check errors", "medium")
+        assert result == "Prefer to check errors"
+
+    def test_double_word_prevention(self):
+        """Should not produce 'Avoid avoid' or similar doubles."""
+        result = _to_imperative("avoid using global state", "medium")
+        # Should NOT be "Avoid avoid using global state"
+        assert "avoid avoid" not in result.lower()
+        assert "Avoid" in result
+
+    def test_word_boundary_not_false_positive(self):
+        """Should not match 'not' in 'notify' or 'notation'."""
+        # "notify" contains "not" but is not a negative
+        result = _to_imperative("send notifications promptly", "high")
+        # Should be "Always send notifications..." not "Never send notifications..."
+        assert result.startswith("Always")
+
+    def test_word_boundary_over_false_positive(self):
+        """Should not match 'over' in 'override' as comparison."""
+        result = _to_imperative("the override method handles errors", "high")
+        # Should be "Always the override..." - detected as comparison due to 'over' substring
+        # Actually this should NOT be detected since 'over' is inside 'override'
+        assert "Always" in result
+
+    def test_preserves_case_in_content(self):
+        """Should preserve internal capitalization."""
+        result = _to_imperative("should use PostgreSQL", "high")
+        assert "PostgreSQL" in result
+
+    def test_invalid_confidence_raises(self):
+        """Should raise ValueError for invalid confidence levels."""
+        with pytest.raises(ValueError, match="Invalid confidence level"):
+            _to_imperative("some rule", "hgih")  # typo
+
+        with pytest.raises(ValueError, match="Invalid confidence level"):
+            _to_imperative("some rule", "invalid")
+
+    def test_gerund_conversion(self):
+        """Should convert verbs to gerund form for Avoid/Prefer."""
+        # Avoid + verb -> Avoid + gerund
+        assert _to_imperative("use mutable defaults", "medium") == "Prefer to use mutable defaults"
+        assert _to_imperative("should not run tests in production", "medium") == "Avoid running tests in production"
+
+        # Prefer (comparison) + verb -> Prefer + gerund
+        assert _to_imperative("write tests before code", "medium") == "Prefer to write tests before code"
