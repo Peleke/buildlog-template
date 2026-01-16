@@ -9,6 +9,7 @@ from pathlib import Path
 import click
 
 from buildlog.distill import CATEGORIES, distill_all, format_output
+from buildlog.skills import generate_skills, format_skills
 from buildlog.stats import calculate_stats, format_dashboard, format_json
 
 
@@ -329,6 +330,107 @@ def stats(output_json: bool, detailed: bool, since_date: str | None):
         click.echo(format_json(stats_data))
     else:
         click.echo(format_dashboard(stats_data, detailed=detailed))
+
+
+@main.command()
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout)")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["yaml", "json", "markdown"]),
+    default="yaml",
+    help="Output format (default: yaml)",
+)
+@click.option(
+    "--min-frequency",
+    type=int,
+    default=1,
+    help="Only include skills seen at least this many times",
+)
+@click.option(
+    "--since",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Only include entries from this date onward (YYYY-MM-DD)",
+)
+@click.option(
+    "--embeddings",
+    type=click.Choice(["token", "sentence-transformers", "openai"]),
+    default=None,
+    help="Embedding backend for semantic deduplication",
+)
+def skills(
+    output: str | None,
+    fmt: str,
+    min_frequency: int,
+    since: datetime | None,
+    embeddings: str | None,
+):
+    """Generate agent-consumable skills from buildlog patterns.
+
+    Transforms distilled patterns into actionable rules with deduplication,
+    confidence scoring, and stable IDs.
+
+    Examples:
+
+        buildlog skills                        # YAML to stdout
+        buildlog skills -o skills.yml          # Write to file
+        buildlog skills --format markdown      # For CLAUDE.md injection
+        buildlog skills --min-frequency 2      # Only repeated patterns
+        buildlog skills --embeddings sentence-transformers  # Semantic dedup
+
+    Embedding backends:
+        token (default): Fast, no dependencies, token-based similarity
+        sentence-transformers: Local semantic embeddings (pip install buildlog[embeddings])
+        openai: OpenAI API embeddings (requires OPENAI_API_KEY)
+    """
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    # Convert datetime to date if provided
+    since_date = since.date() if since else None
+
+    # Generate skills
+    try:
+        skill_set = generate_skills(
+            buildlog_dir,
+            min_frequency=min_frequency,
+            since_date=since_date,
+            embedding_backend=embeddings,
+        )
+    except ImportError as e:
+        click.echo(f"Missing dependency: {e}", err=True)
+        raise SystemExit(1)
+    except Exception as e:
+        click.echo(f"Failed to generate skills: {e}", err=True)
+        raise SystemExit(1)
+
+    # Format output
+    try:
+        formatted = format_skills(skill_set, fmt)
+    except ImportError as e:
+        click.echo(str(e), err=True)
+        raise SystemExit(1)
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        raise SystemExit(1)
+
+    # Write output
+    if output:
+        output_path = Path(output)
+        try:
+            output_path.write_text(formatted, encoding="utf-8")
+            click.echo(
+                f"Wrote {skill_set.total_skills} skills to {output_path} "
+                f"(from {skill_set.source_entries} entries)"
+            )
+        except Exception as e:
+            click.echo(f"Failed to write output: {e}", err=True)
+            raise SystemExit(1)
+    else:
+        click.echo(formatted)
 
 
 if __name__ == "__main__":
