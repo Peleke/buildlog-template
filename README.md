@@ -4,8 +4,8 @@
 
 ### Engineering Notebook for AI-Assisted Development
 
-[![PyPI](https://img.shields.io/badge/PyPI-0.1.0-blue?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/buildlog/)
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
+[![PyPI](https://img.shields.io/pypi/v/buildlog?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/buildlog/)
+[![Python](https://img.shields.io/pypi/pyversions/buildlog?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 **Capture your work as publishable content. Include the fuckups.**
