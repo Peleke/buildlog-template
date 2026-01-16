@@ -19,7 +19,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Final, Literal, TypedDict
 
@@ -335,7 +335,9 @@ def generate_skills(
 
     # Get embedding backend
     backend = (
-        get_backend(embedding_backend) if embedding_backend else get_default_backend()
+        get_backend(embedding_backend)  # type: ignore[arg-type]
+        if embedding_backend
+        else get_default_backend()
     )
     logger.info("Using embedding backend: %s", backend.name)
 
@@ -366,7 +368,7 @@ def generate_skills(
         skills_by_category[category] = skills
 
     return SkillSet(
-        generated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        generated_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         source_entries=result.entry_count,
         skills=skills_by_category,
     )

@@ -287,7 +287,7 @@ def distill(output: str | None, fmt: str, since: datetime | None, category: str 
 
     # Format output
     try:
-        formatted = format_output(result, fmt)
+        formatted = format_output(result, fmt)  # type: ignore[arg-type]
     except ImportError as e:
         click.echo(str(e), err=True)
         raise SystemExit(1)
@@ -432,7 +432,7 @@ def skills(
 
     # Format output
     try:
-        formatted = format_skills(skill_set, fmt)
+        formatted = format_skills(skill_set, fmt)  # type: ignore[arg-type]
     except ImportError as e:
         click.echo(str(e), err=True)
         raise SystemExit(1)

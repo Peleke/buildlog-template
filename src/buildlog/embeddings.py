@@ -341,7 +341,7 @@ class SentenceTransformerBackend(EmbeddingBackend):
                     "Install with: pip install buildlog[embeddings]"
                 ) from e
 
-            self._model = SentenceTransformer(self._model_name)
+            self._model = SentenceTransformer(self._model_name)  # type: ignore[assignment]
 
         return self._model
 
@@ -390,7 +390,7 @@ class OpenAIBackend(EmbeddingBackend):
                     "Install with: pip install openai"
                 ) from e
 
-            self._client = openai.OpenAI()
+            self._client = openai.OpenAI()  # type: ignore[assignment]
 
         return self._client
 

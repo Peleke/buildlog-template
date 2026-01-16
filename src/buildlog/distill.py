@@ -17,7 +17,7 @@ import logging
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Final, Literal, TypedDict
 
@@ -81,7 +81,7 @@ class DistillResult:
     extracted_at: str
     entry_count: int
     patterns: dict[str, list[PatternDict]] = field(default_factory=dict)
-    statistics: StatisticsDict = field(default_factory=dict)
+    statistics: StatisticsDict = field(default_factory=dict)  # type: ignore[assignment]
 
     def to_dict(self) -> DistillResultDict:
         """Convert to dictionary for JSON/YAML serialization."""
@@ -333,7 +333,7 @@ def distill_all(
     statistics = _compute_statistics(patterns, by_month)
 
     return DistillResult(
-        extracted_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        extracted_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         entry_count=entry_count,
         patterns=patterns,
         statistics=statistics,
