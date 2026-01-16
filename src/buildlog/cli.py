@@ -3,10 +3,13 @@
 import shutil
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import click
+
+from buildlog.distill import CATEGORIES, distill_all, format_output
+from buildlog.stats import calculate_stats, format_dashboard, format_json
 
 
 def get_template_dir() -> Path | None:
@@ -216,6 +219,116 @@ def update():
             raise SystemExit(1)
 
     click.echo("\n✓ buildlog updated!")
+
+
+@main.command()
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout)")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "yaml"]),
+    default="json",
+    help="Output format",
+)
+@click.option(
+    "--since",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Only include entries from this date onward (YYYY-MM-DD)",
+)
+@click.option(
+    "--category",
+    type=click.Choice(CATEGORIES),
+    help="Filter to a specific category",
+)
+def distill(output: str | None, fmt: str, since: datetime | None, category: str | None):
+    """Extract patterns from all buildlog entries.
+
+    Parses the Improvements section of each buildlog entry and aggregates
+    insights into structured output (JSON or YAML).
+
+    Examples:
+
+        buildlog distill                       # JSON to stdout
+        buildlog distill -o patterns.json      # Write to file
+        buildlog distill --format yaml         # YAML output
+        buildlog distill --since 2026-01-01    # Filter by date
+        buildlog distill --category workflow   # Filter by category
+    """
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    # Convert datetime to date if provided
+    since_date = since.date() if since else None
+
+    # Run distillation
+    try:
+        result = distill_all(buildlog_dir, since=since_date, category_filter=category)
+    except Exception as e:
+        click.echo(f"Failed to distill entries: {e}", err=True)
+        raise SystemExit(1)
+
+    # Format output
+    try:
+        formatted = format_output(result, fmt)
+    except ImportError as e:
+        click.echo(str(e), err=True)
+        raise SystemExit(1)
+
+    # Write output
+    if output:
+        output_path = Path(output)
+        try:
+            output_path.write_text(formatted, encoding="utf-8")
+            click.echo(f"Wrote {result.statistics.get('total_patterns', 0)} patterns to {output_path}")
+        except Exception as e:
+            click.echo(f"Failed to write output: {e}", err=True)
+            raise SystemExit(1)
+    else:
+        click.echo(formatted)
+
+
+@main.command()
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option("--detailed", is_flag=True, help="Show detailed breakdown including top sources")
+@click.option("--since", "since_date", default=None, help="Only include entries since date (YYYY-MM-DD)")
+def stats(output_json: bool, detailed: bool, since_date: str | None):
+    """Show buildlog statistics and analytics.
+
+    Provides insights on buildlog usage, coverage, and quality.
+
+    Examples:
+
+        buildlog stats              # Terminal dashboard
+        buildlog stats --json       # JSON output for scripts
+        buildlog stats --detailed   # Include top sources
+        buildlog stats --since 2026-01-01
+    """
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    # Parse since date if provided
+    parsed_since = None
+    if since_date:
+        try:
+            parsed_since = datetime.strptime(since_date, "%Y-%m-%d").date()
+        except ValueError:
+            click.echo("Invalid date format. Use YYYY-MM-DD.", err=True)
+            raise SystemExit(1)
+
+    # Calculate stats
+    stats_data = calculate_stats(buildlog_dir, since_date=parsed_since)
+
+    # Output in requested format
+    if output_json:
+        click.echo(format_json(stats_data))
+    else:
+        click.echo(format_dashboard(stats_data, detailed=detailed))
 
 
 if __name__ == "__main__":
