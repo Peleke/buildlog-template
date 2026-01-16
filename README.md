@@ -10,7 +10,7 @@
 
 **Capture your work as publishable content. Include the fuckups.**
 
-<img src="assets/hero.png" alt="Chaos to Order - buildlog transforms messy development sessions into structured knowledge" width="800"/>
+<img src="assets/hero3.png" alt="Chaos to Order - buildlog transforms messy development sessions into structured knowledge" width="800"/>
 
 [Quick Start](#-quick-start) · [The Pipeline](#-the-pipeline) · [Commands](#-commands) · [Philosophy](#-philosophy)
 
