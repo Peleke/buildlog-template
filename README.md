@@ -6,6 +6,8 @@
 
 [![PyPI](https://img.shields.io/pypi/v/buildlog?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/buildlog/)
 [![Python](https://img.shields.io/pypi/pyversions/buildlog?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
+[![CI](https://img.shields.io/github/actions/workflow/status/Peleke/buildlog-template/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/Peleke/buildlog-template/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/Peleke/buildlog-template?style=for-the-badge&logo=codecov&logoColor=white)](https://codecov.io/gh/Peleke/buildlog-template)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 **Capture your work as publishable content. Include the fuckups.**

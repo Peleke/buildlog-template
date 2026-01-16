@@ -1,0 +1,31 @@
+# Codecov configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+
+  status:
+    project:
+      default:
+        # Fail if coverage drops
+        target: auto
+        threshold: 0%  # No decrease allowed
+        if_ci_failed: error
+    patch:
+      default:
+        # New code must have coverage
+        target: 80%
+        threshold: 0%
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+
+# Ignore test files in coverage
+ignore:
+  - "tests/**/*"
+  - "**/__pycache__/**"
+  - "**/conftest.py"
