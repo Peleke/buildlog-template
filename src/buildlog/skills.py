@@ -14,11 +14,11 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Final, Literal, TypedDict
 
 from buildlog.distill import CATEGORIES, PatternDict, distill_all
+from buildlog.embeddings import EmbeddingBackend, get_backend, get_default_backend
 
 logger = logging.getLogger(__name__)
 
@@ -125,14 +125,6 @@ def _generate_skill_id(category: str, rule: str) -> str:
     return f"{prefix}-{rule_hash}"
 
 
-def _normalize_text(text: str) -> str:
-    """Normalize text for comparison."""
-    return " ".join(text.lower().split())
-
-
-def _similarity(a: str, b: str) -> float:
-    """Calculate similarity ratio between two strings."""
-    return SequenceMatcher(None, _normalize_text(a), _normalize_text(b)).ratio()
 
 
 def _calculate_confidence(
@@ -182,18 +174,23 @@ def _extract_tags(rule: str) -> list[str]:
 def _deduplicate_insights(
     patterns: list[PatternDict],
     threshold: float = MIN_SIMILARITY_THRESHOLD,
+    backend: EmbeddingBackend | None = None,
 ) -> list[tuple[str, int, list[str], date | None]]:
     """Deduplicate similar insights into merged rules.
 
     Args:
         patterns: List of pattern dictionaries from distill.
         threshold: Minimum similarity ratio to consider duplicates.
+        backend: Embedding backend for similarity computation.
 
     Returns:
         List of (rule, frequency, sources, most_recent_date) tuples.
     """
     if not patterns:
         return []
+
+    if backend is None:
+        backend = get_default_backend()
 
     # Group similar insights
     groups: list[list[PatternDict]] = []
@@ -204,7 +201,8 @@ def _deduplicate_insights(
 
         for group in groups:
             # Compare against first item in group (representative)
-            if _similarity(insight, group[0]["insight"]) >= threshold:
+            sim = backend.similarity(insight, group[0]["insight"])
+            if sim >= threshold:
                 group.append(pattern)
                 matched = True
                 break
@@ -240,6 +238,7 @@ def generate_skills(
     buildlog_dir: Path,
     min_frequency: int = 1,
     since_date: date | None = None,
+    embedding_backend: str | None = None,
 ) -> SkillSet:
     """Generate skills from buildlog patterns.
 
@@ -247,6 +246,8 @@ def generate_skills(
         buildlog_dir: Path to the buildlog directory.
         min_frequency: Minimum frequency to include a skill.
         since_date: Only include patterns from this date onward.
+        embedding_backend: Name of embedding backend for deduplication.
+            Options: "token" (default), "sentence-transformers", "openai".
 
     Returns:
         SkillSet with generated skills.
@@ -254,11 +255,15 @@ def generate_skills(
     # Get distilled patterns
     result = distill_all(buildlog_dir, since=since_date)
 
+    # Get embedding backend
+    backend = get_backend(embedding_backend) if embedding_backend else get_default_backend()
+    logger.info("Using embedding backend: %s", backend.name)
+
     skills_by_category: dict[str, list[Skill]] = {}
 
     for category in CATEGORIES:
         patterns = result.patterns.get(category, [])
-        deduplicated = _deduplicate_insights(patterns)
+        deduplicated = _deduplicate_insights(patterns, backend=backend)
 
         skills: list[Skill] = []
         for rule, frequency, sources, most_recent in deduplicated:

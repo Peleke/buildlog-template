@@ -30,6 +30,27 @@ dependencies = [
     "copier>=9.0.0",
     "click>=8.0.0",
     "pyyaml>=6.0.0",
+    "numpy>=1.21.0",
+]
+
+[project.optional-dependencies]
+# Local embeddings for semantic deduplication (offline)
+embeddings = [
+    "sentence-transformers>=2.2.0",
+]
+# OpenAI embeddings for semantic deduplication (API-based)
+openai = [
+    "openai>=1.0.0",
+]
+# All optional features
+all = [
+    "sentence-transformers>=2.2.0",
+    "openai>=1.0.0",
+]
+# Development dependencies
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
 ]
 
 [project.urls]
