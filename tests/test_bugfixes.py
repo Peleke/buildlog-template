@@ -1,21 +1,22 @@
 """Tests for bug fixes identified in review."""
 
-from pathlib import Path
 import json
+from pathlib import Path
 
 import pytest
 
-from buildlog.core.operations import status, promote, reject
+from buildlog.core.operations import promote, reject, status
+from buildlog.mcp.tools import _validate_skill_ids, buildlog_promote, buildlog_reject
 from buildlog.render.claude_md import ClaudeMdRenderer
 from buildlog.render.settings_json import SettingsJsonRenderer
-from buildlog.mcp.tools import _validate_skill_ids, buildlog_promote, buildlog_reject
 from buildlog.skills import Skill
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "buildlog"
 
 
-def make_skill(id: str = "arch-123", rule: str = "Test rule", confidence: str = "high") -> Skill:
+def make_skill(
+    id: str = "arch-123", rule: str = "Test rule", confidence: str = "high"
+) -> Skill:
     """Factory for test skills."""
     return Skill(
         id=id,
@@ -42,10 +43,14 @@ class TestTotalSkillsCalculation:
         # Add a stale rejected ID (doesn't exist in current skills)
         reject_file = buildlog_dir / ".buildlog" / "rejected.json"
         reject_file.parent.mkdir(parents=True)
-        reject_file.write_text(json.dumps({
-            "skill_ids": ["stale-nonexistent-id-12345"],
-            "rejected_at": {},
-        }))
+        reject_file.write_text(
+            json.dumps(
+                {
+                    "skill_ids": ["stale-nonexistent-id-12345"],
+                    "rejected_at": {},
+                }
+            )
+        )
 
         # Get status
         result = status(buildlog_dir)

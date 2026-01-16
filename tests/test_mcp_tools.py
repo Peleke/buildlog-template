@@ -3,18 +3,17 @@
 These tests verify the thin MCP wrappers correctly delegate to core operations.
 """
 
-from pathlib import Path
 import json
+from pathlib import Path
 
 import pytest
 
 from buildlog.mcp.tools import (
-    buildlog_status,
+    buildlog_diff,
     buildlog_promote,
     buildlog_reject,
-    buildlog_diff,
+    buildlog_status,
 )
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "buildlog"
 
@@ -152,6 +151,7 @@ class TestBuildlogPromote:
 
         # Cleanup
         import shutil
+
         shutil.rmtree(".claude", ignore_errors=True)
 
 

@@ -315,7 +315,9 @@ def calculate_stats(
     # Parse all entries using functional map/filter pattern
     parsed_or_none = [
         _parse_entry(entry_path, date_str)
-        for entry_path, date_str in iter_buildlog_entries(buildlog_dir, since=since_date)
+        for entry_path, date_str in iter_buildlog_entries(
+            buildlog_dir, since=since_date
+        )
     ]
     entries = [e for e in parsed_or_none if e is not None]
 

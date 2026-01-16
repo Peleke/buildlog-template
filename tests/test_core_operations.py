@@ -1,23 +1,22 @@
 """Tests for buildlog.core.operations module."""
 
-from pathlib import Path
 import json
+from pathlib import Path
 
 import pytest
 
 from buildlog.core.operations import (
-    StatusResult,
+    DiffResult,
     PromoteResult,
     RejectResult,
-    DiffResult,
-    status,
-    promote,
-    reject,
+    StatusResult,
     diff,
     find_skills_by_ids,
+    promote,
+    reject,
+    status,
 )
 from buildlog.skills import Skill, SkillSet, generate_skills
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "buildlog"
 
@@ -80,9 +79,7 @@ class TestStatusOperation:
         # Check it's excluded
         after_reject = status(buildlog_dir)
         all_ids = [
-            s["id"]
-            for cat_skills in after_reject.skills.values()
-            for s in cat_skills
+            s["id"] for cat_skills in after_reject.skills.values() for s in cat_skills
         ]
         assert skill_id not in all_ids
 
@@ -385,11 +382,7 @@ class TestFindSkillsByIds:
         skill_set = generate_skills(FIXTURES_DIR)
 
         # Get some actual skill IDs
-        all_ids = [
-            s.id
-            for cat_skills in skill_set.skills.values()
-            for s in cat_skills
-        ]
+        all_ids = [s.id for cat_skills in skill_set.skills.values() for s in cat_skills]
 
         if all_ids:
             found, not_found = find_skills_by_ids(skill_set, [all_ids[0]])
@@ -411,16 +404,9 @@ class TestFindSkillsByIds:
         skill_set = generate_skills(FIXTURES_DIR)
 
         # Get one real ID
-        all_ids = [
-            s.id
-            for cat_skills in skill_set.skills.values()
-            for s in cat_skills
-        ]
+        all_ids = [s.id for cat_skills in skill_set.skills.values() for s in cat_skills]
 
         if all_ids:
-            found, not_found = find_skills_by_ids(
-                skill_set,
-                [all_ids[0], "fake-id"]
-            )
+            found, not_found = find_skills_by_ids(skill_set, [all_ids[0], "fake-id"])
             assert len(found) == 1
             assert "fake-id" in not_found

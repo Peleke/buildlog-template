@@ -1,11 +1,16 @@
 """Tests for buildlog.render module."""
 
-from pathlib import Path
 import json
+from pathlib import Path
 
 import pytest
 
-from buildlog.render import ClaudeMdRenderer, SettingsJsonRenderer, SkillRenderer, get_renderer
+from buildlog.render import (
+    ClaudeMdRenderer,
+    SettingsJsonRenderer,
+    SkillRenderer,
+    get_renderer,
+)
 from buildlog.skills import Skill
 
 
@@ -145,10 +150,14 @@ class TestSettingsJsonRenderer:
         """Should merge rules into existing settings."""
         settings_file = tmp_path / ".claude" / "settings.json"
         settings_file.parent.mkdir(parents=True)
-        settings_file.write_text(json.dumps({
-            "existing_key": "existing_value",
-            "rules": ["existing rule"],
-        }))
+        settings_file.write_text(
+            json.dumps(
+                {
+                    "existing_key": "existing_value",
+                    "rules": ["existing rule"],
+                }
+            )
+        )
 
         renderer = SettingsJsonRenderer(
             path=settings_file,

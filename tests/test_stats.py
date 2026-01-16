@@ -10,9 +10,9 @@ import pytest
 from buildlog.stats import (
     BuildlogStats,
     calculate_stats,
+    calculate_streak,
     format_dashboard,
     format_json,
-    calculate_streak,
 )
 
 
@@ -225,11 +225,15 @@ class TestErrorHandling:
 
         # Create a valid entry
         valid_file = buildlog_dir / "2026-01-01-valid.md"
-        valid_file.write_text("# Build Journal: Valid\n\n## Improvements\n\n### Architectural\n\n- Valid insight")
+        valid_file.write_text(
+            "# Build Journal: Valid\n\n## Improvements\n\n### Architectural\n\n- Valid insight"
+        )
 
         # Create a file with invalid UTF-8 bytes
         invalid_file = buildlog_dir / "2026-01-02-invalid-utf8.md"
-        invalid_file.write_bytes(b"# Build Journal: Invalid\n\n\xff\xfe Invalid UTF-8 bytes")
+        invalid_file.write_bytes(
+            b"# Build Journal: Invalid\n\n\xff\xfe Invalid UTF-8 bytes"
+        )
 
         stats = calculate_stats(buildlog_dir)
         # Should process the valid file and skip the invalid one
@@ -242,7 +246,9 @@ class TestErrorHandling:
 
         # Create a valid entry
         valid_file = buildlog_dir / "2026-01-15-valid.md"
-        valid_file.write_text("# Build Journal: Valid\n\n## Improvements\n\n### Architectural\n\n- Insight")
+        valid_file.write_text(
+            "# Build Journal: Valid\n\n## Improvements\n\n### Architectural\n\n- Insight"
+        )
 
         # Create a file with impossible date (matches glob but fails fromisoformat)
         invalid_date_file = buildlog_dir / "2026-99-99-impossible-date.md"

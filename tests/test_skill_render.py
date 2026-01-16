@@ -181,8 +181,15 @@ class TestSkillRenderer:
             tracking_path=tmp_path / ".buildlog" / "promoted.json",
         )
         skills = [
-            make_skill(id="arch-h1", category="architectural", confidence="high", rule="Arch high"),
-            make_skill(id="wf-h1", category="workflow", confidence="high", rule="Workflow high"),
+            make_skill(
+                id="arch-h1",
+                category="architectural",
+                confidence="high",
+                rule="Arch high",
+            ),
+            make_skill(
+                id="wf-h1", category="workflow", confidence="high", rule="Workflow high"
+            ),
         ]
         renderer.render(skills)
 

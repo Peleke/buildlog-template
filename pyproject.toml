@@ -57,6 +57,11 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
+    "black>=24.0.0",
+    "isort>=5.13.0",
+    "mypy>=1.8.0",
+    "flake8>=7.0.0",
+    "types-PyYAML>=6.0.0",
 ]
 
 [project.urls]
@@ -82,3 +87,37 @@ packages = ["src/buildlog"]
 "template" = "share/buildlog/template"
 "copier.yml" = "share/buildlog/copier.yml"
 "post_gen.py" = "share/buildlog/post_gen.py"
+
+# ============================================================================
+# Tool Configuration
+# ============================================================================
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311", "py312", "py313"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["buildlog"]
+skip_gitignore = true
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = false
+warn_unused_ignores = false
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+strict_optional = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"

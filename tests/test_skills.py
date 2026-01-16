@@ -5,19 +5,18 @@ from pathlib import Path
 
 import pytest
 
+from buildlog.embeddings import TokenBackend, get_backend
 from buildlog.skills import (
     Skill,
     SkillSet,
-    _deduplicate_insights,
     _calculate_confidence,
+    _deduplicate_insights,
     _extract_tags,
     _generate_skill_id,
     _to_imperative,
-    generate_skills,
     format_skills,
+    generate_skills,
 )
-from buildlog.embeddings import TokenBackend, get_backend
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "buildlog"
 
@@ -119,17 +118,16 @@ class TestTokenBackend:
         """Synonyms should increase similarity."""
         backend = TokenBackend()
         # "tsc" and "typescript" are synonyms
-        sim = backend.similarity("run tsc before commit", "run typescript before commit")
+        sim = backend.similarity(
+            "run tsc before commit", "run typescript before commit"
+        )
         assert sim > 0.7
 
     def test_stop_word_removal(self):
         """Stop words should be filtered."""
         backend = TokenBackend()
         # "always" and "the" are stop words
-        sim = backend.similarity(
-            "always run the type checker",
-            "run type checker"
-        )
+        sim = backend.similarity("always run the type checker", "run type checker")
         assert sim > 0.8
 
     def test_verb_normalization(self):
@@ -145,8 +143,18 @@ class TestDeduplication:
     def test_merges_similar_insights(self):
         """Should merge similar insights."""
         patterns = [
-            {"insight": "run tests before commit", "source": "a.md", "date": "2026-01-01", "context": ""},
-            {"insight": "run testing before committing", "source": "b.md", "date": "2026-01-02", "context": ""},
+            {
+                "insight": "run tests before commit",
+                "source": "a.md",
+                "date": "2026-01-01",
+                "context": "",
+            },
+            {
+                "insight": "run testing before committing",
+                "source": "b.md",
+                "date": "2026-01-02",
+                "context": "",
+            },
         ]
         backend = TokenBackend()
         result = _deduplicate_insights(patterns, threshold=0.5, backend=backend)
@@ -158,8 +166,18 @@ class TestDeduplication:
     def test_keeps_distinct_insights(self):
         """Should not merge distinct insights."""
         patterns = [
-            {"insight": "use redis for caching", "source": "a.md", "date": "2026-01-01", "context": ""},
-            {"insight": "write tests first", "source": "b.md", "date": "2026-01-02", "context": ""},
+            {
+                "insight": "use redis for caching",
+                "source": "a.md",
+                "date": "2026-01-01",
+                "context": "",
+            },
+            {
+                "insight": "write tests first",
+                "source": "b.md",
+                "date": "2026-01-02",
+                "context": "",
+            },
         ]
         backend = TokenBackend()
         result = _deduplicate_insights(patterns, threshold=0.5, backend=backend)
@@ -174,9 +192,24 @@ class TestDeduplication:
     def test_tracks_sources(self):
         """Should track all sources for merged insights."""
         patterns = [
-            {"insight": "run tests", "source": "a.md", "date": "2026-01-01", "context": ""},
-            {"insight": "run test", "source": "b.md", "date": "2026-01-02", "context": ""},
-            {"insight": "run testing", "source": "c.md", "date": "2026-01-03", "context": ""},
+            {
+                "insight": "run tests",
+                "source": "a.md",
+                "date": "2026-01-01",
+                "context": "",
+            },
+            {
+                "insight": "run test",
+                "source": "b.md",
+                "date": "2026-01-02",
+                "context": "",
+            },
+            {
+                "insight": "run testing",
+                "source": "c.md",
+                "date": "2026-01-03",
+                "context": "",
+            },
         ]
         backend = TokenBackend()
         result = _deduplicate_insights(patterns, threshold=0.5, backend=backend)
@@ -342,17 +375,33 @@ class TestToImperative:
 
     def test_already_has_confidence_modifier(self):
         """Should preserve rules that already have confidence modifiers."""
-        assert _to_imperative("always validate inputs", "high") == "Always validate inputs"
-        assert _to_imperative("never use global state", "medium") == "Never use global state"
-        assert _to_imperative("prefer composition over inheritance", "low") == "Prefer composition over inheritance"
-        assert _to_imperative("avoid mutable defaults", "high") == "Avoid mutable defaults"
+        assert (
+            _to_imperative("always validate inputs", "high") == "Always validate inputs"
+        )
+        assert (
+            _to_imperative("never use global state", "medium")
+            == "Never use global state"
+        )
+        assert (
+            _to_imperative("prefer composition over inheritance", "low")
+            == "Prefer composition over inheritance"
+        )
+        assert (
+            _to_imperative("avoid mutable defaults", "high") == "Avoid mutable defaults"
+        )
 
     def test_plain_imperative_gets_confidence_prefix(self):
         """Plain imperatives should get confidence prefixes."""
         # Low confidence adds "Consider:"
-        assert _to_imperative("use frozen dataclasses", "low") == "Consider: use frozen dataclasses"
+        assert (
+            _to_imperative("use frozen dataclasses", "low")
+            == "Consider: use frozen dataclasses"
+        )
         # High confidence adds "Always"
-        assert _to_imperative("run tests before commit", "high") == "Always run tests before commit"
+        assert (
+            _to_imperative("run tests before commit", "high")
+            == "Always run tests before commit"
+        )
 
     def test_high_confidence_basic(self):
         """High confidence should prefix with Always."""
@@ -434,8 +483,17 @@ class TestToImperative:
     def test_gerund_conversion(self):
         """Should convert verbs to gerund form for Avoid/Prefer."""
         # Avoid + verb -> Avoid + gerund
-        assert _to_imperative("use mutable defaults", "medium") == "Prefer to use mutable defaults"
-        assert _to_imperative("should not run tests in production", "medium") == "Avoid running tests in production"
+        assert (
+            _to_imperative("use mutable defaults", "medium")
+            == "Prefer to use mutable defaults"
+        )
+        assert (
+            _to_imperative("should not run tests in production", "medium")
+            == "Avoid running tests in production"
+        )
 
         # Prefer (comparison) + verb -> Prefer + gerund
-        assert _to_imperative("write tests before code", "medium") == "Prefer to write tests before code"
+        assert (
+            _to_imperative("write tests before code", "medium")
+            == "Prefer to write tests before code"
+        )

@@ -278,7 +278,6 @@ def promote(
     tracking_path = _get_promoted_path(buildlog_dir)
 
     # Get renderer using the registry pattern
-    from buildlog.render import get_renderer
     renderer = get_renderer(target, path=target_path, tracking_path=tracking_path)
 
     message = renderer.render(found_skills)
@@ -373,7 +372,8 @@ def diff(
 
     for category, skill_list in skill_set.skills.items():
         pending_skills = [
-            s.to_dict() for s in skill_list
+            s.to_dict()
+            for s in skill_list
             if s.id not in rejected_ids and s.id not in promoted_ids
         ]
         if pending_skills:
