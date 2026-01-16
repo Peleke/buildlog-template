@@ -29,41 +29,60 @@ Meanwhile, your AI agent makes the same mistakes on similar problems because it 
 **buildlog** captures the signal from AI-assisted development sessions and transforms it into:
 
 1. **Publishable content** - Each entry is a $500+ tutorial draft
-2. **Structured patterns** - Categorized insights ready for analysis
-3. **Agent-consumable skills** - Deduplicated rules that can improve future AI behavior
+2. **Structured insights** - Categorized learnings ready for analysis
+3. **Agent rules** - Deduplicated, confidence-scored rules that improve AI behavior
 
-```
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│   Raw Sessions  │ ──▶  │  Buildlog Entry │ ──▶  │  Agent Skills   │
-│   (ephemeral)   │      │  (structured)   │      │  (actionable)   │
-└─────────────────┘      └─────────────────┘      └─────────────────┘
-     Chat logs            Markdown files          YAML/JSON rules
-     Screen shares        with categories         that agents can
-     Debugging noise      and improvements        actually use
+```mermaid
+flowchart LR
+    A["Raw Sessions<br/>(ephemeral)"] --> B["Buildlog Entries<br/>(structured markdown)"]
+    B --> C["Distilled Insights<br/>(categorized patterns)"]
+    C --> D["Agent Rules<br/>(deduplicated + scored)"]
+    D --> E["CLAUDE.md<br/>settings.json<br/>Agent Skills"]
+
+    style A fill:#ff6b6b,color:#fff
+    style B fill:#4ecdc4,color:#fff
+    style C fill:#45b7d1,color:#fff
+    style D fill:#96ceb4,color:#fff
+    style E fill:#dda0dd,color:#fff
 ```
 
 ---
 
-## ✨ Features
+## Key Concepts
 
-### 📝 Structured Capture
+| Term | What it means |
+|------|---------------|
+| **Entry** | A structured markdown file documenting one work session |
+| **Insight** | A single learning extracted from an entry's Improvements section |
+| **Pattern** | Raw insights grouped by category (architectural, workflow, etc.) |
+| **Rule** | Deduplicated insight with stable ID, confidence score, and source tracking |
+| **Agent Skill** | Rules promoted to `.claude/skills/` for on-demand loading by Claude |
+
+---
+
+## Features
+
+### Structured Capture
 Templates with six required sections ensure you never forget to document the mistakes that teach the most.
 
-### 📊 Pattern Distillation
+### Pattern Distillation
 Extract categorized insights from all your entries into structured JSON/YAML for analysis.
 
-### 🧠 Semantic Deduplication
+### Semantic Deduplication
 "Run tests before commit" and "Always execute the test suite prior to committing" are the same insight. buildlog merges them.
 
-### 🤖 Agent-Ready Skills
-Generate rules your AI agent can consume—with stable IDs, confidence scores, and source tracking.
+### Confidence Scoring
+Rules are scored based on frequency and recency. High-confidence rules have been reinforced multiple times recently.
 
-### 🔌 Pluggable Embeddings
+### Multiple Promotion Targets
+Promote rules to CLAUDE.md, settings.json, or **Anthropic Agent Skills** (`.claude/skills/`) for on-demand loading.
+
+### Pluggable Embeddings
 Token-based similarity by default. Upgrade to sentence-transformers or OpenAI for semantic understanding.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Install
@@ -78,15 +97,42 @@ buildlog new auth-api
 # After a few entries, extract patterns
 buildlog distill
 
-# Generate agent-consumable skills
+# Generate deduplicated rules
 buildlog skills
 ```
 
 ---
 
-## 🔄 The Pipeline
+## The Pipeline
 
 buildlog is a three-stage pipeline that transforms ephemeral work into durable knowledge:
+
+```mermaid
+flowchart TB
+    subgraph Stage1["Stage 1: Capture"]
+        A1["buildlog new slug"] --> A2["Edit markdown entry"]
+        A2 --> A3["Document: Goal, Journey,<br/>Tests, Code, Improvements"]
+    end
+
+    subgraph Stage2["Stage 2: Distill"]
+        B1["buildlog distill"] --> B2["Parse all entries"]
+        B2 --> B3["Extract Improvements sections"]
+        B3 --> B4["Group by category"]
+    end
+
+    subgraph Stage3["Stage 3: Promote"]
+        C1["buildlog skills"] --> C2["Deduplicate similar insights"]
+        C2 --> C3["Calculate confidence scores"]
+        C3 --> C4["Generate stable IDs"]
+        C4 --> C5["Promote to target"]
+    end
+
+    Stage1 --> Stage2 --> Stage3
+
+    C5 --> D1["CLAUDE.md"]
+    C5 --> D2["settings.json"]
+    C5 --> D3[".claude/skills/"]
+```
 
 ### Stage 1: Capture (`buildlog new`)
 
@@ -123,7 +169,7 @@ The **Improvements** section is structured for machine extraction:
 
 ### Stage 2: Distill (`buildlog distill`)
 
-Extract all improvements across entries into structured data:
+Extract all insights across entries into structured data:
 
 ```bash
 buildlog distill                    # JSON to stdout
@@ -150,13 +196,13 @@ Output:
 }
 ```
 
-### Stage 3: Skills (`buildlog skills`)
+### Stage 3: Generate Rules (`buildlog skills`)
 
 Transform raw patterns into deduplicated, scored rules:
 
 ```bash
 buildlog skills                           # YAML to stdout
-buildlog skills -o skills.yml             # Write to file
+buildlog skills -o rules.yml              # Write to file
 buildlog skills --format markdown         # For CLAUDE.md injection
 buildlog skills --min-frequency 2         # Only repeated patterns
 buildlog skills --embeddings openai       # Semantic deduplication
@@ -185,18 +231,18 @@ skills:
 
 ---
 
-## 🧠 Patterns vs Skills
+## Patterns vs Rules
 
 **Patterns** are raw extractions—every insight from every entry, exactly as written.
 
-**Skills** are processed rules with:
+**Rules** are processed patterns with:
 
 | Property | Description |
 |----------|-------------|
 | **Stable ID** | Same rule always gets same ID (SHA-256 based) |
 | **Deduplication** | Similar insights merged, frequency tracked |
 | **Confidence** | high/medium/low based on frequency + recency |
-| **Sources** | Which entries contributed to this skill |
+| **Sources** | Which entries contributed to this rule |
 | **Tags** | Auto-extracted technology/concept keywords |
 
 ### Deduplication in Action
@@ -208,7 +254,7 @@ Raw patterns from different entries:
 - "Execute tests prior to committing code"
 ```
 
-After deduplication → **1 skill** with `frequency: 3`:
+After deduplication → **1 rule** with `frequency: 3`:
 ```yaml
 - id: wf-96f12966f1
   rule: Run tests before committing
@@ -218,7 +264,126 @@ After deduplication → **1 skill** with `frequency: 3`:
 
 ---
 
-## 🔌 Embedding Backends
+## Promotion Targets
+
+Rules can be promoted to different targets for agent consumption:
+
+```mermaid
+flowchart LR
+    R["Rules<br/>(buildlog_status)"] --> T1["CLAUDE.md<br/>(append)"]
+    R --> T2["settings.json<br/>(merge)"]
+    R --> T3[".claude/skills/<br/>(Agent Skill)"]
+
+    T1 --> A1["Always loaded<br/>in context"]
+    T2 --> A2["Project settings<br/>for Claude Code"]
+    T3 --> A3["On-demand loading<br/>saves context"]
+
+    style T3 fill:#96ceb4,color:#fff
+```
+
+| Target | File | When to Use |
+|--------|------|-------------|
+| `claude_md` | `CLAUDE.md` | Rules always in context (default) |
+| `settings_json` | `.claude/settings.json` | Project-level Claude Code settings |
+| `skill` | `.claude/skills/buildlog-learned/SKILL.md` | **On-demand loading** - rules load only when relevant |
+
+### Anthropic Agent Skills (New!)
+
+The `skill` target creates an [Anthropic Agent Skill](https://docs.anthropic.com/en/docs/claude-code/skills) that Claude loads on-demand:
+
+```bash
+# Via MCP tool
+buildlog_promote(skill_ids=["arch-123", "wf-456"], target="skill")
+```
+
+Creates `.claude/skills/buildlog-learned/SKILL.md`:
+
+```markdown
+---
+name: buildlog-learned
+description: Project-specific patterns learned from development history.
+  Use when writing code, making architectural decisions, reviewing PRs,
+  or ensuring consistency. Contains 12 rules across Architectural, Workflow.
+---
+
+# Learned Patterns
+
+*12 rules extracted from buildlog entries on 2026-01-16*
+
+## Must Follow (High Confidence)
+
+These patterns have been reinforced multiple times.
+
+### Architectural
+- Always validate inputs at the boundary
+- Use dependency injection for testability
+
+### Workflow
+- Run tests after EVERY code change
+
+## Should Consider (Medium Confidence)
+
+These patterns appear frequently but may have exceptions.
+
+### Tool Usage
+- Prefer `patch` context manager for date mocking
+```
+
+**Why Agent Skills?**
+- **On-demand loading** - Rules only load when Claude determines they're relevant
+- **Saves context** - Not always in context like CLAUDE.md
+- **Progressive disclosure** - Claude asks before loading the full skill
+
+### Live Usage Scenario
+
+Here's how your learned rules actually get used:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ You: "Review this authentication endpoint I wrote"              │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Claude sees: "authentication" + "review" + "endpoint"           │
+│                                                                 │
+│ Checks skill description:                                       │
+│   "Use when writing code, making architectural decisions,       │
+│    reviewing PRs, or ensuring consistency..."                   │
+│                                                                 │
+│ Match! Loads .claude/skills/buildlog-learned/SKILL.md           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Claude now has access to YOUR learned rules:                    │
+│                                                                 │
+│   Must Follow:                                                  │
+│   - Password hashing belongs in User model, not route handler   │
+│   - Always validate inputs at the boundary                      │
+│                                                                 │
+│   Worth Knowing:                                                │
+│   - bcrypt.compare() arg order is (plaintext, hash)             │
+│   - JWT expiry is in seconds, not milliseconds                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Claude: "I notice the password hashing is in your route         │
+│ handler. Based on patterns from your buildlog, this should      │
+│ be a pre-save hook in the User model instead.                   │
+│                                                                 │
+│ Also, I see bcrypt.compare(hash, password) - the argument       │
+│ order should be (plaintext, hash). This has tripped you up      │
+│ before."                                                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Your past mistakes now prevent future ones—automatically.
+
+---
+
+## Embedding Backends
 
 Deduplication uses text similarity. Choose your backend:
 
@@ -244,14 +409,14 @@ buildlog skills --embeddings openai
 
 | Input | Token | OpenAI |
 |-------|:-----:|:------:|
-| "Run tests before commit" ≈ "Run testing before committing" | ✅ Merged | ✅ Merged |
-| "Use Redis for caching" ≈ "Cache data in Redis" | ❌ Separate | ✅ Merged |
+| "Run tests before commit" ≈ "Run testing before committing" | Merged | Merged |
+| "Use Redis for caching" ≈ "Cache data in Redis" | Separate | Merged |
 
 ---
 
-## 🤖 Practical Usage: Making Your Life Easier
+## Practical Usage
 
-### 1. Inject Skills into CLAUDE.md
+### 1. Inject Rules into CLAUDE.md
 
 ```bash
 buildlog skills --format markdown >> CLAUDE.md
@@ -260,40 +425,51 @@ buildlog skills --format markdown >> CLAUDE.md
 Your AI agent now has access to every lesson you've learned:
 
 ```markdown
-## Learned Skills
+## Learned Rules
 
-Based on 23 buildlog entries, 31 actionable skills have emerged:
+Based on 23 buildlog entries, 31 actionable rules have emerged:
 
-### Architectural (8 skills)
-- 🟢 **Always validate inputs at the boundary** (seen 4x)
-- 🟡 **Use frozen dataclasses for data containers** (seen 2x)
+### Architectural (8 rules)
+- Always validate inputs at the boundary (seen 4x)
+- Use frozen dataclasses for data containers (seen 2x)
 
-### Workflow (12 skills)
-- 🟢 **Run tests after EVERY code change** (seen 5x)
+### Workflow (12 rules)
+- Run tests after EVERY code change (seen 5x)
 ...
 ```
 
-### 2. Track Skill Evolution
+### 2. Create an Agent Skill
 
-Skills have stable IDs. Track which skills are reinforced over time:
+For on-demand loading instead of always-in-context:
 
 ```bash
-# This week's new skills
+# Via CLI (coming soon)
+buildlog promote --target skill
+
+# Via MCP
+buildlog_promote(skill_ids=["arch-123"], target="skill")
+```
+
+### 3. Track Rule Evolution
+
+Rules have stable IDs. Track which are reinforced over time:
+
+```bash
+# This week's new rules
 buildlog skills --since 2026-01-10 -o this-week.yml
 
 # Compare to baseline
-diff baseline-skills.yml this-week.yml
+diff baseline.yml this-week.yml
 ```
 
-### 3. Find Your Blind Spots
+### 4. Find Your Blind Spots
 
 ```bash
 buildlog stats --detailed
 ```
 
 ```
-📊 Buildlog Statistics
-═══════════════════════════════════════
+Buildlog Statistics
 
 Entries: 23 total
 Coverage: 87% with improvements
@@ -304,22 +480,13 @@ Category Breakdown:
   tool_usage:        8 insights (17%)
   domain_knowledge: 11 insights (24%)
 
-⚠️  Warnings:
+Warnings:
   - 3 entries have empty Improvements sections
 ```
 
-### 4. Build a Personal Knowledge Base
-
-```bash
-# Weekly cron job
-buildlog skills -o ~/.buildlog/skills-$(date +%Y-%m-%d).yml
-```
-
-Over time, you build a corpus of everything you've learned—searchable, diffable, and agent-consumable.
-
 ---
 
-## 📋 Commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
@@ -329,7 +496,7 @@ Over time, you build a corpus of everything you've learned—searchable, diffabl
 | `buildlog list` | List all entries |
 | `buildlog distill` | Extract patterns from all entries |
 | `buildlog stats` | Show statistics and analytics |
-| `buildlog skills` | Generate agent-consumable skills |
+| `buildlog skills` | Generate deduplicated rules |
 | `buildlog update` | Update templates to latest |
 
 ### Skills Options
@@ -337,63 +504,72 @@ Over time, you build a corpus of everything you've learned—searchable, diffabl
 ```bash
 --output, -o PATH       # Write to file instead of stdout
 --format [yaml|json|markdown]  # Output format (default: yaml)
---min-frequency N       # Only skills seen N+ times
+--min-frequency N       # Only rules seen N+ times
 --since YYYY-MM-DD      # Only entries from this date
 --embeddings [token|sentence-transformers|openai]  # Similarity backend
 ```
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
-```
-buildlog/
-├── cli.py              # Click CLI commands
-├── distill.py          # Pattern extraction from markdown
-├── stats.py            # Analytics and coverage metrics
-├── skills.py           # Skill generation with deduplication
-├── embeddings.py       # Pluggable similarity backends
-├── core/               # Core business logic
-│   └── operations.py   # status, promote, reject, diff
-├── render/             # Output adapters
-│   ├── claude_md.py    # Append rules to CLAUDE.md
-│   └── settings_json.py# Merge rules into settings.json
-└── mcp/                # MCP server (thin wrappers)
-    ├── server.py       # FastMCP server setup
-    └── tools.py        # Tool implementations
+```mermaid
+flowchart TB
+    subgraph CLI["CLI Layer"]
+        cli["cli.py"]
+    end
 
-User's Project/
-└── buildlog/
-    ├── _TEMPLATE.md           # Entry template
-    ├── 2026-01-15-auth-api.md
-    ├── 2026-01-16-bugfix.md
-    └── ...
+    subgraph Core["Core Logic"]
+        distill["distill.py<br/>Pattern extraction"]
+        skills["skills.py<br/>Deduplication + scoring"]
+        stats["stats.py<br/>Analytics"]
+        embeddings["embeddings.py<br/>Similarity backends"]
+        ops["core/operations.py<br/>status, promote, reject"]
+    end
+
+    subgraph Render["Render Adapters"]
+        claude_md["claude_md.py"]
+        settings_json["settings_json.py"]
+        skill_render["skill.py"]
+    end
+
+    subgraph MCP["MCP Server"]
+        server["server.py"]
+        tools["tools.py"]
+    end
+
+    cli --> distill
+    cli --> skills
+    cli --> stats
+
+    skills --> embeddings
+    skills --> distill
+
+    ops --> skills
+    ops --> Render
+
+    tools --> ops
+    server --> tools
 ```
 
 ### Data Flow
 
-```
-buildlog/*.md
-      │
-      ▼ parse markdown, extract Improvements
-┌─────────────────┐
-│  distill_all()  │ → patterns by category
-└────────┬────────┘
-         │
-         ▼ deduplicate, score, tag
-┌─────────────────┐
-│ generate_skills()│ → SkillSet with stable IDs
-└────────┬────────┘
-         │
-         ▼ format output
-┌─────────────────┐
-│ format_skills() │ → YAML / JSON / Markdown
-└─────────────────┘
+```mermaid
+flowchart LR
+    MD["buildlog/*.md"] --> Parse["Parse markdown"]
+    Parse --> Extract["Extract Improvements"]
+    Extract --> Distill["distill_all()"]
+    Distill --> Patterns["Patterns by category"]
+    Patterns --> Dedup["Deduplicate"]
+    Dedup --> Score["Calculate confidence"]
+    Score --> Rules["Rules with IDs"]
+    Rules --> Format["Format output"]
+    Format --> Out["YAML / JSON / Markdown / Agent Skill"]
 ```
 
 ---
 
-## 🧪 Installation Options
+## Installation Options
 
 ```bash
 # Basic install
@@ -417,9 +593,9 @@ pip install buildlog[mcp]
 
 ---
 
-## 🔗 MCP Server (Claude Code Integration)
+## MCP Server (Claude Code Integration)
 
-The MCP server lets Claude Code interact with your buildlog skills directly. Your agent can review learned patterns, promote them to rules, or reject false positives—all through natural conversation.
+The MCP server lets Claude Code interact with your buildlog rules directly. Your agent can review learned patterns, promote them to rules, or reject false positives—all through natural conversation.
 
 ### Setup for Claude Code CLI
 
@@ -442,96 +618,29 @@ The MCP server lets Claude Code interact with your buildlog skills directly. You
    }
    ```
 
-   Or for project-specific config (`.claude/settings.json` in your repo):
-   ```json
-   {
-     "mcpServers": {
-       "buildlog": {
-         "command": "buildlog-mcp",
-         "args": []
-       }
-     }
-   }
-   ```
-
 3. Start a new Claude Code session. The buildlog tools will be available.
-
-### Setup for Claude Desktop
-
-1. Install with MCP support:
-   ```bash
-   pip install buildlog[mcp]
-   ```
-
-2. Add to your Claude Desktop config:
-   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-   - **Linux**: `~/.config/claude/claude_desktop_config.json`
-
-   ```json
-   {
-     "mcpServers": {
-       "buildlog": {
-         "command": "buildlog-mcp",
-         "args": []
-       }
-     }
-   }
-   ```
-
-3. Restart Claude Desktop.
-
-### Local Development / Dogfooding
-
-For dogfooding buildlog in your own projects during development:
-
-```bash
-# From the buildlog-template repo, install in editable mode
-uv pip install -e ".[mcp,dev]"
-
-# Verify the MCP server runs
-buildlog-mcp --help  # Should show MCP server info
-
-# Test that skills generation works
-cd /path/to/your/project
-buildlog init  # if not already initialized
-buildlog skills  # verify skills are generated
-```
-
-Then add to your project's `.claude/settings.json`:
-```json
-{
-  "mcpServers": {
-    "buildlog": {
-      "command": "buildlog-mcp"
-    }
-  }
-}
-```
-
-### Troubleshooting
-
-**"buildlog-mcp: command not found"**
-- Ensure the package is installed: `pip show buildlog`
-- Check your PATH includes pip's bin directory
-- Try using the full path: `which buildlog-mcp` or `python -m buildlog.mcp.server`
-
-**"No buildlog directory found"**
-- Run `buildlog init` in your project first
-- The MCP server looks for `./buildlog/` by default
-
-**Skills not appearing**
-- Ensure you have buildlog entries with **Improvements** sections
-- Run `buildlog stats` to check coverage
 
 ### Available Tools
 
 | Tool | Description |
 |------|-------------|
-| `buildlog_status` | Get skills grouped by category with confidence scores |
-| `buildlog_promote` | Write high-confidence skills to CLAUDE.md or settings.json |
-| `buildlog_reject` | Mark skills to exclude from future suggestions |
-| `buildlog_diff` | Show skills pending review (not yet promoted/rejected) |
+| `buildlog_status` | Get rules grouped by category with confidence scores |
+| `buildlog_promote` | Write rules to CLAUDE.md, settings.json, or **Agent Skills** |
+| `buildlog_reject` | Mark rules to exclude from future suggestions |
+| `buildlog_diff` | Show rules pending review (not yet promoted/rejected) |
+
+### Promotion Targets via MCP
+
+```python
+# Append to CLAUDE.md (default)
+buildlog_promote(skill_ids=["arch-123"], target="claude_md")
+
+# Merge into settings.json
+buildlog_promote(skill_ids=["arch-123"], target="settings_json")
+
+# Create Anthropic Agent Skill (NEW!)
+buildlog_promote(skill_ids=["arch-123"], target="skill")
+```
 
 ### Example Conversation
 
@@ -539,44 +648,26 @@ Then add to your project's `.claude/settings.json`:
 You: What patterns have I learned?
 
 Claude: [calls buildlog_status]
-        Based on 23 buildlog entries, you have 31 skills:
+        Based on 23 buildlog entries, you have 31 rules:
 
         High confidence (ready to promote):
         - arch-b0fcb62a1e: "Always validate inputs at the boundary"
         - wf-96f12966f1: "Run tests before committing"
 
-        Would you like me to add these to your CLAUDE.md?
+        Would you like me to add these to your CLAUDE.md or create an Agent Skill?
 
-You: Yes, promote the high-confidence ones.
+You: Create an Agent Skill so they load on-demand.
 
-Claude: [calls buildlog_promote]
-        Added 8 rules to CLAUDE.md. These patterns will now
-        influence my behavior in future sessions.
+Claude: [calls buildlog_promote with target="skill"]
+        Created skill at .claude/skills/buildlog-learned/SKILL.md
+
+        This skill will load on-demand when relevant to your work,
+        saving context for when you need it most.
 ```
-
-### How It Works
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Claude Code Session                          │
-│                                                                  │
-│  1. Claude calls buildlog_status                                │
-│     → Runs generate_skills() on-demand                          │
-│     → Returns skills with confidence scores                     │
-│                                                                  │
-│  2. User reviews and approves                                   │
-│                                                                  │
-│  3. Claude calls buildlog_promote                               │
-│     → Appends rules to CLAUDE.md                                │
-│     → Tracks promoted IDs in .buildlog/promoted.json            │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-The MCP server is **stateless**—skills are generated fresh on each request from your buildlog entries. No daemon, no database, no background processes.
 
 ---
 
-## 📜 Philosophy
+## Philosophy
 
 ### 1. Write Fast, Not Pretty
 Refrigerator to-do list energy. Get it down before you forget.
@@ -595,7 +686,7 @@ Each entry should be publishable as a **$500+ tutorial**. Real error messages. H
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing`)
@@ -605,7 +696,7 @@ Each entry should be publishable as a **$500+ tutorial**. Real error messages. H
 
 ---
 
-## 📄 License
+## License
 
 MIT License — see [LICENSE](./LICENSE) for details.
 
@@ -617,6 +708,6 @@ MIT License — see [LICENSE](./LICENSE) for details.
 
 **buildlog makes that possible.**
 
-[⬆ Back to top](#buildlog)
+[Back to top](#buildlog)
 
 </div>

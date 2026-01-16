@@ -59,7 +59,7 @@ class PromoteResult:
     """IDs of skills that were promoted."""
 
     target: str
-    """Target format (claude_md or settings_json)."""
+    """Target format (claude_md, settings_json, or skill)."""
 
     rules_added: int
     """Number of rules added."""
@@ -232,7 +232,7 @@ def status(
 def promote(
     buildlog_dir: Path,
     skill_ids: list[str],
-    target: Literal["claude_md", "settings_json"] = "claude_md",
+    target: Literal["claude_md", "settings_json", "skill"] = "claude_md",
     target_path: Path | None = None,
 ) -> PromoteResult:
     """Promote skills to agent rules.
@@ -240,7 +240,7 @@ def promote(
     Args:
         buildlog_dir: Path to buildlog directory.
         skill_ids: List of skill IDs to promote.
-        target: Where to write rules ("claude_md" or "settings_json").
+        target: Where to write rules ("claude_md", "settings_json", or "skill").
         target_path: Optional custom path for the target file.
 
     Returns:
@@ -277,13 +277,9 @@ def promote(
     # Set up tracking path in buildlog directory
     tracking_path = _get_promoted_path(buildlog_dir)
 
-    # Get renderer with custom paths
-    if target == "claude_md":
-        from buildlog.render.claude_md import ClaudeMdRenderer
-        renderer = ClaudeMdRenderer(path=target_path, tracking_path=tracking_path)
-    else:
-        from buildlog.render.settings_json import SettingsJsonRenderer
-        renderer = SettingsJsonRenderer(path=target_path, tracking_path=tracking_path)
+    # Get renderer using the registry pattern
+    from buildlog.render import get_renderer
+    renderer = get_renderer(target, path=target_path, tracking_path=tracking_path)
 
     message = renderer.render(found_skills)
 

@@ -39,17 +39,17 @@ def buildlog_status(
 
 def buildlog_promote(
     skill_ids: list[str],
-    target: Literal["claude_md", "settings_json"] = "claude_md",
+    target: Literal["claude_md", "settings_json", "skill"] = "claude_md",
     buildlog_dir: str = "buildlog",
 ) -> dict:
     """Promote skills to your agent's rules.
 
-    Writes selected skills to CLAUDE.md or .claude/settings.json
-    so your AI agent will follow these patterns.
+    Writes selected skills to CLAUDE.md, .claude/settings.json, or
+    .claude/skills/buildlog-learned/SKILL.md (Anthropic Agent Skills format).
 
     Args:
         skill_ids: List of skill IDs to promote (e.g., ["arch-b0fcb62a1e"])
-        target: Where to write rules ("claude_md" or "settings_json")
+        target: Where to write rules ("claude_md", "settings_json", or "skill")
         buildlog_dir: Path to buildlog directory
 
     Returns:

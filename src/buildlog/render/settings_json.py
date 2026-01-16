@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from buildlog.render.tracking import track_promoted
 from buildlog.skills import _to_imperative
 
 if TYPE_CHECKING:
@@ -69,28 +70,7 @@ class SettingsJsonRenderer:
         # Write back
         self.path.write_text(json.dumps(settings, indent=2))
 
-        # Track promoted skill IDs
-        self._track_promoted(skills)
+        # Track promoted skill IDs using shared utility
+        track_promoted(skills, self.tracking_path)
 
         return f"Added {added} rules to {self.path} ({len(skills) - added} duplicates skipped)"
-
-    def _track_promoted(self, skills: list[Skill]) -> None:
-        """Track which skills have been promoted."""
-        self.tracking_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Load existing tracking data (handle corrupt JSON)
-        tracking = {"skill_ids": [], "promoted_at": {}}
-        if self.tracking_path.exists():
-            try:
-                tracking = json.loads(self.tracking_path.read_text())
-            except json.JSONDecodeError:
-                pass  # Start fresh if corrupted
-
-        # Add new skill IDs
-        now = datetime.now().isoformat()
-        for skill in skills:
-            if skill.id not in tracking["skill_ids"]:
-                tracking["skill_ids"].append(skill.id)
-                tracking["promoted_at"][skill.id] = now
-
-        self.tracking_path.write_text(json.dumps(tracking, indent=2))

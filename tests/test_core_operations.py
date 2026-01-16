@@ -214,6 +214,41 @@ class TestPromoteOperation:
         tracking = json.loads(promoted_file.read_text())
         assert skill_id in tracking["skill_ids"]
 
+    def test_promotes_to_skill_format(self, tmp_path):
+        """Should create Anthropic Agent Skill SKILL.md file."""
+        # Setup
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        fixture = FIXTURES_DIR / "2026-01-01-test-entry.md"
+        (buildlog_dir / "2026-01-01-test-entry.md").write_text(fixture.read_text())
+
+        skill_file = tmp_path / ".claude" / "skills" / "buildlog-learned" / "SKILL.md"
+
+        # Get a skill ID
+        initial = status(buildlog_dir)
+        first_category = list(initial.skills.keys())[0]
+        skill_id = initial.skills[first_category][0]["id"]
+
+        # Promote it
+        result = promote(
+            buildlog_dir,
+            [skill_id],
+            target="skill",
+            target_path=skill_file,
+        )
+
+        assert result.error is None
+        assert skill_id in result.promoted_ids
+        assert result.rules_added == 1
+        assert "SKILL.md" in result.message
+
+        # Check file was created with proper format
+        assert skill_file.exists()
+        content = skill_file.read_text()
+        assert content.startswith("---\n")  # YAML frontmatter
+        assert "name: buildlog-learned" in content
+        assert "description:" in content
+
 
 class TestRejectOperation:
     """Tests for reject() operation."""

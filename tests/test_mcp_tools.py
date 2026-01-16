@@ -119,6 +119,41 @@ class TestBuildlogPromote:
 
         assert result["target"] == "settings_json"
 
+    def test_accepts_skill_target(self, tmp_path):
+        """Should accept target='skill' for Anthropic Agent Skills format."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Copy fixture
+        fixture = FIXTURES_DIR / "2026-01-01-test-entry.md"
+        (buildlog_dir / "2026-01-01-test-entry.md").write_text(fixture.read_text())
+
+        # Get a skill ID
+        status = buildlog_status(buildlog_dir=str(buildlog_dir))
+        first_category = list(status["skills"].keys())[0]
+        skill_id = status["skills"][first_category][0]["id"]
+
+        result = buildlog_promote(
+            skill_ids=[skill_id],
+            target="skill",
+            buildlog_dir=str(buildlog_dir),
+        )
+
+        assert result["target"] == "skill"
+        assert result["error"] is None
+        assert skill_id in result["promoted_ids"]
+
+        # Verify SKILL.md was created
+        skill_file = Path(".claude/skills/buildlog-learned/SKILL.md")
+        assert skill_file.exists()
+        content = skill_file.read_text()
+        assert "---\n" in content  # YAML frontmatter
+        assert "name: buildlog-learned" in content
+
+        # Cleanup
+        import shutil
+        shutil.rmtree(".claude", ignore_errors=True)
+
 
 class TestBuildlogReject:
     """Tests for buildlog_reject MCP tool."""

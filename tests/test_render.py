@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from buildlog.render import ClaudeMdRenderer, SettingsJsonRenderer, get_renderer
+from buildlog.render import ClaudeMdRenderer, SettingsJsonRenderer, SkillRenderer, get_renderer
 from buildlog.skills import Skill
 
 
@@ -230,6 +230,11 @@ class TestGetRenderer:
         """Should return SettingsJsonRenderer for 'settings_json'."""
         renderer = get_renderer("settings_json")
         assert isinstance(renderer, SettingsJsonRenderer)
+
+    def test_returns_skill_renderer(self):
+        """Should return SkillRenderer for 'skill'."""
+        renderer = get_renderer("skill")
+        assert isinstance(renderer, SkillRenderer)
 
     def test_accepts_custom_path(self, tmp_path):
         """Should accept custom path."""
