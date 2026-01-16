@@ -116,10 +116,35 @@
 
 [Observations about pace, tone, information density, interruptions]
 
-### For Next Time
+---
 
-1. [Lesson 1]
-2. [Lesson 2]
+## Improvements
+
+*Actionable learnings for future work. This section accumulates knowledge that can improve agent practices over time.*
+
+### Architectural
+
+[Things to do differently in system design, abstractions, patterns]
+- [e.g., "Should have used a plugin architecture from the start instead of hardcoding backends"]
+- [e.g., "The retry logic belongs in a shared util, not duplicated across services"]
+
+### Workflow
+
+[Better approaches to the development process itself]
+- [e.g., "Run the type checker before committing, not after"]
+- [e.g., "Should have written the integration test first to clarify the API contract"]
+
+### Tool Usage
+
+[More effective ways to use available tools and capabilities]
+- [e.g., "Use grep with -C flag for context instead of reading entire files"]
+- [e.g., "The batch endpoint would have been faster than individual requests"]
+
+### Domain Knowledge
+
+[Things learned about the specific technology/domain that apply broadly]
+- [e.g., "ComfyUI node IDs must be strings, not integers"]
+- [e.g., "Supabase storage returns 400 not 404 for missing files"]
 
 ---
 

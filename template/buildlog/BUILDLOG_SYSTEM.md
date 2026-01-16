@@ -36,6 +36,7 @@ Copy `_TEMPLATE.md` for each new entry. Sections:
 | **Test Results** | Actual commands, actual outputs |
 | **Code Samples** | Key snippets, not full files |
 | **AI Experience** | Reflection on collaboration |
+| **Improvements** | Actionable learnings for next time (see below) |
 
 ### Optional Sections
 
@@ -45,6 +46,21 @@ Copy `_TEMPLATE.md` for each new entry. Sections:
 | **Performance** | Benchmarks, timing data |
 | **What's Left** | If work is incomplete |
 | **Screenshots** | When visual context helps |
+
+### The Improvements Section
+
+The **Improvements** section is critical for accumulating knowledge over time. It captures actionable learnings in four categories:
+
+| Category | What to Capture |
+|----------|-----------------|
+| **Architectural** | Better design patterns, abstractions, system structure |
+| **Workflow** | Better development process, order of operations |
+| **Tool Usage** | More effective use of available tools and capabilities |
+| **Domain Knowledge** | Technology-specific facts that apply broadly |
+
+Write these as **concrete, reusable insights** - not vague observations. Bad: "Should have planned better." Good: "Should have defined the API contract before implementing the client."
+
+These entries form the substrate for future knowledge extraction. Even raw natural language thoughts are valuable here.
 
 ## When to Write Entries
 

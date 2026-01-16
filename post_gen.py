@@ -19,6 +19,9 @@ After completing significant work (features, debugging sessions, deployments, 2+
 4. **Test Results** - Actual commands run, actual outputs received
 5. **Code Samples** - Key snippets with context (not full files)
 6. **AI Experience Reflection** - Meta-commentary on the collaboration
+7. **Improvements** - Actionable learnings: architectural, workflow, tool usage, domain knowledge
+
+The **Improvements** section is critical - capture concrete insights like "Should have defined the API contract before implementing the client" not vague observations like "Should have planned better."
 
 **Quality bar:** Publishable as a $500+ Envato Tuts+/Manning tutorial.
 

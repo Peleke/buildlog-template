@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "buildlog"
+version = "0.1.0"
+description = "Engineering notebook for AI-assisted development"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Peleke Sengstacke" }
+]
+keywords = ["buildlog", "documentation", "ai", "development", "journal"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Documentation",
+    "Topic :: Software Development :: Documentation",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "copier>=9.0.0",
+    "click>=8.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Peleke/buildlog-template"
+Repository = "https://github.com/Peleke/buildlog-template"
+
+[project.scripts]
+buildlog = "buildlog.cli:main"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/template",
+    "/copier.yml",
+    "/post_gen.py",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/buildlog"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"template" = "share/buildlog/template"
+"copier.yml" = "share/buildlog/copier.yml"
+"post_gen.py" = "share/buildlog/post_gen.py"
