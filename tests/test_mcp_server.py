@@ -14,7 +14,7 @@ class TestMCPServerSetup:
 
     def test_server_imports(self):
         """Server module should import without error."""
-        from buildlog.mcp.server import mcp, main
+        from buildlog.mcp.server import main, mcp
 
         assert mcp is not None
         assert callable(main)

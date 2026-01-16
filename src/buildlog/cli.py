@@ -9,7 +9,7 @@ from pathlib import Path
 import click
 
 from buildlog.distill import CATEGORIES, distill_all, format_output
-from buildlog.skills import generate_skills, format_skills
+from buildlog.skills import format_skills, generate_skills
 from buildlog.stats import calculate_stats, format_dashboard, format_json
 
 
@@ -27,6 +27,7 @@ def get_template_dir() -> Path | None:
 
     # 2. Check installed location (site-packages/../share/buildlog)
     import sysconfig
+
     data_dir = Path(sysconfig.get_path("data")) / "share" / "buildlog"
     if (data_dir / "copier.yml").exists():
         return data_dir
@@ -67,13 +68,16 @@ def init(no_claude_md: bool):
         try:
             subprocess.run(
                 [
-                    sys.executable, "-m", "copier", "copy",
+                    sys.executable,
+                    "-m",
+                    "copier",
+                    "copy",
                     "--trust",
                     *(["--data", "update_claude_md=false"] if no_claude_md else []),
                     str(template_dir),
-                    "."
+                    ".",
                 ],
-                check=True
+                check=True,
             )
         except subprocess.CalledProcessError:
             click.echo("Failed to initialize buildlog.", err=True)
@@ -84,13 +88,16 @@ def init(no_claude_md: bool):
         try:
             subprocess.run(
                 [
-                    sys.executable, "-m", "copier", "copy",
+                    sys.executable,
+                    "-m",
+                    "copier",
+                    "copy",
                     "--trust",
                     *(["--data", "update_claude_md=false"] if no_claude_md else []),
                     "gh:Peleke/buildlog-template",
-                    "."
+                    ".",
                 ],
-                check=True
+                check=True,
             )
         except subprocess.CalledProcessError:
             click.echo("Failed to initialize buildlog.", err=True)
@@ -102,7 +109,9 @@ def init(no_claude_md: bool):
 
 @main.command()
 @click.argument("slug")
-@click.option("--date", "-d", "entry_date", default=None, help="Date for entry (YYYY-MM-DD)")
+@click.option(
+    "--date", "-d", "entry_date", default=None, help="Date for entry (YYYY-MM-DD)"
+)
 def new(slug: str, entry_date: str | None):
     """Create a new buildlog entry.
 
@@ -121,7 +130,9 @@ def new(slug: str, entry_date: str | None):
         raise SystemExit(1)
 
     if not template_file.exists():
-        click.echo("No _TEMPLATE.md found in buildlog/. Run 'buildlog init' first.", err=True)
+        click.echo(
+            "No _TEMPLATE.md found in buildlog/. Run 'buildlog init' first.", err=True
+        )
         raise SystemExit(1)
 
     # Determine date
@@ -170,8 +181,7 @@ def list():
         raise SystemExit(1)
 
     entries = sorted(
-        buildlog_dir.glob("20??-??-??-*.md"),
-        reverse=True  # Most recent first
+        buildlog_dir.glob("20??-??-??-*.md"), reverse=True  # Most recent first
     )
 
     if not entries:
@@ -183,7 +193,9 @@ def list():
         # Extract title from first line if possible
         try:
             first_line = entry.read_text().split("\n")[0]
-            title = first_line.replace("# Build Journal: ", "").replace("# ", "").strip()
+            title = (
+                first_line.replace("# Build Journal: ", "").replace("# ", "").strip()
+            )
             if title == "[TITLE]":
                 title = "(untitled)"
         except Exception:
@@ -202,21 +214,23 @@ def update():
         click.echo("Updating from local template...")
         try:
             subprocess.run(
-                [sys.executable, "-m", "copier", "update", "--trust"],
-                check=True
+                [sys.executable, "-m", "copier", "update", "--trust"], check=True
             )
         except subprocess.CalledProcessError:
-            click.echo("Failed to update. Try running 'copier update' directly.", err=True)
+            click.echo(
+                "Failed to update. Try running 'copier update' directly.", err=True
+            )
             raise SystemExit(1)
     else:
         click.echo("Updating from GitHub...")
         try:
             subprocess.run(
-                [sys.executable, "-m", "copier", "update", "--trust"],
-                check=True
+                [sys.executable, "-m", "copier", "update", "--trust"], check=True
             )
         except subprocess.CalledProcessError:
-            click.echo("Failed to update. Try running 'copier update' directly.", err=True)
+            click.echo(
+                "Failed to update. Try running 'copier update' directly.", err=True
+            )
             raise SystemExit(1)
 
     click.echo("\n✓ buildlog updated!")
@@ -273,7 +287,7 @@ def distill(output: str | None, fmt: str, since: datetime | None, category: str 
 
     # Format output
     try:
-        formatted = format_output(result, fmt)
+        formatted = format_output(result, fmt)  # type: ignore[arg-type]
     except ImportError as e:
         click.echo(str(e), err=True)
         raise SystemExit(1)
@@ -283,7 +297,9 @@ def distill(output: str | None, fmt: str, since: datetime | None, category: str 
         output_path = Path(output)
         try:
             output_path.write_text(formatted, encoding="utf-8")
-            click.echo(f"Wrote {result.statistics.get('total_patterns', 0)} patterns to {output_path}")
+            click.echo(
+                f"Wrote {result.statistics.get('total_patterns', 0)} patterns to {output_path}"
+            )
         except Exception as e:
             click.echo(f"Failed to write output: {e}", err=True)
             raise SystemExit(1)
@@ -293,8 +309,15 @@ def distill(output: str | None, fmt: str, since: datetime | None, category: str 
 
 @main.command()
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-@click.option("--detailed", is_flag=True, help="Show detailed breakdown including top sources")
-@click.option("--since", "since_date", default=None, help="Only include entries since date (YYYY-MM-DD)")
+@click.option(
+    "--detailed", is_flag=True, help="Show detailed breakdown including top sources"
+)
+@click.option(
+    "--since",
+    "since_date",
+    default=None,
+    help="Only include entries since date (YYYY-MM-DD)",
+)
 def stats(output_json: bool, detailed: bool, since_date: str | None):
     """Show buildlog statistics and analytics.
 
@@ -409,7 +432,7 @@ def skills(
 
     # Format output
     try:
-        formatted = format_skills(skill_set, fmt)
+        formatted = format_skills(skill_set, fmt)  # type: ignore[arg-type]
     except ImportError as e:
         click.echo(str(e), err=True)
         raise SystemExit(1)

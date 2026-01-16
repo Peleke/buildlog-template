@@ -19,7 +19,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Final, Literal, TypedDict
 
@@ -134,8 +134,6 @@ def _generate_skill_id(category: str, rule: str) -> str:
     return f"{prefix}-{rule_hash}"
 
 
-
-
 def _calculate_confidence(
     frequency: int,
     most_recent_date: date | None,
@@ -164,7 +162,10 @@ def _calculate_confidence(
     if most_recent_date:
         recency_days = (reference_date - most_recent_date).days
 
-    if frequency >= HIGH_CONFIDENCE_FREQUENCY and recency_days < HIGH_CONFIDENCE_RECENCY_DAYS:
+    if (
+        frequency >= HIGH_CONFIDENCE_FREQUENCY
+        and recency_days < HIGH_CONFIDENCE_RECENCY_DAYS
+    ):
         return "high"
     elif frequency >= MEDIUM_CONFIDENCE_FREQUENCY:
         return "medium"
@@ -179,12 +180,44 @@ def _extract_tags(rule: str) -> list[str]:
     """
     # Common tech/concept terms to extract as tags
     known_tags = {
-        "api", "http", "json", "yaml", "sql", "database", "cache",
-        "redis", "supabase", "postgres", "mongodb", "git", "docker",
-        "kubernetes", "aws", "gcp", "azure", "react", "python",
-        "typescript", "javascript", "rust", "go", "test", "testing",
-        "ci", "cd", "deploy", "error", "retry", "timeout", "auth",
-        "jwt", "oauth", "plugin", "middleware", "async", "sync",
+        "api",
+        "http",
+        "json",
+        "yaml",
+        "sql",
+        "database",
+        "cache",
+        "redis",
+        "supabase",
+        "postgres",
+        "mongodb",
+        "git",
+        "docker",
+        "kubernetes",
+        "aws",
+        "gcp",
+        "azure",
+        "react",
+        "python",
+        "typescript",
+        "javascript",
+        "rust",
+        "go",
+        "test",
+        "testing",
+        "ci",
+        "cd",
+        "deploy",
+        "error",
+        "retry",
+        "timeout",
+        "auth",
+        "jwt",
+        "oauth",
+        "plugin",
+        "middleware",
+        "async",
+        "sync",
     }
 
     # Word variants that map to canonical tags
@@ -301,7 +334,11 @@ def generate_skills(
     result = distill_all(buildlog_dir, since=since_date)
 
     # Get embedding backend
-    backend = get_backend(embedding_backend) if embedding_backend else get_default_backend()
+    backend = (
+        get_backend(embedding_backend)  # type: ignore[arg-type]
+        if embedding_backend
+        else get_default_backend()
+    )
     logger.info("Using embedding backend: %s", backend.name)
 
     skills_by_category: dict[str, list[Skill]] = {}
@@ -331,7 +368,7 @@ def generate_skills(
         skills_by_category[category] = skills
 
     return SkillSet(
-        generated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        generated_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         source_entries=result.entry_count,
         skills=skills_by_category,
     )
@@ -347,7 +384,9 @@ def _format_yaml(skill_set: SkillSet) -> str:
         ) from e
 
     data = skill_set.to_dict()
-    return yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    return yaml.dump(
+        data, default_flow_style=False, allow_unicode=True, sort_keys=False
+    )
 
 
 def _format_json(skill_set: SkillSet) -> str:
@@ -361,8 +400,10 @@ def _format_markdown(skill_set: SkillSet) -> str:
 
     lines.append("## Learned Skills")
     lines.append("")
-    lines.append(f"Based on {skill_set.source_entries} buildlog entries, "
-                 f"{skill_set.total_skills} actionable skills have emerged:")
+    lines.append(
+        f"Based on {skill_set.source_entries} buildlog entries, "
+        f"{skill_set.total_skills} actionable skills have emerged:"
+    )
     lines.append("")
 
     category_titles = {
@@ -384,7 +425,9 @@ def _format_markdown(skill_set: SkillSet) -> str:
             confidence_badge = {"high": "🟢", "medium": "🟡", "low": "⚪"}.get(
                 skill.confidence, ""
             )
-            freq_text = f"seen {skill.frequency}x" if skill.frequency > 1 else "seen once"
+            freq_text = (
+                f"seen {skill.frequency}x" if skill.frequency > 1 else "seen once"
+            )
             lines.append(f"- {confidence_badge} **{skill.rule}** ({freq_text})")
 
         lines.append("")
@@ -397,16 +440,23 @@ def _format_markdown(skill_set: SkillSet) -> str:
 
 # Pre-compiled patterns for _to_imperative (module-level for efficiency)
 _NEGATIVE_PATTERNS = tuple(
-    re.compile(p) for p in (
-        r"\bdon't\b", r"\bdo not\b", r"\bnever\b", r"\bavoid\b",
-        r"\bstop\b", r"\bshouldn't\b", r"\bshould not\b",
+    re.compile(p)
+    for p in (
+        r"\bdon't\b",
+        r"\bdo not\b",
+        r"\bnever\b",
+        r"\bavoid\b",
+        r"\bstop\b",
+        r"\bshouldn't\b",
+        r"\bshould not\b",
     )
 )
 
 # Comparison patterns - intentionally narrow to avoid false positives
 # "over" alone matches "all over", "game over" etc. so we require context
 _COMPARISON_PATTERNS = tuple(
-    re.compile(p) for p in (
+    re.compile(p)
+    for p in (
         r"\binstead of\b",
         r"\brather than\b",
         r"\bbetter than\b",
@@ -416,10 +466,22 @@ _COMPARISON_PATTERNS = tuple(
 
 # Verbs that need -ing form when following "Avoid" or bare "Prefer"
 _VERB_TO_GERUND: Final[dict[str, str]] = {
-    "use": "using", "run": "running", "make": "making", "write": "writing",
-    "read": "reading", "put": "putting", "get": "getting", "set": "setting",
-    "add": "adding", "create": "creating", "delete": "deleting", "call": "calling",
-    "pass": "passing", "send": "sending", "store": "storing", "cache": "caching",
+    "use": "using",
+    "run": "running",
+    "make": "making",
+    "write": "writing",
+    "read": "reading",
+    "put": "putting",
+    "get": "getting",
+    "set": "setting",
+    "add": "adding",
+    "create": "creating",
+    "delete": "deleting",
+    "call": "calling",
+    "pass": "passing",
+    "send": "sending",
+    "store": "storing",
+    "cache": "caching",
 }
 
 
@@ -456,8 +518,14 @@ def _to_imperative(rule: str, confidence: ConfidenceLevel) -> str:
 
     # Already has a confidence modifier - just capitalize and return
     confidence_modifiers = (
-        "always", "never", "prefer", "avoid", "consider", "remember",
-        "don't", "do not",
+        "always",
+        "never",
+        "prefer",
+        "avoid",
+        "consider",
+        "remember",
+        "don't",
+        "do not",
     )
     if any(rule_lower.startswith(word) for word in confidence_modifiers):
         return rule[0].upper() + rule[1:]
@@ -485,16 +553,23 @@ def _to_imperative(rule: str, confidence: ConfidenceLevel) -> str:
     # Clean up the rule for prefixing
     # Remove leading "should" type words (order matters - longer first)
     cleaners = [
-        "you shouldn't ", "we shouldn't ", "shouldn't ",
-        "you should not ", "we should not ", "should not ",
-        "you should ", "we should ", "should ",
-        "it's better to ", "it is better to ",
+        "you shouldn't ",
+        "we shouldn't ",
+        "shouldn't ",
+        "you should not ",
+        "we should not ",
+        "should not ",
+        "you should ",
+        "we should ",
+        "should ",
+        "it's better to ",
+        "it is better to ",
     ]
     cleaned = rule
     cleaned_lower = rule_lower
     for cleaner in cleaners:
         if cleaned_lower.startswith(cleaner):
-            cleaned = cleaned[len(cleaner):]
+            cleaned = cleaned[len(cleaner) :]
             cleaned_lower = cleaned.lower()
             break
 
@@ -505,10 +580,12 @@ def _to_imperative(rule: str, confidence: ConfidenceLevel) -> str:
 
     # Avoid double words: "Avoid avoid using..." -> "Avoid using..."
     prefix_lower = prefix.lower()
-    if cleaned_lower.startswith(prefix_lower + " ") or cleaned_lower.startswith(prefix_lower + "ing "):
+    if cleaned_lower.startswith(prefix_lower + " ") or cleaned_lower.startswith(
+        prefix_lower + "ing "
+    ):
         first_space = cleaned.find(" ")
         if first_space > 0:
-            cleaned = cleaned[first_space + 1:]
+            cleaned = cleaned[first_space + 1 :]
             cleaned_lower = cleaned.lower()
 
     # For "Avoid" and bare "Prefer", convert leading verbs to gerund form
@@ -518,7 +595,7 @@ def _to_imperative(rule: str, confidence: ConfidenceLevel) -> str:
         first_word = cleaned_lower.split()[0] if cleaned_lower else ""
         if first_word in _VERB_TO_GERUND:
             gerund = _VERB_TO_GERUND[first_word]
-            cleaned = gerund + cleaned[len(first_word):]
+            cleaned = gerund + cleaned[len(first_word) :]
             cleaned_lower = cleaned.lower()
 
     # Lowercase first char if we're adding a prefix (but not for gerunds which are already lower)
@@ -538,8 +615,10 @@ def _format_rules(skill_set: SkillSet) -> str:
 
     lines.append("# Project Rules")
     lines.append("")
-    lines.append(f"*Auto-generated from {skill_set.source_entries} buildlog entries. "
-                 f"{skill_set.total_skills} rules extracted.*")
+    lines.append(
+        f"*Auto-generated from {skill_set.source_entries} buildlog entries. "
+        f"{skill_set.total_skills} rules extracted.*"
+    )
     lines.append("")
 
     # Collect all skills, sort by confidence then frequency
@@ -625,6 +704,8 @@ def format_skills(skill_set: SkillSet, fmt: OutputFormat = "yaml") -> str:
 
     formatter = formatters.get(fmt)
     if formatter is None:
-        raise ValueError(f"Unknown format: {fmt}. Must be one of: {list(formatters.keys())}")
+        raise ValueError(
+            f"Unknown format: {fmt}. Must be one of: {list(formatters.keys())}"
+        )
 
     return formatter(skill_set)

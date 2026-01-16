@@ -166,7 +166,10 @@ Something.
         result = parse_improvements(content)
 
         assert len(result["architectural"]) == 2
-        assert "This is a long insight that continues on the next line and even a third line" in result["architectural"]
+        assert (
+            "This is a long insight that continues on the next line and even a third line"
+            in result["architectural"]
+        )
         assert "Short insight" in result["architectural"]
 
     def test_handles_nested_h4_headers(self):
@@ -312,7 +315,10 @@ class TestDistillAll:
         # Should only include the February entry
         assert result.entry_count == 1
         assert len(result.patterns["architectural"]) == 1
-        assert "Event sourcing is overkill" in result.patterns["architectural"][0]["insight"]
+        assert (
+            "Event sourcing is overkill"
+            in result.patterns["architectural"][0]["insight"]
+        )
 
     def test_filters_by_category(self):
         """Should filter to specific category."""

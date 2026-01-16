@@ -12,7 +12,7 @@ __all__ = [
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from itertools import takewhile
 from pathlib import Path
 from typing import Final, NamedTuple, TypedDict
@@ -315,7 +315,9 @@ def calculate_stats(
     # Parse all entries using functional map/filter pattern
     parsed_or_none = [
         _parse_entry(entry_path, date_str)
-        for entry_path, date_str in iter_buildlog_entries(buildlog_dir, since=since_date)
+        for entry_path, date_str in iter_buildlog_entries(
+            buildlog_dir, since=since_date
+        )
     ]
     entries = [e for e in parsed_or_none if e is not None]
 
@@ -326,8 +328,8 @@ def calculate_stats(
 
     entry_dates = [e.entry_date for e in entries if e.entry_date]
 
-    this_week = sum(1 for d in entry_dates if d and d >= week_ago)
-    this_month = sum(1 for d in entry_dates if d and d >= month_start)
+    this_week = sum(1 for d in entry_dates if d and d >= week_ago)  # type: ignore[misc]
+    this_month = sum(1 for d in entry_dates if d and d >= month_start)  # type: ignore[misc]
 
     with_improvements = sum(1 for e in entries if e.has_improvements)
     coverage_percent = int((with_improvements / len(entries) * 100) if entries else 0)
@@ -351,7 +353,7 @@ def calculate_stats(
             warnings.insert(0, "No buildlog entries found")
 
     return BuildlogStats(
-        generated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        generated_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         entries=EntryStats(
             total=len(entries),
             this_week=this_week,

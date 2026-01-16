@@ -61,4 +61,4 @@ def get_renderer(
         )
 
     renderer_cls = RENDERERS[target]
-    return renderer_cls(path=path, **kwargs)
+    return renderer_cls(path=path, **kwargs)  # type: ignore[call-arg]

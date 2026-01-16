@@ -76,9 +76,7 @@ class SkillRenderer:
 
         # Build SKILL.md content
         categories = sorted(set(s.category for s in skills))
-        category_display = ", ".join(
-            self._category_title(c) for c in categories
-        )
+        category_display = ", ".join(self._category_title(c) for c in categories)
 
         lines = [
             "---",
@@ -98,27 +96,33 @@ class SkillRenderer:
 
         # High confidence = Must Follow
         if by_confidence["high"]:
-            lines.extend(self._render_confidence_section(
-                "Must Follow (High Confidence)",
-                "These patterns have been reinforced multiple times.",
-                by_confidence["high"],
-            ))
+            lines.extend(
+                self._render_confidence_section(
+                    "Must Follow (High Confidence)",
+                    "These patterns have been reinforced multiple times.",
+                    by_confidence["high"],
+                )
+            )
 
         # Medium confidence = Should Consider
         if by_confidence["medium"]:
-            lines.extend(self._render_confidence_section(
-                "Should Consider (Medium Confidence)",
-                "These patterns appear frequently but may have exceptions.",
-                by_confidence["medium"],
-            ))
+            lines.extend(
+                self._render_confidence_section(
+                    "Should Consider (Medium Confidence)",
+                    "These patterns appear frequently but may have exceptions.",
+                    by_confidence["medium"],
+                )
+            )
 
         # Low confidence = Worth Knowing
         if by_confidence["low"]:
-            lines.extend(self._render_confidence_section(
-                "Worth Knowing (Low Confidence)",
-                "Emerging patterns worth being aware of.",
-                by_confidence["low"],
-            ))
+            lines.extend(
+                self._render_confidence_section(
+                    "Worth Knowing (Low Confidence)",
+                    "Emerging patterns worth being aware of.",
+                    by_confidence["low"],
+                )
+            )
 
         content = "\n".join(lines)
 

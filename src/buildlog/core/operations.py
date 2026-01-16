@@ -192,7 +192,7 @@ def status(
     confidence_order = {"low": 0, "medium": 1, "high": 2}
     min_level = confidence_order[min_confidence]
 
-    filtered: dict[str, list[dict]] = {}
+    filtered: dict[str, list[dict]] = {}  # type: ignore[type-arg]
     by_confidence = {"high": 0, "medium": 0, "low": 0}
     promotable: list[str] = []
 
@@ -215,7 +215,7 @@ def status(
                 category_skills.append(skill.to_dict())
 
         if category_skills:
-            filtered[category] = category_skills
+            filtered[category] = category_skills  # type: ignore[assignment]
 
     # Calculate actual total (sum of by_confidence, which excludes rejected)
     actual_total = sum(by_confidence.values())
@@ -278,7 +278,6 @@ def promote(
     tracking_path = _get_promoted_path(buildlog_dir)
 
     # Get renderer using the registry pattern
-    from buildlog.render import get_renderer
     renderer = get_renderer(target, path=target_path, tracking_path=tracking_path)
 
     message = renderer.render(found_skills)
@@ -368,16 +367,17 @@ def diff(
     promoted_ids = _load_json_set(_get_promoted_path(buildlog_dir), "skill_ids")
 
     # Find unpromoted, unrejected skills
-    pending: dict[str, list[dict]] = {}
+    pending: dict[str, list[dict]] = {}  # type: ignore[type-arg]
     total_pending = 0
 
     for category, skill_list in skill_set.skills.items():
         pending_skills = [
-            s.to_dict() for s in skill_list
+            s.to_dict()
+            for s in skill_list
             if s.id not in rejected_ids and s.id not in promoted_ids
         ]
         if pending_skills:
-            pending[category] = pending_skills
+            pending[category] = pending_skills  # type: ignore[assignment]
             total_pending += len(pending_skills)
 
     return DiffResult(
