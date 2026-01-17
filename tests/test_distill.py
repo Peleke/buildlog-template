@@ -333,7 +333,7 @@ class TestDistillAll:
         """Should track source file and date for each pattern."""
         result = distill_all(FIXTURES_DIR)
 
-        for category, patterns in result.patterns.items():
+        for _category, patterns in result.patterns.items():
             for pattern in patterns:
                 assert "source" in pattern
                 assert "date" in pattern

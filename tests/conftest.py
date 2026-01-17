@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 import pytest
 
 from buildlog.skills import ConfidenceLevel, Skill
@@ -14,6 +12,8 @@ def make_skill():
     """Factory fixture for creating test skills.
 
     Returns a function that creates Skill instances with sensible defaults.
+    Supports both discrete confidence (high/medium/low) and optional
+    continuous confidence (confidence_score, confidence_tier).
     """
 
     def _make_skill(
@@ -22,6 +22,10 @@ def make_skill():
         rule: str = "Test rule",
         frequency: int = 2,
         confidence: ConfidenceLevel = "medium",
+        sources: list[str] | None = None,
+        tags: list[str] | None = None,
+        confidence_score: float | None = None,
+        confidence_tier: str | None = None,
     ) -> Skill:
         return Skill(
             id=id,
@@ -29,8 +33,10 @@ def make_skill():
             rule=rule,
             frequency=frequency,
             confidence=confidence,
-            sources=["test.md"],
-            tags=["test"],
+            sources=sources if sources is not None else ["test.md"],
+            tags=tags if tags is not None else ["test"],
+            confidence_score=confidence_score,
+            confidence_tier=confidence_tier,
         )
 
     return _make_skill
