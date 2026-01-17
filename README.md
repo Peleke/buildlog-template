@@ -630,6 +630,7 @@ The MCP server lets Claude Code interact with your buildlog rules directly. Your
 | `buildlog_promote` | Write rules to CLAUDE.md, settings.json, or **Agent Skills** |
 | `buildlog_reject` | Mark rules to exclude from future suggestions |
 | `buildlog_diff` | Show rules pending review (not yet promoted/rejected) |
+| `buildlog_learn_from_review` | Capture learnings from code review feedback |
 
 ### Promotion Targets via MCP
 
@@ -666,6 +667,136 @@ Claude: [calls buildlog_promote with target="skill"]
         This skill will load on-demand when relevant to your work,
         saving context for when you need it most.
 ```
+
+---
+
+## Review Learning System
+
+Beyond manual buildlog entries, buildlog can **learn from code reviews** in real-time. Every review becomes a teaching moment—rules get extracted, persisted, and gain confidence through reinforcement.
+
+### How It Works
+
+```mermaid
+flowchart LR
+    A["Code Review"] --> B["Extract Rules"]
+    B --> C["learn_from_review()"]
+    C --> D["Persist to<br/>.buildlog/review_learnings.json"]
+    D --> E["Rules gain confidence<br/>through reinforcement"]
+    E --> F["Inject into<br/>future sessions"]
+```
+
+### The MCP Tool
+
+```python
+buildlog_learn_from_review(
+    issues=[
+        {
+            "severity": "critical",
+            "category": "architectural",
+            "description": "No bounds validation on score input",
+            "rule_learned": "Validate invariants at function boundaries"
+        }
+    ],
+    source="PR#42"
+)
+```
+
+When the same rule is learned from multiple reviews, its confidence increases automatically.
+
+### Reviewer Skills (The Brutal Feedback Loop)
+
+buildlog ships with **ruthless reviewer personas** that output structured JSON compatible with `buildlog_learn_from_review()`. Every review teaches the system.
+
+| Skill | Trigger | Focus |
+|-------|---------|-------|
+| **Ruthless Reviewer** | `review`, `code review` | Code quality, FP principles, invariants |
+| **Test Terrorist** | `test review`, `coverage audit` | ALL test types: unit, integration, E2E, contract, property-based |
+| **Security Karen** | `security review`, `owasp` | OWASP Top 10, input validation, auth |
+| **Review Gauntlet** | `gauntlet`, `destroy my code` | All three reviewers in sequence |
+
+#### The Review Gauntlet
+
+Run all three reviewers for maximum brutality:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     THE REVIEW GAUNTLET                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   Your Code                                                     │
+│       │                                                         │
+│       ▼                                                         │
+│   ┌──────────────────┐                                          │
+│   │  RUTHLESS        │  "Is this pure? Would it compile        │
+│   │  REVIEWER        │   in Haskell?"                           │
+│   └────────┬─────────┘                                          │
+│            ▼                                                    │
+│   ┌──────────────────┐                                          │
+│   │  TEST            │  "Where are your contract tests?        │
+│   │  TERRORIST       │   Show me the Gherkin."                  │
+│   └────────┬─────────┘                                          │
+│            ▼                                                    │
+│   ┌──────────────────┐                                          │
+│   │  SECURITY        │  "I need to speak to your security      │
+│   │  KAREN           │   manager about this SQL query."         │
+│   └────────┬─────────┘                                          │
+│            ▼                                                    │
+│   Combined Issues → buildlog_learn_from_review()               │
+│            ▼                                                    │
+│   Future sessions get smarter                                   │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Each reviewer outputs structured JSON:
+
+```json
+{
+  "verdict": "BLOCKED",
+  "issues": [
+    {
+      "severity": "critical",
+      "category": "architectural",
+      "location": "src/api/handler.py:45",
+      "description": "Score bounds not validated",
+      "rule_learned": "Validate invariants at function boundaries",
+      "functional_principle": "Parse, don't validate"
+    }
+  ]
+}
+```
+
+After review, call `buildlog_learn_from_review(issues=...)` to persist the learnings.
+
+### Test Terrorist Coverage
+
+The Test Terrorist knows ALL test types:
+
+| Layer | Test Types |
+|-------|-----------|
+| **Fundamentals** | Unit, Integration, E2E, Smoke |
+| **User Flows** | BDD scenarios, persistence tests |
+| **Advanced** | Contract (Pact), Property-based (Hypothesis), Metamorphic, Statistical, Mutation |
+| **Specialized** | Chaos, Load/Performance, Accessibility |
+
+**Contract tests are NON-NEGOTIABLE** for service boundaries. The Test Terrorist will find your missing ones.
+
+### Security Karen's OWASP Obsession
+
+Security Karen audits against OWASP Top 10 (2021):
+
+- **A01**: Broken Access Control
+- **A02**: Cryptographic Failures
+- **A03**: Injection
+- **A04**: Insecure Design
+- **A05**: Security Misconfiguration
+- **A06**: Vulnerable Components
+- **A07**: Auth Failures
+- **A08**: Integrity Failures
+- **A09**: Logging Failures
+- **A10**: SSRF
+
+Plus: secrets management, input validation, API security, error handling.
 
 ---
 
