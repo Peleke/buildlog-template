@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Literal
 
-from buildlog.core import diff, promote, reject, status
+from buildlog.core import diff, learn_from_review, promote, reject, status
 
 
 def _validate_skill_ids(skill_ids: list[str]) -> list[str]:
@@ -94,4 +94,49 @@ def buildlog_diff(
         Dictionary with pending skills and counts
     """
     result = diff(Path(buildlog_dir))
+    return asdict(result)
+
+
+def buildlog_learn_from_review(
+    issues: list[dict],
+    source: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Capture learnings from code review feedback.
+
+    Call this after a review loop completes to persist learnings.
+    Each issue's rule_learned becomes a tracked learning that gains
+    confidence through reinforcement.
+
+    Args:
+        issues: List of issues with structure:
+            {
+                "severity": "critical|major|minor|nitpick",
+                "category": "architectural|workflow|tool_usage|domain_knowledge",
+                "description": "What's wrong",
+                "rule_learned": "Generalizable rule",
+                "location": "file:line (optional)",
+                "why_it_matters": "Why this matters (optional)",
+                "functional_principle": "FP principle (optional)"
+            }
+        source: Optional identifier (e.g., "PR#13")
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Result with new_learnings, reinforced_learnings, total processed
+
+    Example:
+        buildlog_learn_from_review(
+            issues=[
+                {
+                    "severity": "critical",
+                    "category": "architectural",
+                    "description": "Score bounds not validated",
+                    "rule_learned": "Validate invariants at function boundaries"
+                }
+            ],
+            source="PR#13"
+        )
+    """
+    result = learn_from_review(Path(buildlog_dir), issues, source)
     return asdict(result)
