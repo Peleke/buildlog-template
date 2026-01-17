@@ -10,6 +10,7 @@ import pytest
 
 from buildlog.mcp.tools import (
     buildlog_diff,
+    buildlog_learn_from_review,
     buildlog_promote,
     buildlog_reject,
     buildlog_status,
@@ -246,3 +247,129 @@ class TestBuildlogDiff:
         assert result["total_pending"] > 0
         assert result["already_promoted"] == 0
         assert result["already_rejected"] == 0
+
+
+class TestBuildlogLearnFromReview:
+    """Tests for buildlog_learn_from_review MCP tool."""
+
+    def test_returns_dict(self, tmp_path):
+        """Should return a dictionary."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        issues = [
+            {
+                "severity": "critical",
+                "category": "architectural",
+                "description": "Test issue",
+                "rule_learned": "Test rule",
+            }
+        ]
+
+        result = buildlog_learn_from_review(
+            issues=issues,
+            source="test",
+            buildlog_dir=str(buildlog_dir),
+        )
+
+        assert isinstance(result, dict)
+
+    def test_has_expected_keys(self, tmp_path):
+        """Should have all expected keys from LearnFromReviewResult."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        issues = [
+            {
+                "severity": "minor",
+                "category": "workflow",
+                "description": "Test",
+                "rule_learned": "Test rule",
+            }
+        ]
+
+        result = buildlog_learn_from_review(
+            issues=issues,
+            buildlog_dir=str(buildlog_dir),
+        )
+
+        assert "new_learnings" in result
+        assert "reinforced_learnings" in result
+        assert "total_issues_processed" in result
+        assert "source" in result
+        assert "message" in result
+        assert "error" in result
+
+    def test_creates_new_learnings(self, tmp_path):
+        """Should create new learnings from issues."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        issues = [
+            {
+                "severity": "critical",
+                "category": "architectural",
+                "description": "No bounds check",
+                "rule_learned": "Validate at boundaries",
+            },
+            {
+                "severity": "major",
+                "category": "workflow",
+                "description": "Missing tests",
+                "rule_learned": "Write tests first",
+            },
+        ]
+
+        result = buildlog_learn_from_review(
+            issues=issues,
+            source="PR#42",
+            buildlog_dir=str(buildlog_dir),
+        )
+
+        assert result["error"] is None
+        assert len(result["new_learnings"]) == 2
+        assert result["total_issues_processed"] == 2
+
+    def test_reinforces_existing_learnings(self, tmp_path):
+        """Should reinforce when same rule seen again."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        issues = [
+            {
+                "severity": "critical",
+                "category": "architectural",
+                "description": "Test",
+                "rule_learned": "Same rule",
+            }
+        ]
+
+        # First call
+        result1 = buildlog_learn_from_review(
+            issues=issues,
+            source="PR#1",
+            buildlog_dir=str(buildlog_dir),
+        )
+        assert len(result1["new_learnings"]) == 1
+
+        # Second call with same rule
+        result2 = buildlog_learn_from_review(
+            issues=issues,
+            source="PR#2",
+            buildlog_dir=str(buildlog_dir),
+        )
+        assert len(result2["reinforced_learnings"]) == 1
+        assert len(result2["new_learnings"]) == 0
+
+    def test_returns_error_for_empty_issues(self, tmp_path):
+        """Should return error when no issues provided."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        result = buildlog_learn_from_review(
+            issues=[],
+            buildlog_dir=str(buildlog_dir),
+        )
+
+        assert result["error"] is not None
+        assert "No issues provided" in result["error"]
