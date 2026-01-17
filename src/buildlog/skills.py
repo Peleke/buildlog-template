@@ -44,14 +44,9 @@ OutputFormat = Literal["yaml", "json", "markdown", "rules", "settings"]
 ConfidenceLevel = Literal["high", "medium", "low"]
 
 
-class SkillDict(TypedDict, total=False):
-    """Type for skill dictionary representation.
+class _SkillDictRequired(TypedDict):
+    """Required fields for skill dictionary (base class)."""
 
-    Required fields are always present. Optional fields (confidence_score,
-    confidence_tier) are only present when continuous confidence is enabled.
-    """
-
-    # Required fields (always present)
     id: str
     category: str
     rule: str
@@ -59,7 +54,15 @@ class SkillDict(TypedDict, total=False):
     confidence: ConfidenceLevel
     sources: list[str]
     tags: list[str]
-    # Optional fields (present when continuous confidence is enabled)
+
+
+class SkillDict(_SkillDictRequired, total=False):
+    """Type for skill dictionary representation.
+
+    Inherits required fields from _SkillDictRequired.
+    Optional fields are only present when continuous confidence is enabled.
+    """
+
     confidence_score: float
     confidence_tier: str
 

@@ -27,10 +27,11 @@ __all__ = [
     "ConfidenceTier",
     "ConfidenceConfig",
     "ConfidenceMetrics",
-    "ScoredPatternDict",
+    "ConfidenceMetricsDict",
     "calculate_confidence",
     "get_confidence_tier",
     "merge_confidence_metrics",
+    "add_contradiction",
 ]
 
 
@@ -70,6 +71,11 @@ class ConfidenceConfig:
             raise ValueError("k must be positive")
         if self.lambda_ <= 0:
             raise ValueError("lambda_ must be positive")
+        low, mid, high = self.tier_thresholds
+        if not (0 <= low <= mid <= high <= 1):
+            raise ValueError(
+                "tier_thresholds must be monotonically increasing in [0, 1]"
+            )
 
 
 class ConfidenceMetricsDict(TypedDict):
@@ -95,6 +101,12 @@ class ConfidenceMetrics:
     contradiction_count: int = 0
     first_seen: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
+    def __post_init__(self) -> None:
+        if self.reinforcement_count < 0:
+            raise ValueError("reinforcement_count must be non-negative")
+        if self.contradiction_count < 0:
+            raise ValueError("contradiction_count must be non-negative")
+
     def to_dict(self) -> ConfidenceMetricsDict:
         """Convert to serializable dictionary."""
         return {
@@ -106,25 +118,25 @@ class ConfidenceMetrics:
 
     @classmethod
     def from_dict(cls, data: ConfidenceMetricsDict) -> ConfidenceMetrics:
-        """Reconstruct from serialized dictionary."""
+        """Reconstruct from serialized dictionary.
+
+        Note: Timezone-naive datetimes are assumed to be UTC.
+        """
+        last_reinforced = datetime.fromisoformat(data["last_reinforced"])
+        first_seen = datetime.fromisoformat(data["first_seen"])
+
+        # Ensure timezone awareness (assume UTC for naive datetimes)
+        if last_reinforced.tzinfo is None:
+            last_reinforced = last_reinforced.replace(tzinfo=timezone.utc)
+        if first_seen.tzinfo is None:
+            first_seen = first_seen.replace(tzinfo=timezone.utc)
+
         return cls(
             reinforcement_count=data["reinforcement_count"],
-            last_reinforced=datetime.fromisoformat(data["last_reinforced"]),
+            last_reinforced=last_reinforced,
             contradiction_count=data["contradiction_count"],
-            first_seen=datetime.fromisoformat(data["first_seen"]),
+            first_seen=first_seen,
         )
-
-
-class ScoredPatternDict(TypedDict):
-    """Extended pattern dictionary with confidence scoring."""
-
-    insight: str
-    source: str
-    date: str
-    context: str
-    confidence: float
-    confidence_tier: str
-    metrics: ConfidenceMetricsDict
 
 
 def calculate_frequency_weight(n: int, k: float) -> float:
@@ -158,9 +170,12 @@ def calculate_recency_weight(
         tau: Half-life in days
 
     Returns:
-        Weight in range (0, 1], decaying over time
+        Weight in range (0, 1], decaying over time.
+        If t_last is in the future, clamps to 1.0.
     """
     days_elapsed = (t_now - t_last).total_seconds() / (24 * 60 * 60)
+    if days_elapsed < 0:
+        return 1.0  # Future timestamps treated as "just now"
     return math.exp(-days_elapsed / tau)
 
 
@@ -224,12 +239,18 @@ def get_confidence_tier(
     """Map confidence score to descriptive tier.
 
     Args:
-        score: Confidence score in range (0, 1)
+        score: Confidence score in range [0, 1]
         config: Configuration with tier thresholds
 
     Returns:
         Descriptive tier label
+
+    Raises:
+        ValueError: If score is outside [0, 1] range
     """
+    if not (0.0 <= score <= 1.0):
+        raise ValueError(f"score must be in [0, 1], got {score}")
+
     if config is None:
         config = ConfidenceConfig()
 

@@ -134,6 +134,21 @@ class TestConfidenceConfig:
         with pytest.raises(AttributeError):
             config.tau = 100  # type: ignore[misc]
 
+    def test_tier_thresholds_out_of_order_raises(self) -> None:
+        """Tier thresholds must be monotonically increasing."""
+        with pytest.raises(ValueError, match="tier_thresholds must be monotonically"):
+            ConfidenceConfig(tier_thresholds=(0.5, 0.3, 0.7))
+
+    def test_tier_thresholds_negative_raises(self) -> None:
+        """Tier thresholds must be non-negative."""
+        with pytest.raises(ValueError, match="tier_thresholds must be monotonically"):
+            ConfidenceConfig(tier_thresholds=(-0.1, 0.3, 0.7))
+
+    def test_tier_thresholds_above_one_raises(self) -> None:
+        """Tier thresholds must be at most 1."""
+        with pytest.raises(ValueError, match="tier_thresholds must be monotonically"):
+            ConfidenceConfig(tier_thresholds=(0.2, 0.5, 1.5))
+
 
 # =============================================================================
 # Frequency Weight Tests
@@ -301,6 +316,12 @@ class TestRecencyWeight:
         t_last = now - timedelta(days=days)
         weight = calculate_recency_weight(t_last=t_last, t_now=now, tau=30.0)
         assert weight <= 1.0
+
+    def test_future_timestamp_clamps_to_one(self, now: datetime) -> None:
+        """Future last_reinforced should clamp to 1.0 (not explode)."""
+        future = now + timedelta(days=10)
+        weight = calculate_recency_weight(t_last=future, t_now=now, tau=30.0)
+        assert weight == 1.0
 
 
 # =============================================================================
@@ -540,6 +561,26 @@ class TestConfidenceTier:
         # At exactly 0.7, should be entrenched (not stable)
         assert get_confidence_tier(0.7, default_config) == ConfidenceTier.ENTRENCHED
 
+    def test_score_below_zero_raises(self) -> None:
+        """Score below 0 should raise ValueError."""
+        with pytest.raises(ValueError, match="score must be in"):
+            get_confidence_tier(-0.1)
+
+    def test_score_above_one_raises(self) -> None:
+        """Score above 1 should raise ValueError."""
+        with pytest.raises(ValueError, match="score must be in"):
+            get_confidence_tier(1.5)
+
+    def test_zero_is_valid(self) -> None:
+        """Score of exactly 0 should be valid (SPECULATIVE)."""
+        tier = get_confidence_tier(0.0)
+        assert tier == ConfidenceTier.SPECULATIVE
+
+    def test_one_is_valid(self) -> None:
+        """Score of exactly 1 should be valid (ENTRENCHED)."""
+        tier = get_confidence_tier(1.0)
+        assert tier == ConfidenceTier.ENTRENCHED
+
 
 # =============================================================================
 # Metric Merging Tests
@@ -654,6 +695,35 @@ class TestAddContradiction:
 # =============================================================================
 
 
+class TestConfidenceMetricsValidation:
+    """Tests for ConfidenceMetrics validation."""
+
+    def test_negative_reinforcement_count_raises(self) -> None:
+        """Negative reinforcement_count should raise ValueError."""
+        with pytest.raises(
+            ValueError, match="reinforcement_count must be non-negative"
+        ):
+            ConfidenceMetrics(reinforcement_count=-1)
+
+    def test_negative_contradiction_count_raises(self) -> None:
+        """Negative contradiction_count should raise ValueError."""
+        with pytest.raises(
+            ValueError, match="contradiction_count must be non-negative"
+        ):
+            ConfidenceMetrics(contradiction_count=-1)
+
+    def test_zero_counts_valid(self) -> None:
+        """Zero counts should be valid."""
+        metrics = ConfidenceMetrics(reinforcement_count=0, contradiction_count=0)
+        assert metrics.reinforcement_count == 0
+        assert metrics.contradiction_count == 0
+
+
+# =============================================================================
+# Serialization Tests
+# =============================================================================
+
+
 class TestMetricsSerialization:
     """Tests for metrics to/from dict conversion."""
 
@@ -697,6 +767,32 @@ class TestMetricsSerialization:
         assert roundtripped.last_reinforced == original.last_reinforced
         assert roundtripped.contradiction_count == original.contradiction_count
         assert roundtripped.first_seen == original.first_seen
+
+    def test_from_dict_naive_datetime_gets_utc(self) -> None:
+        """Timezone-naive datetimes in from_dict should be assumed UTC."""
+        naive_timestamp = "2026-01-15T12:00:00"  # No timezone info
+        data = {
+            "reinforcement_count": 1,
+            "last_reinforced": naive_timestamp,
+            "contradiction_count": 0,
+            "first_seen": naive_timestamp,
+        }
+        metrics = ConfidenceMetrics.from_dict(data)
+        # Should have UTC timezone
+        assert metrics.last_reinforced.tzinfo == timezone.utc
+        assert metrics.first_seen.tzinfo == timezone.utc
+
+    def test_from_dict_aware_datetime_preserved(self, now: datetime) -> None:
+        """Timezone-aware datetimes in from_dict should be preserved."""
+        data = {
+            "reinforcement_count": 1,
+            "last_reinforced": now.isoformat(),
+            "contradiction_count": 0,
+            "first_seen": now.isoformat(),
+        }
+        metrics = ConfidenceMetrics.from_dict(data)
+        assert metrics.last_reinforced == now
+        assert metrics.first_seen == now
 
 
 # =============================================================================
