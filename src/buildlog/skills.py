@@ -5,11 +5,13 @@ from __future__ import annotations
 __all__ = [
     "Skill",
     "SkillSet",
+    "ConfidenceConfig",  # Re-exported for convenience
     "_deduplicate_insights",
     "_calculate_confidence",
     "_extract_tags",
     "_generate_skill_id",
     "_to_imperative",
+    "_build_confidence_metrics",
     "generate_skills",
     "format_skills",
 ]
@@ -23,6 +25,9 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Final, Literal, TypedDict
 
+from buildlog.confidence import ConfidenceConfig, ConfidenceMetrics
+from buildlog.confidence import calculate_confidence as calculate_continuous_confidence
+from buildlog.confidence import get_confidence_tier
 from buildlog.distill import CATEGORIES, PatternDict, distill_all
 from buildlog.embeddings import EmbeddingBackend, get_backend, get_default_backend
 
@@ -39,8 +44,8 @@ OutputFormat = Literal["yaml", "json", "markdown", "rules", "settings"]
 ConfidenceLevel = Literal["high", "medium", "low"]
 
 
-class SkillDict(TypedDict):
-    """Type for skill dictionary representation."""
+class _SkillDictRequired(TypedDict):
+    """Required fields for skill dictionary (base class)."""
 
     id: str
     category: str
@@ -49,6 +54,17 @@ class SkillDict(TypedDict):
     confidence: ConfidenceLevel
     sources: list[str]
     tags: list[str]
+
+
+class SkillDict(_SkillDictRequired, total=False):
+    """Type for skill dictionary representation.
+
+    Inherits required fields from _SkillDictRequired.
+    Optional fields are only present when continuous confidence is enabled.
+    """
+
+    confidence_score: float
+    confidence_tier: str
 
 
 class SkillSetDict(TypedDict):
@@ -66,6 +82,17 @@ class Skill:
 
     Represents a single actionable rule derived from one or more
     similar insights across buildlog entries.
+
+    Attributes:
+        id: Stable identifier for the skill.
+        category: Category (architectural, workflow, etc.).
+        rule: The actionable rule text.
+        frequency: How many times this pattern was seen.
+        confidence: Discrete confidence level (high/medium/low).
+        sources: List of source files where this pattern appeared.
+        tags: Extracted technology/concept tags.
+        confidence_score: Continuous confidence score (0-1), if calculated.
+        confidence_tier: Descriptive tier (speculative/provisional/stable/entrenched).
     """
 
     id: str
@@ -75,10 +102,16 @@ class Skill:
     confidence: ConfidenceLevel
     sources: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
+    confidence_score: float | None = None
+    confidence_tier: str | None = None
 
     def to_dict(self) -> SkillDict:
-        """Convert to dictionary for serialization."""
-        return SkillDict(
+        """Convert to dictionary for serialization.
+
+        Only includes optional fields (confidence_score, confidence_tier)
+        when they are set.
+        """
+        result = SkillDict(
             id=self.id,
             category=self.category,
             rule=self.rule,
@@ -87,6 +120,11 @@ class Skill:
             sources=self.sources,
             tags=self.tags,
         )
+        if self.confidence_score is not None:
+            result["confidence_score"] = self.confidence_score
+        if self.confidence_tier is not None:
+            result["confidence_tier"] = self.confidence_tier
+        return result
 
 
 @dataclass
@@ -253,7 +291,7 @@ def _deduplicate_insights(
     patterns: list[PatternDict],
     threshold: float = MIN_SIMILARITY_THRESHOLD,
     backend: EmbeddingBackend | None = None,
-) -> list[tuple[str, int, list[str], date | None]]:
+) -> list[tuple[str, int, list[str], date | None, date | None]]:
     """Deduplicate similar insights into merged rules.
 
     Args:
@@ -262,7 +300,8 @@ def _deduplicate_insights(
         backend: Embedding backend for similarity computation.
 
     Returns:
-        List of (rule, frequency, sources, most_recent_date) tuples.
+        List of (rule, frequency, sources, most_recent_date, earliest_date) tuples.
+        Both dates can be None if no valid dates are found in the patterns.
     """
     if not patterns:
         return []
@@ -289,7 +328,7 @@ def _deduplicate_insights(
             groups.append([pattern])
 
     # Convert groups to deduplicated rules
-    results: list[tuple[str, int, list[str], date | None]] = []
+    results: list[tuple[str, int, list[str], date | None, date | None]] = []
 
     for group in groups:
         # Use the shortest insight as the canonical rule (often cleaner)
@@ -298,7 +337,7 @@ def _deduplicate_insights(
         frequency = len(group)
         sources = sorted(set(p["source"] for p in group))
 
-        # Find most recent date
+        # Find most recent and earliest dates
         dates: list[date] = []
         for p in group:
             try:
@@ -307,9 +346,50 @@ def _deduplicate_insights(
                 pass
 
         most_recent = max(dates) if dates else None
-        results.append((rule, frequency, sources, most_recent))
+        earliest = min(dates) if dates else None
+        results.append((rule, frequency, sources, most_recent, earliest))
 
     return results
+
+
+def _build_confidence_metrics(
+    frequency: int,
+    most_recent: date | None,
+    earliest: date | None,
+) -> ConfidenceMetrics:
+    """Build ConfidenceMetrics from deduplication results.
+
+    Args:
+        frequency: Number of times the pattern was seen.
+        most_recent: Most recent occurrence date.
+        earliest: Earliest occurrence date.
+
+    Returns:
+        ConfidenceMetrics for continuous confidence calculation.
+    """
+    # Use midnight UTC for date-based timestamps
+    now = datetime.now(timezone.utc)
+
+    if most_recent is not None:
+        last_reinforced = datetime(
+            most_recent.year, most_recent.month, most_recent.day, tzinfo=timezone.utc
+        )
+    else:
+        last_reinforced = now
+
+    if earliest is not None:
+        first_seen = datetime(
+            earliest.year, earliest.month, earliest.day, tzinfo=timezone.utc
+        )
+    else:
+        first_seen = last_reinforced
+
+    return ConfidenceMetrics(
+        reinforcement_count=frequency,
+        last_reinforced=last_reinforced,
+        contradiction_count=0,  # Deferred: no contradiction tracking yet
+        first_seen=first_seen,
+    )
 
 
 def generate_skills(
@@ -317,6 +397,7 @@ def generate_skills(
     min_frequency: int = 1,
     since_date: date | None = None,
     embedding_backend: str | None = None,
+    confidence_config: ConfidenceConfig | None = None,
 ) -> SkillSet:
     """Generate skills from buildlog patterns.
 
@@ -326,6 +407,9 @@ def generate_skills(
         since_date: Only include patterns from this date onward.
         embedding_backend: Name of embedding backend for deduplication.
             Options: "token" (default), "sentence-transformers", "openai".
+        confidence_config: Configuration for continuous confidence scoring.
+            If provided, skills will include confidence_score and confidence_tier.
+            If None, only discrete confidence levels (high/medium/low) are computed.
 
     Returns:
         SkillSet with generated skills.
@@ -341,6 +425,9 @@ def generate_skills(
     )
     logger.info("Using embedding backend: %s", backend.name)
 
+    # Capture reference time for confidence calculations
+    t_now = datetime.now(timezone.utc) if confidence_config else None
+
     skills_by_category: dict[str, list[Skill]] = {}
 
     for category in CATEGORIES:
@@ -348,9 +435,21 @@ def generate_skills(
         deduplicated = _deduplicate_insights(patterns, backend=backend)
 
         skills: list[Skill] = []
-        for rule, frequency, sources, most_recent in deduplicated:
+        for rule, frequency, sources, most_recent, earliest in deduplicated:
             if frequency < min_frequency:
                 continue
+
+            # Calculate continuous confidence if config provided
+            confidence_score: float | None = None
+            confidence_tier: str | None = None
+            if confidence_config is not None and t_now is not None:
+                metrics = _build_confidence_metrics(frequency, most_recent, earliest)
+                confidence_score = calculate_continuous_confidence(
+                    metrics, confidence_config, t_now
+                )
+                confidence_tier = get_confidence_tier(
+                    confidence_score, confidence_config
+                ).value
 
             skill = Skill(
                 id=_generate_skill_id(category, rule),
@@ -360,6 +459,8 @@ def generate_skills(
                 confidence=_calculate_confidence(frequency, most_recent),
                 sources=sources,
                 tags=_extract_tags(rule),
+                confidence_score=confidence_score,
+                confidence_tier=confidence_tier,
             )
             skills.append(skill)
 

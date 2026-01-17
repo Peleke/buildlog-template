@@ -88,7 +88,7 @@ class TestStatusOperation:
         result = status(FIXTURES_DIR)
 
         # All promotable IDs should be from high-confidence skills
-        for skill_id in result.promotable_ids:
+        for _skill_id in result.promotable_ids:
             # Skill IDs have format "prefix-hash"
             # We need to verify they're high confidence by checking by_confidence
             pass  # Can't easily verify without skill lookup, but the count should match

@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pytest
 
+from buildlog.confidence import ConfidenceConfig, ConfidenceTier
 from buildlog.embeddings import TokenBackend, get_backend
 from buildlog.skills import (
     Skill,
     SkillSet,
+    _build_confidence_metrics,
     _calculate_confidence,
     _deduplicate_insights,
     _extract_tags,
@@ -215,7 +217,7 @@ class TestDeduplication:
         result = _deduplicate_insights(patterns, threshold=0.5, backend=backend)
 
         assert len(result) == 1
-        rule, freq, sources, _ = result[0]
+        rule, freq, sources, _, _ = result[0]
         assert freq == 3
         assert len(sources) == 3
 
@@ -497,3 +499,275 @@ class TestToImperative:
             _to_imperative("write tests before code", "medium")
             == "Prefer to write tests before code"
         )
+
+
+class TestSkillWithContinuousConfidence:
+    """Tests for Skill with continuous confidence fields."""
+
+    def test_skill_without_continuous_confidence(self, make_skill):
+        """Skill should work without continuous confidence fields."""
+        skill = make_skill()
+        assert skill.confidence_score is None
+        assert skill.confidence_tier is None
+
+    def test_skill_with_continuous_confidence(self, make_skill):
+        """Skill should accept continuous confidence fields."""
+        skill = make_skill(
+            confidence_score=0.75,
+            confidence_tier="stable",
+        )
+        assert skill.confidence_score == 0.75
+        assert skill.confidence_tier == "stable"
+
+    def test_to_dict_excludes_none_fields(self, make_skill):
+        """to_dict should not include None confidence fields."""
+        skill = make_skill()
+        d = skill.to_dict()
+        assert "confidence_score" not in d
+        assert "confidence_tier" not in d
+
+    def test_to_dict_includes_set_fields(self, make_skill):
+        """to_dict should include set confidence fields."""
+        skill = make_skill(
+            confidence_score=0.85,
+            confidence_tier="entrenched",
+        )
+        d = skill.to_dict()
+        assert d["confidence_score"] == 0.85
+        assert d["confidence_tier"] == "entrenched"
+
+    def test_discrete_and_continuous_coexist(self, make_skill):
+        """Both discrete and continuous confidence should coexist."""
+        skill = make_skill(
+            confidence="high",
+            confidence_score=0.9,
+            confidence_tier="entrenched",
+        )
+        assert skill.confidence == "high"
+        assert skill.confidence_score == 0.9
+        assert skill.confidence_tier == "entrenched"
+
+
+class TestDeduplicationWithEarliestDate:
+    """Tests for earliest_date tracking in deduplication."""
+
+    def test_returns_earliest_date(self):
+        """Should return earliest date from merged patterns."""
+        patterns = [
+            {
+                "insight": "run tests",
+                "source": "a.md",
+                "date": "2026-01-15",
+                "context": "",
+            },
+            {
+                "insight": "run test",
+                "source": "b.md",
+                "date": "2026-01-01",  # Earliest
+                "context": "",
+            },
+            {
+                "insight": "run testing",
+                "source": "c.md",
+                "date": "2026-01-10",
+                "context": "",
+            },
+        ]
+        backend = TokenBackend()
+        result = _deduplicate_insights(patterns, threshold=0.5, backend=backend)
+
+        assert len(result) == 1
+        _, _, _, most_recent, earliest = result[0]
+        assert most_recent == date(2026, 1, 15)
+        assert earliest == date(2026, 1, 1)
+
+    def test_single_pattern_same_dates(self):
+        """Single pattern should have same earliest and most_recent."""
+        patterns = [
+            {
+                "insight": "unique insight",
+                "source": "a.md",
+                "date": "2026-01-10",
+                "context": "",
+            },
+        ]
+        backend = TokenBackend()
+        result = _deduplicate_insights(patterns, threshold=0.5, backend=backend)
+
+        assert len(result) == 1
+        _, _, _, most_recent, earliest = result[0]
+        assert most_recent == earliest == date(2026, 1, 10)
+
+    def test_handles_missing_dates(self):
+        """Should handle patterns without valid dates."""
+        patterns = [
+            {
+                "insight": "run tests",
+                "source": "a.md",
+                "date": "invalid-date",
+                "context": "",
+            },
+            {
+                "insight": "run test",
+                "source": "b.md",
+                "date": "2026-01-01",
+                "context": "",
+            },
+        ]
+        backend = TokenBackend()
+        result = _deduplicate_insights(patterns, threshold=0.5, backend=backend)
+
+        assert len(result) == 1
+        _, _, _, most_recent, earliest = result[0]
+        # Should only have the valid date
+        assert most_recent == date(2026, 1, 1)
+        assert earliest == date(2026, 1, 1)
+
+    def test_all_invalid_dates_returns_none(self):
+        """All invalid dates should return None for both."""
+        patterns = [
+            {
+                "insight": "run tests",
+                "source": "a.md",
+                "date": "invalid",
+                "context": "",
+            },
+        ]
+        backend = TokenBackend()
+        result = _deduplicate_insights(patterns, threshold=0.5, backend=backend)
+
+        assert len(result) == 1
+        _, _, _, most_recent, earliest = result[0]
+        assert most_recent is None
+        assert earliest is None
+
+
+class TestBuildConfidenceMetrics:
+    """Tests for _build_confidence_metrics helper."""
+
+    def test_builds_metrics_with_dates(self):
+        """Should build metrics from valid dates."""
+        most_recent = date(2026, 1, 15)
+        earliest = date(2026, 1, 1)
+        metrics = _build_confidence_metrics(5, most_recent, earliest)
+
+        assert metrics.reinforcement_count == 5
+        assert metrics.last_reinforced.year == 2026
+        assert metrics.last_reinforced.month == 1
+        assert metrics.last_reinforced.day == 15
+        assert metrics.first_seen.day == 1
+        assert metrics.contradiction_count == 0
+
+    def test_handles_none_most_recent(self):
+        """Should use current time for None most_recent."""
+        metrics = _build_confidence_metrics(3, None, date(2026, 1, 1))
+
+        assert metrics.reinforcement_count == 3
+        # last_reinforced should be roughly now (within a minute)
+        assert metrics.last_reinforced is not None
+
+    def test_handles_none_earliest(self):
+        """Should use last_reinforced for None earliest."""
+        most_recent = date(2026, 1, 15)
+        metrics = _build_confidence_metrics(3, most_recent, None)
+
+        assert metrics.first_seen.day == 15  # Same as last_reinforced
+
+    def test_handles_both_none(self):
+        """Should handle both dates being None."""
+        metrics = _build_confidence_metrics(1, None, None)
+
+        assert metrics.reinforcement_count == 1
+        assert metrics.contradiction_count == 0
+        # Both should be roughly now
+        assert metrics.last_reinforced is not None
+        assert metrics.first_seen is not None
+
+
+class TestGenerateSkillsWithContinuousConfidence:
+    """Tests for generate_skills with continuous confidence enabled."""
+
+    def test_without_config_no_continuous_fields(self):
+        """Without confidence_config, skills should not have continuous fields."""
+        skill_set = generate_skills(FIXTURES_DIR)
+
+        for skills in skill_set.skills.values():
+            for skill in skills:
+                assert skill.confidence_score is None
+                assert skill.confidence_tier is None
+
+    def test_with_config_populates_continuous_fields(self):
+        """With confidence_config, skills should have continuous fields."""
+        config = ConfidenceConfig()
+        skill_set = generate_skills(FIXTURES_DIR, confidence_config=config)
+
+        for skills in skill_set.skills.values():
+            for skill in skills:
+                assert skill.confidence_score is not None
+                assert 0 < skill.confidence_score <= 1
+                assert skill.confidence_tier is not None
+                assert skill.confidence_tier in [
+                    "speculative",
+                    "provisional",
+                    "stable",
+                    "entrenched",
+                ]
+
+    def test_both_confidence_systems_present(self):
+        """Both discrete and continuous confidence should be present."""
+        config = ConfidenceConfig()
+        skill_set = generate_skills(FIXTURES_DIR, confidence_config=config)
+
+        for skills in skill_set.skills.values():
+            for skill in skills:
+                # Discrete confidence always present
+                assert skill.confidence in ("high", "medium", "low")
+                # Continuous confidence present when config provided
+                assert skill.confidence_score is not None
+                assert skill.confidence_tier is not None
+
+    def test_custom_config_affects_tiers(self):
+        """Custom config thresholds should affect tier assignment."""
+        # Very high thresholds - most things should be speculative
+        strict_config = ConfidenceConfig(tier_thresholds=(0.8, 0.9, 0.95))
+        skill_set = generate_skills(FIXTURES_DIR, confidence_config=strict_config)
+
+        # Very low thresholds - most things should be entrenched
+        lenient_config = ConfidenceConfig(tier_thresholds=(0.01, 0.02, 0.03))
+        lenient_skills = generate_skills(FIXTURES_DIR, confidence_config=lenient_config)
+
+        # Count tier distributions
+        strict_tiers: dict[str, int] = {}
+        lenient_tiers: dict[str, int] = {}
+
+        for skills in skill_set.skills.values():
+            for skill in skills:
+                tier = skill.confidence_tier or ""
+                strict_tiers[tier] = strict_tiers.get(tier, 0) + 1
+
+        for skills in lenient_skills.skills.values():
+            for skill in skills:
+                tier = skill.confidence_tier or ""
+                lenient_tiers[tier] = lenient_tiers.get(tier, 0) + 1
+
+        # Lenient config should have more entrenched than strict
+        # (if there are any skills)
+        if strict_tiers and lenient_tiers:
+            lenient_entrenched = lenient_tiers.get("entrenched", 0)
+            strict_entrenched = strict_tiers.get("entrenched", 0)
+            assert lenient_entrenched >= strict_entrenched
+
+    def test_serialization_includes_continuous_fields(self):
+        """JSON serialization should include continuous confidence."""
+        import json
+
+        config = ConfidenceConfig()
+        skill_set = generate_skills(FIXTURES_DIR, confidence_config=config)
+        output = format_skills(skill_set, "json")
+        data = json.loads(output)
+
+        for category_skills in data["skills"].values():
+            for skill_dict in category_skills:
+                assert "confidence" in skill_dict  # Discrete
+                assert "confidence_score" in skill_dict  # Continuous
+                assert "confidence_tier" in skill_dict
