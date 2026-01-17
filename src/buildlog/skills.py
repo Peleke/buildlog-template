@@ -33,6 +33,18 @@ from buildlog.embeddings import EmbeddingBackend, get_backend, get_default_backe
 
 logger = logging.getLogger(__name__)
 
+
+def _load_review_learnings(buildlog_dir: Path) -> dict:
+    """Load review learnings from .buildlog/review_learnings.json."""
+    learnings_path = buildlog_dir / ".buildlog" / "review_learnings.json"
+    if not learnings_path.exists():
+        return {"learnings": {}}
+    try:
+        return json.loads(learnings_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {"learnings": {}}
+
+
 # Configuration constants
 MIN_SIMILARITY_THRESHOLD: Final[float] = 0.7
 HIGH_CONFIDENCE_FREQUENCY: Final[int] = 3
@@ -398,8 +410,9 @@ def generate_skills(
     since_date: date | None = None,
     embedding_backend: str | None = None,
     confidence_config: ConfidenceConfig | None = None,
+    include_review_learnings: bool = True,
 ) -> SkillSet:
-    """Generate skills from buildlog patterns.
+    """Generate skills from buildlog patterns and review learnings.
 
     Args:
         buildlog_dir: Path to the buildlog directory.
@@ -410,6 +423,9 @@ def generate_skills(
         confidence_config: Configuration for continuous confidence scoring.
             If provided, skills will include confidence_score and confidence_tier.
             If None, only discrete confidence levels (high/medium/low) are computed.
+        include_review_learnings: Whether to include learnings from code reviews.
+            When True, loads .buildlog/review_learnings.json and merges
+            review learnings into the skill set.
 
     Returns:
         SkillSet with generated skills.
@@ -467,6 +483,111 @@ def generate_skills(
         # Sort by frequency (descending), then by rule (for stability)
         skills.sort(key=lambda s: (-s.frequency, s.rule))
         skills_by_category[category] = skills
+
+    # Merge review learnings if requested
+    if include_review_learnings:
+        review_data = _load_review_learnings(buildlog_dir)
+        learnings = review_data.get("learnings", {})
+
+        for learning_id, learning_dict in learnings.items():
+            category = learning_dict.get("category", "workflow")
+            rule = learning_dict.get("rule", "")
+
+            if not rule:
+                continue
+
+            # Parse timestamps for confidence calculation
+            first_seen_str = learning_dict.get("first_seen", "")
+            last_reinforced_str = learning_dict.get("last_reinforced", "")
+
+            try:
+                first_seen = datetime.fromisoformat(first_seen_str)
+                if first_seen.tzinfo is None:
+                    first_seen = first_seen.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                first_seen = datetime.now(timezone.utc)
+
+            try:
+                last_reinforced = datetime.fromisoformat(last_reinforced_str)
+                if last_reinforced.tzinfo is None:
+                    last_reinforced = last_reinforced.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                last_reinforced = datetime.now(timezone.utc)
+
+            # Get frequency from reinforcement count
+            frequency = learning_dict.get("reinforcement_count", 1)
+
+            # Check for duplicate rules in existing skills (by ID match)
+            existing_skill = None
+            if category in skills_by_category:
+                for skill in skills_by_category[category]:
+                    if skill.id == learning_id:
+                        existing_skill = skill
+                        break
+
+            if existing_skill is not None:
+                # Merge: boost the existing skill's frequency
+                existing_skill = Skill(
+                    id=existing_skill.id,
+                    category=existing_skill.category,
+                    rule=existing_skill.rule,
+                    frequency=existing_skill.frequency + frequency,
+                    confidence=existing_skill.confidence,
+                    sources=existing_skill.sources
+                    + [learning_dict.get("source", "review")],
+                    tags=existing_skill.tags,
+                    confidence_score=existing_skill.confidence_score,
+                    confidence_tier=existing_skill.confidence_tier,
+                )
+                # Replace in list
+                skills_by_category[category] = [
+                    existing_skill if s.id == existing_skill.id else s
+                    for s in skills_by_category[category]
+                ]
+            else:
+                # Create new skill from review learning
+                review_conf_score: float | None = None
+                review_conf_tier: str | None = None
+
+                if confidence_config is not None and t_now is not None:
+                    metrics = ConfidenceMetrics(
+                        reinforcement_count=frequency,
+                        last_reinforced=last_reinforced,
+                        contradiction_count=learning_dict.get("contradiction_count", 0),
+                        first_seen=first_seen,
+                    )
+                    review_conf_score = calculate_continuous_confidence(
+                        metrics, confidence_config, t_now
+                    )
+                    review_conf_tier = get_confidence_tier(
+                        review_conf_score, confidence_config
+                    ).value
+
+                # Calculate discrete confidence from most recent date
+                discrete_confidence = _calculate_confidence(
+                    frequency, last_reinforced.date()
+                )
+
+                skill = Skill(
+                    id=learning_id,
+                    category=category,
+                    rule=rule,
+                    frequency=frequency,
+                    confidence=discrete_confidence,
+                    sources=[learning_dict.get("source", "review")],
+                    tags=_extract_tags(rule),
+                    confidence_score=review_conf_score,
+                    confidence_tier=review_conf_tier,
+                )
+
+                # Add to category
+                if category not in skills_by_category:
+                    skills_by_category[category] = []
+                skills_by_category[category].append(skill)
+
+        # Re-sort categories after adding review learnings
+        for category in skills_by_category:
+            skills_by_category[category].sort(key=lambda s: (-s.frequency, s.rule))
 
     return SkillSet(
         generated_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
