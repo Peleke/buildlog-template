@@ -6,12 +6,14 @@ MCP, CLI, HTTP, or any other interface.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypedDict
 
+from buildlog.confidence import ConfidenceMetrics, merge_confidence_metrics
 from buildlog.render import get_renderer
 from buildlog.skills import Skill, SkillSet, generate_skills
 
@@ -20,11 +22,15 @@ __all__ = [
     "PromoteResult",
     "RejectResult",
     "DiffResult",
+    "ReviewIssue",
+    "ReviewLearning",
+    "LearnFromReviewResult",
     "status",
     "promote",
     "reject",
     "diff",
     "find_skills_by_ids",
+    "learn_from_review",
 ]
 
 
@@ -106,6 +112,175 @@ class DiffResult:
 
     error: str | None = None
     """Error message if operation failed."""
+
+
+# -----------------------------------------------------------------------------
+# Review Learning Data Structures
+# -----------------------------------------------------------------------------
+
+
+class ReviewIssueDict(TypedDict, total=False):
+    """Serializable form of ReviewIssue."""
+
+    severity: str
+    category: str
+    description: str
+    rule_learned: str
+    location: str | None
+    why_it_matters: str | None
+    functional_principle: str | None
+
+
+@dataclass
+class ReviewIssue:
+    """A single issue identified during code review.
+
+    Attributes:
+        severity: How serious the issue is (critical/major/minor/nitpick).
+        category: What kind of issue (architectural/workflow/tool_usage/domain_knowledge).
+        description: What's wrong (concrete).
+        rule_learned: The generalizable rule extracted from this issue.
+        location: File:line where the issue was found.
+        why_it_matters: Why this issue matters (consequences).
+        functional_principle: Related FP principle, if applicable.
+    """
+
+    severity: Literal["critical", "major", "minor", "nitpick"]
+    category: Literal["architectural", "workflow", "tool_usage", "domain_knowledge"]
+    description: str
+    rule_learned: str
+    location: str | None = None
+    why_it_matters: str | None = None
+    functional_principle: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ReviewIssue":
+        """Construct from dictionary (e.g., from JSON)."""
+        return cls(
+            severity=data.get("severity", "minor"),
+            category=data.get("category", "workflow"),
+            description=data.get("description", ""),
+            rule_learned=data.get("rule_learned", ""),
+            location=data.get("location"),
+            why_it_matters=data.get("why_it_matters"),
+            functional_principle=data.get("functional_principle"),
+        )
+
+
+class ReviewLearningDict(TypedDict, total=False):
+    """Serializable form of ReviewLearning."""
+
+    id: str
+    rule: str
+    category: str
+    severity: str
+    source: str
+    first_seen: str
+    last_reinforced: str
+    reinforcement_count: int
+    contradiction_count: int
+    functional_principle: str | None
+
+
+@dataclass
+class ReviewLearning:
+    """A learning extracted from review, with confidence tracking.
+
+    Attributes:
+        id: Deterministic hash of rule_learned (category prefix + hash).
+        rule: The generalizable rule text.
+        category: Category of the learning.
+        severity: Severity of the original issue.
+        source: Where this learning came from (e.g., "review:PR#13").
+        first_seen: When this rule was first identified.
+        last_reinforced: When this rule was last seen/reinforced.
+        reinforcement_count: How many times this rule has been seen.
+        contradiction_count: How many times this rule was contradicted.
+        functional_principle: Related FP principle, if applicable.
+    """
+
+    id: str
+    rule: str
+    category: str
+    severity: str
+    source: str
+    first_seen: datetime
+    last_reinforced: datetime
+    reinforcement_count: int = 1
+    contradiction_count: int = 0
+    functional_principle: str | None = None
+
+    def to_confidence_metrics(self) -> ConfidenceMetrics:
+        """Convert to ConfidenceMetrics for scoring."""
+        return ConfidenceMetrics(
+            reinforcement_count=self.reinforcement_count,
+            last_reinforced=self.last_reinforced,
+            contradiction_count=self.contradiction_count,
+            first_seen=self.first_seen,
+        )
+
+    def to_dict(self) -> ReviewLearningDict:
+        """Convert to serializable dictionary."""
+        result: ReviewLearningDict = {
+            "id": self.id,
+            "rule": self.rule,
+            "category": self.category,
+            "severity": self.severity,
+            "source": self.source,
+            "first_seen": self.first_seen.isoformat(),
+            "last_reinforced": self.last_reinforced.isoformat(),
+            "reinforcement_count": self.reinforcement_count,
+            "contradiction_count": self.contradiction_count,
+        }
+        if self.functional_principle:
+            result["functional_principle"] = self.functional_principle
+        return result
+
+    @classmethod
+    def from_dict(cls, data: ReviewLearningDict) -> "ReviewLearning":
+        """Reconstruct from serialized dictionary."""
+        first_seen = datetime.fromisoformat(data["first_seen"])
+        last_reinforced = datetime.fromisoformat(data["last_reinforced"])
+
+        # Ensure timezone awareness
+        if first_seen.tzinfo is None:
+            first_seen = first_seen.replace(tzinfo=timezone.utc)
+        if last_reinforced.tzinfo is None:
+            last_reinforced = last_reinforced.replace(tzinfo=timezone.utc)
+
+        return cls(
+            id=data["id"],
+            rule=data["rule"],
+            category=data["category"],
+            severity=data["severity"],
+            source=data["source"],
+            first_seen=first_seen,
+            last_reinforced=last_reinforced,
+            reinforcement_count=data.get("reinforcement_count", 1),
+            contradiction_count=data.get("contradiction_count", 0),
+            functional_principle=data.get("functional_principle"),
+        )
+
+
+@dataclass
+class LearnFromReviewResult:
+    """Result of learning from a review.
+
+    Attributes:
+        new_learnings: IDs of newly created learnings.
+        reinforced_learnings: IDs of existing learnings that were reinforced.
+        total_issues_processed: Total number of issues processed.
+        source: Review source identifier.
+        message: Human-readable summary.
+        error: Error message if operation failed.
+    """
+
+    new_learnings: list[str]
+    reinforced_learnings: list[str]
+    total_issues_processed: int
+    source: str
+    message: str = ""
+    error: str | None = None
 
 
 def _get_rejected_path(buildlog_dir: Path) -> Path:
@@ -385,4 +560,170 @@ def diff(
         total_pending=total_pending,
         already_promoted=len(promoted_ids),
         already_rejected=len(rejected_ids),
+    )
+
+
+# -----------------------------------------------------------------------------
+# Review Learning Operations
+# -----------------------------------------------------------------------------
+
+
+def _get_learnings_path(buildlog_dir: Path) -> Path:
+    """Get path to review_learnings.json file."""
+    return buildlog_dir / ".buildlog" / "review_learnings.json"
+
+
+def _generate_learning_id(category: str, rule: str) -> str:
+    """Generate deterministic ID for a learning.
+
+    Uses category prefix + first 10 chars of SHA256 hash.
+    """
+    # Normalize: lowercase, strip whitespace
+    normalized = rule.lower().strip()
+    hash_input = f"{category}:{normalized}".encode("utf-8")
+    hash_hex = hashlib.sha256(hash_input).hexdigest()[:10]
+
+    # Category prefix mapping
+    prefix_map = {
+        "architectural": "arch",
+        "workflow": "wf",
+        "tool_usage": "tool",
+        "domain_knowledge": "dom",
+    }
+    prefix = prefix_map.get(category, category[:4])
+
+    return f"{prefix}-{hash_hex}"
+
+
+def _load_learnings(path: Path) -> dict:
+    """Load learnings from JSON file."""
+    if not path.exists():
+        return {"learnings": {}, "review_history": []}
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {"learnings": {}, "review_history": []}
+
+
+def _save_learnings(path: Path, data: dict) -> None:
+    """Save learnings to JSON file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2))
+
+
+def learn_from_review(
+    buildlog_dir: Path,
+    issues: list[dict],
+    source: str | None = None,
+) -> LearnFromReviewResult:
+    """Capture learnings from a code review and update confidence metrics.
+
+    For each issue:
+    1. Generate deterministic ID from rule text
+    2. If exists: reinforce (increment count, update timestamp)
+    3. If new: create ReviewLearning with initial metrics
+    4. Persist to .buildlog/review_learnings.json
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        issues: List of review issues with rule_learned field.
+        source: Optional source identifier (defaults to timestamp).
+
+    Returns:
+        LearnFromReviewResult with new/reinforced learning IDs.
+    """
+    if not issues:
+        return LearnFromReviewResult(
+            new_learnings=[],
+            reinforced_learnings=[],
+            total_issues_processed=0,
+            source=source or "",
+            error="No issues provided",
+        )
+
+    # Default source to timestamp
+    now = datetime.now(timezone.utc)
+    if source is None:
+        source = f"review:{now.isoformat()}"
+    elif not source.startswith("review:"):
+        source = f"review:{source}"
+
+    learnings_path = _get_learnings_path(buildlog_dir)
+    data = _load_learnings(learnings_path)
+
+    new_ids: list[str] = []
+    reinforced_ids: list[str] = []
+    processed = 0
+
+    for issue_dict in issues:
+        # Skip issues without rule_learned
+        rule = issue_dict.get("rule_learned", "").strip()
+        if not rule:
+            continue
+
+        # Parse issue
+        issue = ReviewIssue.from_dict(issue_dict)
+        learning_id = _generate_learning_id(issue.category, rule)
+
+        if learning_id in data["learnings"]:
+            # Reinforce existing learning
+            existing_data = data["learnings"][learning_id]
+            existing = ReviewLearning.from_dict(existing_data)
+
+            # Use merge_confidence_metrics pattern
+            updated_metrics = merge_confidence_metrics(
+                existing.to_confidence_metrics(), now
+            )
+
+            # Update the learning
+            existing_data["last_reinforced"] = now.isoformat()
+            existing_data["reinforcement_count"] = updated_metrics.reinforcement_count
+            reinforced_ids.append(learning_id)
+        else:
+            # Create new learning
+            learning = ReviewLearning(
+                id=learning_id,
+                rule=rule,
+                category=issue.category,
+                severity=issue.severity,
+                source=source,
+                first_seen=now,
+                last_reinforced=now,
+                reinforcement_count=1,
+                contradiction_count=0,
+                functional_principle=issue.functional_principle,
+            )
+            data["learnings"][learning_id] = learning.to_dict()
+            new_ids.append(learning_id)
+
+        processed += 1
+
+    # Record in review history
+    data["review_history"].append(
+        {
+            "timestamp": now.isoformat(),
+            "source": source,
+            "issues_count": processed,
+            "new_learning_ids": new_ids,
+            "reinforced_learning_ids": reinforced_ids,
+        }
+    )
+
+    # Persist
+    _save_learnings(learnings_path, data)
+
+    # Build message
+    msg_parts = []
+    if new_ids:
+        msg_parts.append(f"{len(new_ids)} new learning(s)")
+    if reinforced_ids:
+        msg_parts.append(f"{len(reinforced_ids)} reinforced")
+    message = ", ".join(msg_parts) if msg_parts else "No learnings captured"
+
+    return LearnFromReviewResult(
+        new_learnings=new_ids,
+        reinforced_learnings=reinforced_ids,
+        total_issues_processed=processed,
+        source=source,
+        message=message,
     )
