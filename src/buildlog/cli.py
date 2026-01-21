@@ -8,6 +8,7 @@ from pathlib import Path
 
 import click
 
+from buildlog.core import get_rewards, log_reward
 from buildlog.distill import CATEGORIES, distill_all, format_output
 from buildlog.skills import format_skills, generate_skills
 from buildlog.stats import calculate_stats, format_dashboard, format_json
@@ -454,6 +455,132 @@ def skills(
             raise SystemExit(1)
     else:
         click.echo(formatted)
+
+
+@main.command()
+@click.argument("outcome", type=click.Choice(["accepted", "revision", "rejected"]))
+@click.option(
+    "--distance",
+    "-d",
+    type=float,
+    help="Revision distance (0-1, 0=minor tweak, 1=complete redo)",
+)
+@click.option("--error-class", "-e", help="Category of error (e.g., missing_test)")
+@click.option("--notes", "-n", help="Additional notes about the feedback")
+@click.option("--rules", "-r", multiple=True, help="Active rule IDs")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def reward(
+    outcome: str,
+    distance: float | None,
+    error_class: str | None,
+    notes: str | None,
+    rules: tuple[str, ...],
+    output_json: bool,
+):
+    """Log a reward signal for the learning loop.
+
+    Used to provide feedback on agent work for bandit learning.
+
+    OUTCOME is one of:
+      - accepted: Work was accepted as-is (reward=1.0)
+      - revision: Work needed changes (reward=1-distance)
+      - rejected: Work was rejected entirely (reward=0.0)
+
+    Examples:
+
+        buildlog reward accepted
+        buildlog reward revision --distance 0.3 --error-class missing_test
+        buildlog reward rejected --notes "Completely wrong approach"
+        buildlog reward accepted --rules arch-123 --rules wf-456
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    result = log_reward(
+        buildlog_dir,
+        outcome=outcome,  # type: ignore[arg-type]
+        rules_active=list(rules) if rules else None,
+        revision_distance=distance,
+        error_class=error_class,
+        notes=notes,
+        source="cli",
+    )
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(f"✓ {result.message}")
+        click.echo(f"  Reward ID: {result.reward_id}")
+        click.echo(f"  Total events: {result.total_events}")
+
+
+@main.command()
+@click.option("--limit", "-n", type=int, help="Limit number of events to show")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def rewards(limit: int | None, output_json: bool):
+    """List reward events and summary statistics.
+
+    Shows recent reward events and aggregate statistics useful for
+    tracking learning progress.
+
+    Examples:
+
+        buildlog rewards              # Show all with summary
+        buildlog rewards --limit 10   # Show 10 most recent
+        buildlog rewards --json       # JSON output for scripts
+    """
+    import json as json_module
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    summary = get_rewards(buildlog_dir, limit=limit)
+
+    if output_json:
+        data = {
+            "total_events": summary.total_events,
+            "accepted": summary.accepted,
+            "revisions": summary.revisions,
+            "rejected": summary.rejected,
+            "mean_reward": summary.mean_reward,
+            "events": [e.to_dict() for e in summary.events],
+        }
+        click.echo(json_module.dumps(data, indent=2))
+    else:
+        # Summary header
+        click.echo("Reward Signal Summary")
+        click.echo("=" * 40)
+        click.echo(f"Total events:  {summary.total_events}")
+        click.echo(f"  Accepted:    {summary.accepted}")
+        click.echo(f"  Revisions:   {summary.revisions}")
+        click.echo(f"  Rejected:    {summary.rejected}")
+        click.echo(f"Mean reward:   {summary.mean_reward:.3f}")
+        click.echo()
+
+        if summary.events:
+            click.echo("Recent Events")
+            click.echo("-" * 40)
+            for event in summary.events:
+                ts = event.timestamp.strftime("%Y-%m-%d %H:%M")
+                outcome_str = event.outcome.upper()
+                reward_str = f"r={event.reward_value:.2f}"
+                click.echo(f"  [{ts}] {outcome_str} ({reward_str})")
+                if event.error_class:
+                    click.echo(f"           error_class: {event.error_class}")
+                if event.notes:
+                    click.echo(f"           notes: {event.notes}")
+        else:
+            click.echo("No reward events yet.")
+            click.echo("Log your first with: buildlog reward accepted")
 
 
 if __name__ == "__main__":

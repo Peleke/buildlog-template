@@ -25,12 +25,17 @@ __all__ = [
     "ReviewIssue",
     "ReviewLearning",
     "LearnFromReviewResult",
+    "RewardEvent",
+    "LogRewardResult",
+    "RewardSummary",
     "status",
     "promote",
     "reject",
     "diff",
     "find_skills_by_ids",
     "learn_from_review",
+    "log_reward",
+    "get_rewards",
 ]
 
 
@@ -281,6 +286,133 @@ class LearnFromReviewResult:
     source: str
     message: str = ""
     error: str | None = None
+
+
+# -----------------------------------------------------------------------------
+# Reward Signal Data Structures (for Bandit Learning)
+# -----------------------------------------------------------------------------
+
+
+class RewardEventDict(TypedDict, total=False):
+    """Serializable form of RewardEvent."""
+
+    id: str
+    timestamp: str
+    outcome: str  # "accepted" | "revision" | "rejected"
+    reward_value: float
+    rules_active: list[str]
+    revision_distance: float | None
+    error_class: str | None
+    notes: str | None
+    source: str | None
+
+
+@dataclass
+class RewardEvent:
+    """A single reward/feedback event for bandit learning.
+
+    This tracks human feedback on agent work to enable learning
+    which rules are effective in which contexts.
+
+    Attributes:
+        id: Unique identifier for this event.
+        timestamp: When the feedback was recorded.
+        outcome: The feedback type (accepted/revision/rejected).
+        reward_value: Numeric reward (1.0=accepted, 0=rejected, in between for revision).
+        rules_active: IDs of rules that were in context when work was done.
+        revision_distance: How much correction was needed (0-1, lower is better).
+        error_class: Category of error if applicable.
+        notes: Optional notes about the feedback.
+        source: Where this feedback came from (manual, review_loop, etc.).
+    """
+
+    id: str
+    timestamp: datetime
+    outcome: Literal["accepted", "revision", "rejected"]
+    reward_value: float
+    rules_active: list[str] = field(default_factory=list)
+    revision_distance: float | None = None
+    error_class: str | None = None
+    notes: str | None = None
+    source: str | None = None
+
+    def to_dict(self) -> RewardEventDict:
+        """Convert to serializable dictionary."""
+        result: RewardEventDict = {
+            "id": self.id,
+            "timestamp": self.timestamp.isoformat(),
+            "outcome": self.outcome,
+            "reward_value": self.reward_value,
+            "rules_active": self.rules_active,
+        }
+        if self.revision_distance is not None:
+            result["revision_distance"] = self.revision_distance
+        if self.error_class is not None:
+            result["error_class"] = self.error_class
+        if self.notes is not None:
+            result["notes"] = self.notes
+        if self.source is not None:
+            result["source"] = self.source
+        return result
+
+    @classmethod
+    def from_dict(cls, data: RewardEventDict) -> "RewardEvent":
+        """Reconstruct from serialized dictionary."""
+        timestamp = datetime.fromisoformat(data["timestamp"])
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        return cls(
+            id=data["id"],
+            timestamp=timestamp,
+            outcome=data["outcome"],  # type: ignore[arg-type]
+            reward_value=data["reward_value"],
+            rules_active=data.get("rules_active", []),
+            revision_distance=data.get("revision_distance"),
+            error_class=data.get("error_class"),
+            notes=data.get("notes"),
+            source=data.get("source"),
+        )
+
+
+@dataclass
+class LogRewardResult:
+    """Result of logging a reward event.
+
+    Attributes:
+        reward_id: ID of the logged reward event.
+        reward_value: The computed reward value.
+        total_events: Total reward events logged so far.
+        message: Human-readable confirmation.
+        error: Error message if operation failed.
+    """
+
+    reward_id: str
+    reward_value: float
+    total_events: int
+    message: str = ""
+    error: str | None = None
+
+
+@dataclass
+class RewardSummary:
+    """Summary statistics for reward events.
+
+    Attributes:
+        total_events: Total number of reward events.
+        accepted: Count of accepted outcomes.
+        revisions: Count of revision outcomes.
+        rejected: Count of rejected outcomes.
+        mean_reward: Average reward value across all events.
+        events: List of reward events (limited by query).
+    """
+
+    total_events: int
+    accepted: int
+    revisions: int
+    rejected: int
+    mean_reward: float
+    events: list[RewardEvent] = field(default_factory=list)
 
 
 def _get_rejected_path(buildlog_dir: Path) -> Path:
@@ -726,4 +858,171 @@ def learn_from_review(
         total_issues_processed=processed,
         source=source,
         message=message,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Reward Signal Operations (for Bandit Learning)
+# -----------------------------------------------------------------------------
+
+
+def _get_rewards_path(buildlog_dir: Path) -> Path:
+    """Get path to reward_events.jsonl file."""
+    return buildlog_dir / ".buildlog" / "reward_events.jsonl"
+
+
+def _generate_reward_id(outcome: str, timestamp: datetime) -> str:
+    """Generate unique ID for a reward event.
+
+    Uses outcome + timestamp to ensure uniqueness while allowing
+    multiple events with the same outcome.
+    """
+    ts_str = timestamp.isoformat()
+    normalized = f"{outcome}:{ts_str}"
+    hash_hex = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:10]
+    return f"rew-{hash_hex}"
+
+
+def _compute_reward_value(
+    outcome: Literal["accepted", "revision", "rejected"],
+    revision_distance: float | None,
+) -> float:
+    """Compute numeric reward from outcome.
+
+    Args:
+        outcome: The feedback type.
+        revision_distance: How much correction needed (0-1).
+
+    Returns:
+        Reward value in [0, 1].
+        - accepted: 1.0
+        - rejected: 0.0
+        - revision: 1.0 - distance (default distance 0.5 if not provided)
+    """
+    if outcome == "accepted":
+        return 1.0
+    elif outcome == "rejected":
+        return 0.0
+    else:  # revision
+        distance = revision_distance if revision_distance is not None else 0.5
+        return max(0.0, min(1.0, 1.0 - distance))
+
+
+def log_reward(
+    buildlog_dir: Path,
+    outcome: Literal["accepted", "revision", "rejected"],
+    rules_active: list[str] | None = None,
+    revision_distance: float | None = None,
+    error_class: str | None = None,
+    notes: str | None = None,
+    source: str | None = None,
+) -> LogRewardResult:
+    """Log a reward event for bandit learning.
+
+    Appends to reward_events.jsonl for later analysis.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        outcome: Type of feedback (accepted/revision/rejected).
+        rules_active: List of rule IDs that were in context.
+        revision_distance: How much correction was needed (0-1, for revisions).
+        error_class: Category of error if applicable.
+        notes: Optional notes about the feedback.
+        source: Where this feedback came from.
+
+    Returns:
+        LogRewardResult with confirmation.
+    """
+    now = datetime.now(timezone.utc)
+    reward_id = _generate_reward_id(outcome, now)
+    reward_value = _compute_reward_value(outcome, revision_distance)
+
+    event = RewardEvent(
+        id=reward_id,
+        timestamp=now,
+        outcome=outcome,
+        reward_value=reward_value,
+        rules_active=rules_active or [],
+        revision_distance=revision_distance,
+        error_class=error_class,
+        notes=notes,
+        source=source or "manual",
+    )
+
+    # Append to JSONL file
+    rewards_path = _get_rewards_path(buildlog_dir)
+    rewards_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(rewards_path, "a") as f:
+        f.write(json.dumps(event.to_dict()) + "\n")
+
+    # Count total events
+    total_events = 0
+    if rewards_path.exists():
+        total_events = sum(
+            1 for line in rewards_path.read_text().strip().split("\n") if line
+        )
+
+    return LogRewardResult(
+        reward_id=reward_id,
+        reward_value=reward_value,
+        total_events=total_events,
+        message=f"Logged {outcome} (reward={reward_value:.2f})",
+    )
+
+
+def get_rewards(
+    buildlog_dir: Path,
+    limit: int | None = None,
+) -> RewardSummary:
+    """Get reward events with summary statistics.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        limit: Maximum number of events to return (most recent first).
+
+    Returns:
+        RewardSummary with events and statistics.
+    """
+    rewards_path = _get_rewards_path(buildlog_dir)
+
+    if not rewards_path.exists():
+        return RewardSummary(
+            total_events=0,
+            accepted=0,
+            revisions=0,
+            rejected=0,
+            mean_reward=0.0,
+            events=[],
+        )
+
+    # Parse all events
+    events: list[RewardEvent] = []
+    for line in rewards_path.read_text().strip().split("\n"):
+        if line:
+            try:
+                data = json.loads(line)
+                events.append(RewardEvent.from_dict(data))
+            except (json.JSONDecodeError, KeyError):
+                continue  # Skip malformed lines
+
+    # Calculate statistics
+    total = len(events)
+    accepted = sum(1 for e in events if e.outcome == "accepted")
+    revisions = sum(1 for e in events if e.outcome == "revision")
+    rejected = sum(1 for e in events if e.outcome == "rejected")
+    mean_reward = sum(e.reward_value for e in events) / total if total > 0 else 0.0
+
+    # Sort by timestamp (most recent first) and limit
+    events.sort(key=lambda e: e.timestamp, reverse=True)
+    if limit is not None:
+        events = events[:limit]
+
+    return RewardSummary(
+        total_events=total,
+        accepted=accepted,
+        revisions=revisions,
+        rejected=rejected,
+        mean_reward=mean_reward,
+        events=events,
     )
