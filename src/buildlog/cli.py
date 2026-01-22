@@ -921,15 +921,18 @@ def gauntlet_list(output_json: bool):
     """
     import json as json_module
 
-    from buildlog.seeds import load_all_seeds
+    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
 
-    # Find seeds directory
-    buildlog_dir = Path("buildlog")
-    seeds_dir = buildlog_dir / ".buildlog" / "seeds"
+    # Find seeds directory (local overrides > buildlog template > package bundled)
+    seeds_dir = get_default_seeds_dir()
 
-    # Also check .buildlog at repo root (common for installed templates)
-    if not seeds_dir.exists():
-        seeds_dir = Path(".buildlog") / "seeds"
+    if seeds_dir is None:
+        if output_json:
+            click.echo('{"personas": {}, "total_rules": 0, "error": "No seeds found"}')
+        else:
+            click.echo("No seed files found.")
+            click.echo("Seeds are bundled with buildlog - check your installation.")
+        return
 
     seeds = load_all_seeds(seeds_dir)
 
@@ -997,18 +1000,22 @@ def gauntlet_rules(persona: str, fmt: str, output: str | None):
     """
     import json as json_module
 
-    from buildlog.seeds import load_all_seeds
+    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
 
-    # Find seeds directory
-    seeds_dir = Path(".buildlog") / "seeds"
-    if not seeds_dir.exists():
-        seeds_dir = Path("buildlog") / ".buildlog" / "seeds"
+    # Find seeds directory (local overrides > buildlog template > package bundled)
+    seeds_dir = get_default_seeds_dir()
+
+    if seeds_dir is None:
+        click.echo("No seed files found.", err=True)
+        click.echo(
+            "Seeds are bundled with buildlog - check your installation.", err=True
+        )
+        raise SystemExit(1)
 
     seeds = load_all_seeds(seeds_dir)
 
     if not seeds:
-        click.echo("No seed files found.", err=True)
-        click.echo("Initialize with: buildlog init", err=True)
+        click.echo("No seed files found in directory.", err=True)
         raise SystemExit(1)
 
     # Filter personas
@@ -1117,17 +1124,22 @@ def gauntlet_prompt(target: str, persona: tuple[str, ...], output: str | None):
         buildlog gauntlet prompt src/api.py -p security_karen
         buildlog gauntlet prompt . -o review_prompt.md
     """
-    from buildlog.seeds import load_all_seeds
+    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
 
-    # Find seeds directory
-    seeds_dir = Path(".buildlog") / "seeds"
-    if not seeds_dir.exists():
-        seeds_dir = Path("buildlog") / ".buildlog" / "seeds"
+    # Find seeds directory (local overrides > buildlog template > package bundled)
+    seeds_dir = get_default_seeds_dir()
+
+    if seeds_dir is None:
+        click.echo("No seed files found.", err=True)
+        click.echo(
+            "Seeds are bundled with buildlog - check your installation.", err=True
+        )
+        raise SystemExit(1)
 
     seeds = load_all_seeds(seeds_dir)
 
     if not seeds:
-        click.echo("No seed files found.", err=True)
+        click.echo("No seed files found in directory.", err=True)
         raise SystemExit(1)
 
     # Filter personas

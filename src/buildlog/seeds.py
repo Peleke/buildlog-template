@@ -31,10 +31,13 @@ __all__ = [
     "load_seed_file",
     "load_all_seeds",
     "seeds_to_skills",
+    "get_package_seeds_dir",
+    "get_default_seeds_dir",
 ]
 
 import logging
 from dataclasses import dataclass, field
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +46,53 @@ import yaml
 from buildlog.skills import Skill, _generate_skill_id
 
 logger = logging.getLogger(__name__)
+
+
+def get_package_seeds_dir() -> Path | None:
+    """Get the path to bundled seed files in the package.
+
+    Returns:
+        Path to the package's data/seeds directory, or None if not found.
+    """
+    try:
+        # Python 3.9+ way to get package resources
+        with resources.as_file(resources.files("buildlog").joinpath("data/seeds")) as p:
+            if p.exists():
+                return p
+    except (TypeError, FileNotFoundError):
+        pass
+
+    # Fallback: try relative to this file
+    fallback = Path(__file__).parent / "data" / "seeds"
+    if fallback.exists():
+        return fallback
+
+    return None
+
+
+def get_default_seeds_dir() -> Path | None:
+    """Get the default seeds directory, checking multiple locations.
+
+    Priority:
+    1. Local .buildlog/seeds/ (project-specific overrides)
+    2. Local buildlog/.buildlog/seeds/ (buildlog template structure)
+    3. Package bundled seeds (installed with pip)
+
+    Returns:
+        Path to the seeds directory with most precedence, or None if none found.
+    """
+    # Check local project seeds first (allows overrides)
+    local_seeds = Path(".buildlog") / "seeds"
+    if local_seeds.exists() and any(local_seeds.glob("*.yaml")):
+        return local_seeds
+
+    # Check buildlog template structure
+    buildlog_seeds = Path("buildlog") / ".buildlog" / "seeds"
+    if buildlog_seeds.exists() and any(buildlog_seeds.glob("*.yaml")):
+        return buildlog_seeds
+
+    # Fall back to package seeds
+    return get_package_seeds_dir()
 
 
 @dataclass
