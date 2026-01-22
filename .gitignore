@@ -44,3 +44,11 @@ htmlcov/
 
 # Build artifacts
 *.whl
+
+# Development artifacts
+CHAT.txt
+results/
+sketches/
+
+# buildlog runtime data (in project root, not in src/)
+buildlog/.buildlog/
