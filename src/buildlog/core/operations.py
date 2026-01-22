@@ -1808,16 +1808,32 @@ def gauntlet_accept_risk(
             description = issue.get("description", "")
             location = issue.get("location", "")
 
+            # Sanitize inputs for GitHub issue creation
+            # Note: We use list args (not shell=True), so this is defense-in-depth
+            def _sanitize_for_gh(text: str, max_len: int = 256) -> str:
+                """Sanitize text for GitHub issue fields."""
+                # Remove/replace problematic characters
+                sanitized = text.replace("\n", " ").replace("\r", " ")
+                # Truncate to max length
+                if len(sanitized) > max_len:
+                    sanitized = sanitized[: max_len - 3] + "..."
+                return sanitized.strip()
+
+            safe_severity = _sanitize_for_gh(str(severity), 20)
+            safe_rule = _sanitize_for_gh(str(rule), 200)
+            safe_description = _sanitize_for_gh(str(description), 1000)
+            safe_location = _sanitize_for_gh(str(location), 100)
+
             # Build issue body
             body_parts = [
-                f"**Severity:** {severity}",
-                f"**Rule:** {rule}",
+                f"**Severity:** {safe_severity}",
+                f"**Rule:** {safe_rule}",
                 "",
                 "## Description",
-                description,
+                safe_description,
             ]
-            if location:
-                body_parts.extend(["", f"**Location:** `{location}`"])
+            if safe_location:
+                body_parts.extend(["", f"**Location:** `{safe_location}`"])
 
             body_parts.extend(
                 [
@@ -1828,7 +1844,7 @@ def gauntlet_accept_risk(
             )
 
             body = "\n".join(body_parts)
-            title = f"[Gauntlet/{severity}] {rule[:60]}"
+            title = f"[Gauntlet/{safe_severity}] {safe_rule[:60]}"
 
             # Create GitHub issue
             cmd = [
