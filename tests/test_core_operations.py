@@ -7,11 +7,16 @@ import pytest
 
 from buildlog.core.operations import (
     DiffResult,
+    LogRewardResult,
     PromoteResult,
     RejectResult,
+    RewardEvent,
+    RewardSummary,
     StatusResult,
     diff,
     find_skills_by_ids,
+    get_rewards,
+    log_reward,
     promote,
     reject,
     status,
@@ -410,3 +415,239 @@ class TestFindSkillsByIds:
             found, not_found = find_skills_by_ids(skill_set, [all_ids[0], "fake-id"])
             assert len(found) == 1
             assert "fake-id" in not_found
+
+
+class TestRewardLogging:
+    """Tests for reward signal logging operations."""
+
+    def test_log_accepted_reward(self, tmp_path):
+        """Should log an accepted reward with reward_value=1.0."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        result = log_reward(buildlog_dir, outcome="accepted")
+
+        assert result.error is None
+        assert result.reward_value == 1.0
+        assert result.total_events == 1
+        assert result.reward_id.startswith("rew-")
+
+    def test_log_rejected_reward(self, tmp_path):
+        """Should log a rejected reward with reward_value=0.0."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        result = log_reward(buildlog_dir, outcome="rejected")
+
+        assert result.error is None
+        assert result.reward_value == 0.0
+        assert result.total_events == 1
+
+    def test_log_revision_reward_with_distance(self, tmp_path):
+        """Should compute reward_value from revision_distance."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        result = log_reward(
+            buildlog_dir,
+            outcome="revision",
+            revision_distance=0.3,
+        )
+
+        assert result.error is None
+        assert result.reward_value == pytest.approx(0.7, rel=0.01)
+        assert result.total_events == 1
+
+    def test_log_revision_reward_default_distance(self, tmp_path):
+        """Should use default distance of 0.5 for revision without distance."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        result = log_reward(buildlog_dir, outcome="revision")
+
+        assert result.reward_value == pytest.approx(0.5, rel=0.01)
+
+    def test_appends_to_existing_file(self, tmp_path):
+        """Should append to existing reward_events.jsonl."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        log_reward(buildlog_dir, outcome="accepted")
+        result = log_reward(buildlog_dir, outcome="rejected")
+
+        assert result.total_events == 2
+
+    def test_stores_rules_active(self, tmp_path):
+        """Should store rules_active in the event."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        log_reward(
+            buildlog_dir,
+            outcome="accepted",
+            rules_active=["arch-123", "wf-456"],
+        )
+
+        summary = get_rewards(buildlog_dir)
+        assert len(summary.events) == 1
+        assert "arch-123" in summary.events[0].rules_active
+        assert "wf-456" in summary.events[0].rules_active
+
+    def test_stores_error_class(self, tmp_path):
+        """Should store error_class in the event."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        log_reward(
+            buildlog_dir,
+            outcome="revision",
+            error_class="missing_test",
+        )
+
+        summary = get_rewards(buildlog_dir)
+        assert summary.events[0].error_class == "missing_test"
+
+    def test_stores_notes(self, tmp_path):
+        """Should store notes in the event."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        log_reward(
+            buildlog_dir,
+            outcome="rejected",
+            notes="Completely wrong approach",
+        )
+
+        summary = get_rewards(buildlog_dir)
+        assert summary.events[0].notes == "Completely wrong approach"
+
+    def test_creates_buildlog_directory(self, tmp_path):
+        """Should create .buildlog directory if it doesn't exist."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        log_reward(buildlog_dir, outcome="accepted")
+
+        rewards_file = buildlog_dir / ".buildlog" / "reward_events.jsonl"
+        assert rewards_file.exists()
+
+
+class TestGetRewards:
+    """Tests for get_rewards() operation."""
+
+    def test_returns_empty_for_no_events(self, tmp_path):
+        """Should return empty summary when no events exist."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        summary = get_rewards(buildlog_dir)
+
+        assert summary.total_events == 0
+        assert summary.accepted == 0
+        assert summary.revisions == 0
+        assert summary.rejected == 0
+        assert summary.mean_reward == 0.0
+        assert summary.events == []
+
+    def test_calculates_correct_statistics(self, tmp_path):
+        """Should calculate correct statistics from events."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Log various outcomes
+        log_reward(buildlog_dir, outcome="accepted")  # 1.0
+        log_reward(buildlog_dir, outcome="accepted")  # 1.0
+        log_reward(buildlog_dir, outcome="revision", revision_distance=0.4)  # 0.6
+        log_reward(buildlog_dir, outcome="rejected")  # 0.0
+
+        summary = get_rewards(buildlog_dir)
+
+        assert summary.total_events == 4
+        assert summary.accepted == 2
+        assert summary.revisions == 1
+        assert summary.rejected == 1
+        # Mean = (1.0 + 1.0 + 0.6 + 0.0) / 4 = 0.65
+        assert summary.mean_reward == pytest.approx(0.65, rel=0.01)
+
+    def test_respects_limit(self, tmp_path):
+        """Should respect limit parameter."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Log 5 events
+        for _ in range(5):
+            log_reward(buildlog_dir, outcome="accepted")
+
+        summary = get_rewards(buildlog_dir, limit=2)
+
+        # Stats should reflect all 5
+        assert summary.total_events == 5
+        # But only 2 events returned
+        assert len(summary.events) == 2
+
+    def test_returns_events_most_recent_first(self, tmp_path):
+        """Should return events sorted by timestamp, most recent first."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        log_reward(buildlog_dir, outcome="accepted", notes="first")
+        log_reward(buildlog_dir, outcome="revision", notes="second")
+        log_reward(buildlog_dir, outcome="rejected", notes="third")
+
+        summary = get_rewards(buildlog_dir)
+
+        # Most recent should be first
+        assert summary.events[0].notes == "third"
+        assert summary.events[1].notes == "second"
+        assert summary.events[2].notes == "first"
+
+
+class TestRewardEvent:
+    """Tests for RewardEvent dataclass."""
+
+    def test_to_dict_and_from_dict_roundtrip(self):
+        """Should serialize and deserialize correctly."""
+        from datetime import datetime, timezone
+
+        event = RewardEvent(
+            id="rew-abc123",
+            timestamp=datetime(2026, 1, 21, 10, 0, 0, tzinfo=timezone.utc),
+            outcome="revision",
+            reward_value=0.7,
+            rules_active=["arch-123"],
+            revision_distance=0.3,
+            error_class="missing_test",
+            notes="Test notes",
+            source="manual",
+        )
+
+        # Round-trip
+        data = event.to_dict()
+        restored = RewardEvent.from_dict(data)
+
+        assert restored.id == event.id
+        assert restored.timestamp == event.timestamp
+        assert restored.outcome == event.outcome
+        assert restored.reward_value == event.reward_value
+        assert restored.rules_active == event.rules_active
+        assert restored.revision_distance == event.revision_distance
+        assert restored.error_class == event.error_class
+        assert restored.notes == event.notes
+        assert restored.source == event.source
+
+    def test_from_dict_handles_missing_optional_fields(self):
+        """Should handle missing optional fields gracefully."""
+        data = {
+            "id": "rew-abc123",
+            "timestamp": "2026-01-21T10:00:00+00:00",
+            "outcome": "accepted",
+            "reward_value": 1.0,
+        }
+
+        event = RewardEvent.from_dict(data)
+
+        assert event.rules_active == []
+        assert event.revision_distance is None
+        assert event.error_class is None
+        assert event.notes is None
+        assert event.source is None

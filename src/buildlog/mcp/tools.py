@@ -9,7 +9,15 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Literal
 
-from buildlog.core import diff, learn_from_review, promote, reject, status
+from buildlog.core import (
+    diff,
+    get_rewards,
+    learn_from_review,
+    log_reward,
+    promote,
+    reject,
+    status,
+)
 
 
 def _validate_skill_ids(skill_ids: list[str]) -> list[str]:
@@ -140,3 +148,105 @@ def buildlog_learn_from_review(
     """
     result = learn_from_review(Path(buildlog_dir), issues, source)
     return asdict(result)
+
+
+def buildlog_log_reward(
+    outcome: str,
+    rules_active: list[str] | None = None,
+    revision_distance: float | None = None,
+    error_class: str | None = None,
+    notes: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Log a reward signal for bandit learning.
+
+    Call this after agent work to provide feedback on the outcome.
+    This enables learning which rules are effective in which contexts.
+
+    Args:
+        outcome: Type of feedback:
+            - "accepted": Work was accepted as-is (reward=1.0)
+            - "revision": Work needed changes (reward=1-distance)
+            - "rejected": Work was rejected entirely (reward=0.0)
+        rules_active: List of rule IDs that were in context during the work
+        revision_distance: How much correction was needed (0-1, 0=minor tweak, 1=complete redo)
+        error_class: Category of error if applicable (e.g., "missing_test", "validation_boundary")
+        notes: Optional notes about the feedback
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with reward_id, reward_value, total_events
+
+    Example:
+        # Work was accepted
+        buildlog_log_reward(outcome="accepted", rules_active=["arch-123", "wf-456"])
+
+        # Work needed revision
+        buildlog_log_reward(
+            outcome="revision",
+            revision_distance=0.3,
+            error_class="missing_test",
+            notes="Forgot to test error path"
+        )
+
+        # Work was rejected
+        buildlog_log_reward(outcome="rejected", notes="Completely wrong approach")
+    """
+    # Validate outcome
+    if outcome not in ("accepted", "revision", "rejected"):
+        return {
+            "reward_id": "",
+            "reward_value": 0.0,
+            "total_events": 0,
+            "message": "",
+            "error": f"Invalid outcome: {outcome}. Must be 'accepted', 'revision', or 'rejected'",
+        }
+
+    result = log_reward(
+        Path(buildlog_dir),
+        outcome=outcome,  # type: ignore[arg-type]
+        rules_active=rules_active,
+        revision_distance=revision_distance,
+        error_class=error_class,
+        notes=notes,
+        source="mcp",
+    )
+    return asdict(result)
+
+
+def buildlog_rewards(
+    limit: int | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Get reward events with summary statistics.
+
+    Returns recent reward events and aggregate statistics useful for
+    understanding learning progress.
+
+    Args:
+        limit: Maximum number of events to return (most recent first)
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with:
+            - total_events: Total count of reward events
+            - accepted: Count of accepted outcomes
+            - revisions: Count of revision outcomes
+            - rejected: Count of rejected outcomes
+            - mean_reward: Average reward value
+            - events: List of recent events (limited)
+
+    Example:
+        buildlog_rewards(limit=10)  # Get 10 most recent events with stats
+    """
+    result = get_rewards(Path(buildlog_dir), limit)
+
+    # Convert events to dicts
+    return {
+        "total_events": result.total_events,
+        "accepted": result.accepted,
+        "revisions": result.revisions,
+        "rejected": result.rejected,
+        "mean_reward": result.mean_reward,
+        "events": [e.to_dict() for e in result.events],
+    }
