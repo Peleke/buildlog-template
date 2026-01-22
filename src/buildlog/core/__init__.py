@@ -3,6 +3,8 @@
 from buildlog.core.operations import (
     DiffResult,
     EndSessionResult,
+    GauntletAcceptRiskResult,
+    GauntletLoopResult,
     LearnFromReviewResult,
     LogMistakeResult,
     LogRewardResult,
@@ -20,6 +22,8 @@ from buildlog.core.operations import (
     diff,
     end_session,
     find_skills_by_ids,
+    gauntlet_accept_risk,
+    gauntlet_process_issues,
     get_experiment_report,
     get_rewards,
     get_session_metrics,
@@ -50,6 +54,9 @@ __all__ = [
     "StartSessionResult",
     "EndSessionResult",
     "LogMistakeResult",
+    # Gauntlet loop
+    "GauntletLoopResult",
+    "GauntletAcceptRiskResult",
     "status",
     "promote",
     "reject",
@@ -64,4 +71,7 @@ __all__ = [
     "log_mistake",
     "get_session_metrics",
     "get_experiment_report",
+    # Gauntlet loop operations
+    "gauntlet_process_issues",
+    "gauntlet_accept_risk",
 ]

@@ -35,6 +35,9 @@ __all__ = [
     "StartSessionResult",
     "EndSessionResult",
     "LogMistakeResult",
+    # Gauntlet loop
+    "GauntletLoopResult",
+    "GauntletAcceptRiskResult",
     "status",
     "promote",
     "reject",
@@ -49,6 +52,9 @@ __all__ = [
     "log_mistake",
     "get_session_metrics",
     "get_experiment_report",
+    # Gauntlet loop operations
+    "gauntlet_process_issues",
+    "gauntlet_accept_risk",
 ]
 
 
@@ -1652,3 +1658,215 @@ def get_experiment_report(buildlog_dir: Path) -> dict:
         "sessions": session_metrics,
         "error_classes": error_classes,
     }
+
+
+# =============================================================================
+# Gauntlet Loop Operations
+# =============================================================================
+
+
+@dataclass
+class GauntletLoopResult:
+    """Result of processing gauntlet issues.
+
+    Attributes:
+        action: What to do next:
+            - "fix_criticals": Criticals remain, auto-fix and loop
+            - "checkpoint_majors": No criticals, but majors remain (HITL)
+            - "checkpoint_minors": Only minors remain (HITL)
+            - "clean": No issues remain
+        criticals: List of critical severity issues
+        majors: List of major severity issues
+        minors: List of minor/nitpick severity issues
+        iteration: Current iteration number
+        learnings_persisted: Number of learnings persisted this iteration
+        message: Human-readable summary
+    """
+
+    action: Literal["fix_criticals", "checkpoint_majors", "checkpoint_minors", "clean"]
+    criticals: list[dict]
+    majors: list[dict]
+    minors: list[dict]
+    iteration: int
+    learnings_persisted: int
+    message: str
+
+
+@dataclass
+class GauntletAcceptRiskResult:
+    """Result of accepting risk with remaining issues.
+
+    Attributes:
+        accepted_issues: Number of issues accepted as risk
+        github_issues_created: Number of GitHub issues created (if enabled)
+        github_issue_urls: URLs of created GitHub issues
+        message: Human-readable summary
+        error: Error message if operation failed
+    """
+
+    accepted_issues: int
+    github_issues_created: int
+    github_issue_urls: list[str]
+    message: str
+    error: str | None = None
+
+
+def gauntlet_process_issues(
+    buildlog_dir: Path,
+    issues: list[dict],
+    iteration: int = 1,
+    source: str | None = None,
+) -> GauntletLoopResult:
+    """Process gauntlet issues and determine next action.
+
+    Categorizes issues by severity, persists learnings, and returns
+    the appropriate next action for the gauntlet loop.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        issues: List of issues from the gauntlet review.
+        iteration: Current iteration number (for tracking).
+        source: Optional source identifier for learnings.
+
+    Returns:
+        GauntletLoopResult with categorized issues and next action.
+    """
+    # Categorize by severity
+    criticals = [i for i in issues if i.get("severity") == "critical"]
+    majors = [i for i in issues if i.get("severity") == "major"]
+    minors = [i for i in issues if i.get("severity") in ("minor", "nitpick", None)]
+
+    # Persist learnings for this iteration
+    learn_source = source or f"gauntlet:iteration-{iteration}"
+    learn_result = learn_from_review(buildlog_dir, issues, learn_source)
+    learnings_persisted = len(learn_result.new_learnings) + len(
+        learn_result.reinforced_learnings
+    )
+
+    # Determine action
+    if criticals:
+        action: Literal[
+            "fix_criticals", "checkpoint_majors", "checkpoint_minors", "clean"
+        ] = "fix_criticals"
+        message = (
+            f"Iteration {iteration}: {len(criticals)} critical, "
+            f"{len(majors)} major, {len(minors)} minor. "
+            f"Fix criticals (and majors) then re-run."
+        )
+    elif majors:
+        action = "checkpoint_majors"
+        message = (
+            f"Iteration {iteration}: No criticals! "
+            f"{len(majors)} major, {len(minors)} minor remain. "
+            f"Continue clearing majors?"
+        )
+    elif minors:
+        action = "checkpoint_minors"
+        message = (
+            f"Iteration {iteration}: Only {len(minors)} minor issues remain. "
+            f"Accept risk or continue?"
+        )
+    else:
+        action = "clean"
+        message = f"Iteration {iteration}: All clear! No issues found."
+
+    return GauntletLoopResult(
+        action=action,
+        criticals=criticals,
+        majors=majors,
+        minors=minors,
+        iteration=iteration,
+        learnings_persisted=learnings_persisted,
+        message=message,
+    )
+
+
+def gauntlet_accept_risk(
+    remaining_issues: list[dict],
+    create_github_issues: bool = False,
+    repo: str | None = None,
+) -> GauntletAcceptRiskResult:
+    """Accept risk for remaining issues, optionally creating GitHub issues.
+
+    Args:
+        remaining_issues: Issues being accepted as risk.
+        create_github_issues: Whether to create GitHub issues for tracking.
+        repo: Repository for GitHub issues (uses current repo if None).
+
+    Returns:
+        GauntletAcceptRiskResult with created issue info.
+    """
+    import subprocess
+
+    github_urls: list[str] = []
+    error: str | None = None
+
+    if create_github_issues and remaining_issues:
+        for issue in remaining_issues:
+            severity = issue.get("severity", "minor")
+            rule = issue.get("rule_learned", issue.get("description", "Unknown"))
+            description = issue.get("description", "")
+            location = issue.get("location", "")
+
+            # Build issue body
+            body_parts = [
+                f"**Severity:** {severity}",
+                f"**Rule:** {rule}",
+                "",
+                "## Description",
+                description,
+            ]
+            if location:
+                body_parts.extend(["", f"**Location:** `{location}`"])
+
+            body_parts.extend(
+                [
+                    "",
+                    "---",
+                    "_Created by buildlog gauntlet loop (accepted risk)_",
+                ]
+            )
+
+            body = "\n".join(body_parts)
+            title = f"[Gauntlet/{severity}] {rule[:60]}"
+
+            # Create GitHub issue
+            cmd = [
+                "gh",
+                "issue",
+                "create",
+                "--title",
+                title,
+                "--body",
+                body,
+                "--label",
+                severity,
+            ]
+            if repo:
+                cmd.extend(["--repo", repo])
+
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                # gh issue create outputs the URL
+                url = result.stdout.strip()
+                if url:
+                    github_urls.append(url)
+            except subprocess.CalledProcessError as e:
+                # Don't fail entirely, just note the error
+                error = f"Failed to create some GitHub issues: {e.stderr}"
+            except FileNotFoundError:
+                error = "gh CLI not found. Install GitHub CLI to create issues."
+                break
+
+    return GauntletAcceptRiskResult(
+        accepted_issues=len(remaining_issues),
+        github_issues_created=len(github_urls),
+        github_issue_urls=github_urls,
+        message=(
+            f"Accepted {len(remaining_issues)} issues as risk. "
+            f"Created {len(github_urls)} GitHub issues."
+            if create_github_issues
+            else f"Accepted {len(remaining_issues)} issues as risk."
+        ),
+        error=error,
+    )
