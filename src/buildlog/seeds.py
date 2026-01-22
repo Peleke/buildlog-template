@@ -156,6 +156,36 @@ class SeedFile:
         )
 
 
+def _validate_seed_schema(data: dict) -> bool:
+    """Validate seed file has expected schema structure.
+
+    Defense-in-depth validation for seed files. While yaml.safe_load
+    prevents code execution, this ensures data structure matches expectations.
+
+    Args:
+        data: Parsed YAML data.
+
+    Returns:
+        True if schema is valid, False otherwise.
+    """
+    if not isinstance(data, dict):
+        return False
+
+    # Rules must be a list if present
+    rules = data.get("rules", [])
+    if not isinstance(rules, list):
+        return False
+
+    # Each rule must be a dict with at least a "rule" key
+    for rule in rules:
+        if not isinstance(rule, dict):
+            return False
+        if "rule" not in rule:
+            return False
+
+    return True
+
+
 def load_seed_file(path: Path) -> SeedFile | None:
     """Load a single seed file from disk.
 
@@ -164,6 +194,10 @@ def load_seed_file(path: Path) -> SeedFile | None:
 
     Returns:
         Parsed SeedFile or None if loading fails.
+
+    Note:
+        Uses yaml.safe_load which is safe from code execution attacks.
+        Additional schema validation ensures data structure is as expected.
     """
     if not path.exists():
         logger.warning(f"Seed file not found: {path}")
@@ -171,7 +205,14 @@ def load_seed_file(path: Path) -> SeedFile | None:
 
     try:
         with open(path) as f:
+            # yaml.safe_load is safe - no arbitrary code execution
             data = yaml.safe_load(f)
+
+        # Validate schema before parsing
+        if not _validate_seed_schema(data):
+            logger.error(f"Invalid seed file schema: {path}")
+            return None
+
         return SeedFile.from_dict(data)
     except (yaml.YAMLError, KeyError, TypeError) as e:
         logger.error(f"Failed to parse seed file {path}: {e}")
