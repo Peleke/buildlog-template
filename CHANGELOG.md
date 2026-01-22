@@ -7,6 +7,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-01-22
+
 ### Added
 - Gauntlet Loop: Auto-fix criticals, HITL checkpoints for majors/minors
 - MCP tools: `buildlog_gauntlet_issues`, `buildlog_gauntlet_accept_risk`
@@ -91,7 +93,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `buildlog_status`, `buildlog_promote`, `buildlog_reject`, `buildlog_diff`
 - **Embedding Backends**: Token-based, sentence-transformers, OpenAI
 
-[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Peleke/buildlog-template/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/Peleke/buildlog-template/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Peleke/buildlog-template/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Peleke/buildlog-template/compare/v0.4.0...v0.5.0
