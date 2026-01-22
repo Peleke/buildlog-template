@@ -126,6 +126,53 @@ class TestClaudeMdRenderer:
 
         assert "No skills to promote" in result
 
+    def test_does_not_duplicate_already_promoted_skills(self, tmp_path):
+        """Should skip skills that were already promoted (fixes duplicate bug)."""
+        claude_md = tmp_path / "CLAUDE.md"
+        tracking_path = tmp_path / ".buildlog" / "promoted.json"
+
+        renderer = ClaudeMdRenderer(path=claude_md, tracking_path=tracking_path)
+
+        # First render - use unique marker that survives _to_imperative transform
+        skill = make_skill(id="arch-dedup123", rule="dedup marker xyz")
+        result1 = renderer.render([skill])
+        assert "1 rules" in result1
+
+        content_after_first = claude_md.read_text()
+        # Rule is transformed but marker should survive
+        first_count = content_after_first.count("dedup marker xyz")
+        assert first_count == 1
+
+        # Second render with same skill - should be skipped
+        result2 = renderer.render([skill])
+        assert "already promoted" in result2
+
+        content_after_second = claude_md.read_text()
+        second_count = content_after_second.count("dedup marker xyz")
+        assert second_count == 1  # Still only once, not duplicated
+
+    def test_partial_dedup_with_mixed_skills(self, tmp_path):
+        """Should only append new skills, skip already promoted."""
+        claude_md = tmp_path / "CLAUDE.md"
+        tracking_path = tmp_path / ".buildlog" / "promoted.json"
+
+        renderer = ClaudeMdRenderer(path=claude_md, tracking_path=tracking_path)
+
+        # First render with skill A - use unique markers
+        skill_a = make_skill(id="arch-a", rule="marker aaa unique")
+        renderer.render([skill_a])
+
+        # Second render with skill A (existing) and skill B (new)
+        skill_b = make_skill(id="arch-b", rule="marker bbb unique")
+        result = renderer.render([skill_a, skill_b])
+
+        assert "1 rules" in result  # Only B should be added
+        assert "1 already promoted" in result
+
+        content = claude_md.read_text()
+        assert content.count("marker aaa unique") == 1
+        assert content.count("marker bbb unique") == 1
+
 
 class TestSettingsJsonRenderer:
     """Tests for SettingsJsonRenderer."""

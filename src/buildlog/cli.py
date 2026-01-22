@@ -1264,5 +1264,158 @@ def gauntlet_learn(issues_file: str, source: str | None, output_json: bool):
         click.echo(f"  Total processed: {result.total_issues_processed}")
 
 
+@gauntlet.command("loop")
+@click.argument("target", type=click.Path(exists=True))
+@click.option(
+    "--persona",
+    "-p",
+    multiple=True,
+    help="Personas to run (default: all)",
+)
+@click.option(
+    "--max-iterations",
+    "-n",
+    default=10,
+    help="Maximum iterations to prevent infinite loops (default: 10)",
+)
+@click.option(
+    "--stop-at",
+    type=click.Choice(["criticals", "majors", "minors"]),
+    default="minors",
+    help="Stop after clearing this severity level (default: minors)",
+)
+@click.option(
+    "--auto-gh-issues",
+    is_flag=True,
+    help="Create GitHub issues for remaining items when accepting risk",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def gauntlet_loop(
+    target: str,
+    persona: tuple[str, ...],
+    max_iterations: int,
+    stop_at: str,
+    auto_gh_issues: bool,
+    output_json: bool,
+):
+    """Run the gauntlet loop: review, fix, repeat until clean.
+
+    This command orchestrates the gauntlet loop workflow:
+
+    1. Generate review prompt for target code
+    2. Process issues and determine action
+    3. On criticals: output fix instructions, expect re-run
+    4. On majors only: checkpoint (ask to continue)
+    5. On minors only: checkpoint (accept risk?)
+    6. Optionally create GitHub issues for remaining items
+
+    The loop is designed to be run interactively with an agent
+    (Claude Code, Cursor, etc.) that does the actual fixing.
+
+    Examples:
+
+        buildlog gauntlet loop src/
+        buildlog gauntlet loop tests/ --stop-at majors
+        buildlog gauntlet loop . --auto-gh-issues
+    """
+    import json as json_module
+
+    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+
+    # Find seeds directory
+    seeds_dir = get_default_seeds_dir()
+
+    if seeds_dir is None:
+        click.echo("No seed files found.", err=True)
+        raise SystemExit(1)
+
+    seeds = load_all_seeds(seeds_dir)
+
+    if not seeds:
+        click.echo("No seed files found in directory.", err=True)
+        raise SystemExit(1)
+
+    # Filter personas
+    if persona:
+        seeds = {k: v for k, v in seeds.items() if k in persona}
+        if not seeds:
+            click.echo(f"No matching personas: {', '.join(persona)}", err=True)
+            raise SystemExit(1)
+
+    target_path = Path(target)
+
+    # Generate persona rules summary
+    rules_by_persona: dict[str, list[dict[str, str]]] = {}
+    for name, sf in seeds.items():
+        rules_by_persona[name] = [
+            {"rule": r.rule, "antipattern": r.antipattern, "category": r.category}
+            for r in sf.rules
+        ]
+
+    # Loop instructions
+    instructions = [
+        "1. Review the target code using the rules from each persona",
+        "2. Report all violations as JSON issues with: severity, category, description, rule_learned, location",
+        "3. Call `buildlog_gauntlet_issues` with the issues list to determine next action",
+        "4. If action='fix_criticals': Fix critical+major issues, then re-run gauntlet",
+        "5. If action='checkpoint_majors': Ask user whether to continue fixing majors",
+        "6. If action='checkpoint_minors': Ask user whether to accept risk or continue",
+        "7. If user accepts risk and --auto-gh-issues: Call `buildlog_gauntlet_accept_risk` with remaining issues",
+        "8. Repeat until action='clean' or max_iterations reached",
+    ]
+
+    # Expected issue format
+    issue_format = {
+        "severity": "critical|major|minor|nitpick",
+        "category": "security|testing|architectural|workflow|...",
+        "description": "Concrete description of what's wrong",
+        "rule_learned": "Generalizable rule for the future",
+        "location": "file:line (optional)",
+    }
+
+    # Build the loop output
+    output = {
+        "command": "gauntlet_loop",
+        "target": str(target_path),
+        "personas": list(seeds.keys()),
+        "max_iterations": max_iterations,
+        "stop_at": stop_at,
+        "auto_gh_issues": auto_gh_issues,
+        "rules_by_persona": rules_by_persona,
+        "instructions": instructions,
+        "issue_format": issue_format,
+    }
+
+    if output_json:
+        click.echo(json_module.dumps(output, indent=2))
+    else:
+        # Human-readable output
+        click.echo("=" * 60)
+        click.echo("GAUNTLET LOOP")
+        click.echo("=" * 60)
+        click.echo(f"\nTarget: {target_path}")
+        click.echo(f"Personas: {', '.join(seeds.keys())}")
+        click.echo(f"Max iterations: {max_iterations}")
+        click.echo(f"Stop at: {stop_at}")
+        click.echo(f"Auto GH issues: {auto_gh_issues}")
+
+        click.echo("\n--- RULES ---")
+        for name, rules in rules_by_persona.items():
+            click.echo(f"\n## {name.replace('_', ' ').title()}")
+            for r in rules:
+                click.echo(f"  • {r['rule']}")
+
+        click.echo("\n--- LOOP WORKFLOW ---")
+        for instruction in instructions:
+            click.echo(f"  {instruction}")
+
+        click.echo("\n--- ISSUE FORMAT ---")
+        click.echo(json_module.dumps(issue_format, indent=2))
+
+        click.echo("\n" + "=" * 60)
+        click.echo("Ready. Run gauntlet review and process issues.")
+        click.echo("=" * 60)
+
+
 if __name__ == "__main__":
     main()

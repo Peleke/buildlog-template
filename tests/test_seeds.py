@@ -431,3 +431,47 @@ class TestSkillDefensibilityFields:
         assert "antipattern" not in d
         assert "rationale" not in d
         assert "persona_tags" not in d
+
+
+class TestSeedSchemaValidation:
+    """Tests for seed file schema validation."""
+
+    def test_rejects_non_dict_root(self, tmp_path: Path):
+        """Should reject seed files where root is not a dict."""
+        seed_path = tmp_path / "bad.yaml"
+        seed_path.write_text("- just\n- a\n- list")
+        result = load_seed_file(seed_path)
+        assert result is None
+
+    def test_rejects_rules_not_list(self, tmp_path: Path):
+        """Should reject seed files where rules is not a list."""
+        seed_path = tmp_path / "bad.yaml"
+        seed_path.write_text("persona: test\nrules: not_a_list")
+        result = load_seed_file(seed_path)
+        assert result is None
+
+    def test_rejects_rule_without_rule_key(self, tmp_path: Path):
+        """Should reject rules that don't have a 'rule' key."""
+        seed_path = tmp_path / "bad.yaml"
+        seed_path.write_text(
+            "persona: test\nrules:\n  - category: security\n    description: no rule key"
+        )
+        result = load_seed_file(seed_path)
+        assert result is None
+
+    def test_accepts_valid_minimal_schema(self, tmp_path: Path):
+        """Should accept minimal valid schema."""
+        seed_path = tmp_path / "valid.yaml"
+        seed_path.write_text("persona: test\nrules:\n  - rule: Test rule")
+        result = load_seed_file(seed_path)
+        assert result is not None
+        assert result.persona == "test"
+        assert len(result.rules) == 1
+
+    def test_accepts_empty_rules(self, tmp_path: Path):
+        """Should accept seed files with empty rules list."""
+        seed_path = tmp_path / "empty.yaml"
+        seed_path.write_text("persona: test\nrules: []")
+        result = load_seed_file(seed_path)
+        assert result is not None
+        assert len(result.rules) == 0

@@ -405,3 +405,108 @@ def buildlog_experiment_report(
         buildlog_experiment_report()
     """
     return get_experiment_report(Path(buildlog_dir))
+
+
+# -----------------------------------------------------------------------------
+# Gauntlet Loop MCP Tools
+# -----------------------------------------------------------------------------
+
+
+def buildlog_gauntlet_issues(
+    issues: list[dict],
+    iteration: int = 1,
+    source: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Process gauntlet review issues and determine next action.
+
+    Call this after running a gauntlet review. It categorizes issues by
+    severity, persists learnings, and returns the appropriate next action.
+
+    Args:
+        issues: List of issues from the gauntlet review, each with:
+            {
+                "severity": "critical|major|minor|nitpick",
+                "category": "security|testing|architectural|...",
+                "description": "What's wrong",
+                "rule_learned": "Generalizable rule",
+                "location": "file:line (optional)"
+            }
+        iteration: Current iteration number (for tracking loops)
+        source: Optional source identifier for learnings
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with:
+            - action: What to do next:
+                - "fix_criticals": Criticals remain, auto-fix and loop
+                - "checkpoint_majors": No criticals, majors remain (ask user)
+                - "checkpoint_minors": Only minors remain (ask user)
+                - "clean": No issues remain
+            - criticals: List of critical issues
+            - majors: List of major issues
+            - minors: List of minor/nitpick issues
+            - iteration: Current iteration number
+            - learnings_persisted: Number of learnings saved
+            - message: Human-readable summary
+
+    Example:
+        # After running gauntlet review
+        result = buildlog_gauntlet_issues(
+            issues=[
+                {"severity": "critical", "category": "security", ...},
+                {"severity": "major", "category": "testing", ...},
+            ],
+            iteration=1
+        )
+        # result["action"] tells you what to do next
+    """
+    from buildlog.core import gauntlet_process_issues
+
+    result = gauntlet_process_issues(
+        Path(buildlog_dir),
+        issues=issues,
+        iteration=iteration,
+        source=source,
+    )
+    return asdict(result)
+
+
+def buildlog_gauntlet_accept_risk(
+    remaining_issues: list[dict],
+    create_github_issues: bool = False,
+    repo: str | None = None,
+) -> dict:
+    """Accept risk for remaining issues, optionally creating GitHub issues.
+
+    Call this when the user decides to accept remaining issues as risk
+    (e.g., only minors remain and they want to move on).
+
+    Args:
+        remaining_issues: Issues being accepted as risk
+        create_github_issues: Whether to create GitHub issues for tracking
+        repo: Repository for GitHub issues (uses current repo if None)
+
+    Returns:
+        Dict with:
+            - accepted_issues: Number of issues accepted
+            - github_issues_created: Number of GitHub issues created
+            - github_issue_urls: URLs of created issues
+            - message: Human-readable summary
+            - error: Error message if GitHub issue creation failed
+
+    Example:
+        # User accepts risk with minors, wants GitHub issues
+        result = buildlog_gauntlet_accept_risk(
+            remaining_issues=[...],
+            create_github_issues=True
+        )
+    """
+    from buildlog.core import gauntlet_accept_risk
+
+    result = gauntlet_accept_risk(
+        remaining_issues=remaining_issues,
+        create_github_issues=create_github_issues,
+        repo=repo,
+    )
+    return asdict(result)

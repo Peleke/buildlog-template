@@ -10,7 +10,26 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from buildlog.skills import Skill
 
-__all__ = ["track_promoted"]
+__all__ = ["track_promoted", "get_promoted_ids"]
+
+
+def get_promoted_ids(tracking_path: Path) -> set[str]:
+    """Get the set of already-promoted skill IDs.
+
+    Args:
+        tracking_path: Path to the tracking JSON file.
+
+    Returns:
+        Set of skill IDs that have been promoted.
+    """
+    if not tracking_path.exists():
+        return set()
+
+    try:
+        tracking = json.loads(tracking_path.read_text())
+        return set(tracking.get("skill_ids", []))
+    except json.JSONDecodeError:
+        return set()
 
 
 def track_promoted(skills: list[Skill], tracking_path: Path) -> None:

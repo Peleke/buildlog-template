@@ -8,6 +8,8 @@ from buildlog.mcp.tools import (
     buildlog_diff,
     buildlog_end_session,
     buildlog_experiment_report,
+    buildlog_gauntlet_accept_risk,
+    buildlog_gauntlet_issues,
     buildlog_learn_from_review,
     buildlog_log_mistake,
     buildlog_log_reward,
@@ -36,6 +38,10 @@ mcp.tool()(buildlog_end_session)
 mcp.tool()(buildlog_log_mistake)
 mcp.tool()(buildlog_session_metrics)
 mcp.tool()(buildlog_experiment_report)
+
+# Gauntlet loop tools
+mcp.tool()(buildlog_gauntlet_issues)
+mcp.tool()(buildlog_gauntlet_accept_risk)
 
 
 def main() -> None:

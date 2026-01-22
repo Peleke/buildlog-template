@@ -8,6 +8,7 @@ import pytest
 from buildlog.core.operations import (
     DiffResult,
     LogRewardResult,
+    Mistake,
     PromoteResult,
     RejectResult,
     RewardEvent,
@@ -16,9 +17,12 @@ from buildlog.core.operations import (
     diff,
     find_skills_by_ids,
     get_rewards,
+    learn_from_review,
+    log_mistake,
     log_reward,
     promote,
     reject,
+    start_session,
     status,
 )
 from buildlog.skills import Skill, SkillSet, generate_skills
@@ -976,3 +980,263 @@ class TestMistake:
         assert restored.semantic_hash == mistake.semantic_hash
         assert restored.was_repeat == mistake.was_repeat
         assert restored.corrected_by_rule == mistake.corrected_by_rule
+
+
+class TestMalformedJsonHandling:
+    """Tests for handling malformed JSON in JSONL files."""
+
+    def test_get_rewards_handles_malformed_lines(self, tmp_path):
+        """Should skip malformed JSON lines and continue processing."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        bl_dir = buildlog_dir / ".buildlog"
+        bl_dir.mkdir()
+
+        # Write a file with some valid and some invalid lines
+        # Note: RewardEvent uses 'id' not 'reward_id', and requires 'rules_active'
+        rewards_file = bl_dir / "reward_events.jsonl"
+        valid_1 = (
+            '{"id": "rew-1", "outcome": "accepted", "reward_value": 1.0, '
+            '"timestamp": "2026-01-21T10:00:00+00:00", "rules_active": []}'
+        )
+        valid_2 = (
+            '{"id": "rew-2", "outcome": "rejected", "reward_value": 0.0, '
+            '"timestamp": "2026-01-21T11:00:00+00:00", "rules_active": []}'
+        )
+        rewards_file.write_text(f"{valid_1}\nnot valid json\n{valid_2}\n")
+
+        result = get_rewards(buildlog_dir, limit=10)
+
+        # Should have loaded 2 valid events, skipped the malformed one
+        assert result.total_events == 2
+        assert result.accepted == 1
+        assert result.rejected == 1
+
+    def test_log_reward_creates_directory_if_missing(self, tmp_path):
+        """Should create .buildlog directory if it doesn't exist."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        # Note: .buildlog directory does NOT exist
+
+        result = log_reward(buildlog_dir, outcome="accepted")
+
+        assert result.error is None
+        assert (buildlog_dir / ".buildlog" / "reward_events.jsonl").exists()
+
+
+class TestFileIOEdgeCases:
+    """Tests for file I/O edge cases."""
+
+    def test_get_rewards_handles_empty_file(self, tmp_path):
+        """Should handle empty reward events file."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        bl_dir = buildlog_dir / ".buildlog"
+        bl_dir.mkdir()
+
+        # Create empty file
+        (bl_dir / "reward_events.jsonl").write_text("")
+
+        result = get_rewards(buildlog_dir)
+
+        assert result.total_events == 0
+        assert result.mean_reward == 0.0
+
+    def test_get_rewards_handles_missing_file(self, tmp_path):
+        """Should handle missing reward events file gracefully."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        (buildlog_dir / ".buildlog").mkdir()
+        # Note: reward_events.jsonl does NOT exist
+
+        result = get_rewards(buildlog_dir)
+
+        assert result.total_events == 0
+        assert len(result.events) == 0
+
+    def test_learn_from_review_handles_missing_learnings_file(self, tmp_path):
+        """Should handle missing learnings file gracefully."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        (buildlog_dir / ".buildlog").mkdir()
+        # Note: review_learnings.json does NOT exist
+
+        issues = [
+            {
+                "severity": "major",
+                "category": "security",
+                "description": "Test issue",
+                "rule_learned": "Test rule",
+            }
+        ]
+
+        result = learn_from_review(buildlog_dir, issues)
+
+        assert result.error is None
+        assert len(result.new_learnings) == 1
+
+    def test_status_handles_empty_buildlog(self, tmp_path):
+        """Should handle buildlog directory with no entries."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        result = status(buildlog_dir)
+
+        assert result.total_entries == 0
+        assert result.total_skills == 0
+
+
+class TestSimilarityHeuristicEdgeCases:
+    """Tests for word overlap similarity heuristic edge cases.
+
+    Note: Similarity detection only works across DIFFERENT sessions,
+    not within the same session. This is by design - we want to detect
+    repeated mistakes across sessions, not duplicates within a session.
+    """
+
+    def test_find_similar_mistake_handles_empty_description(self, tmp_path):
+        """Should handle empty descriptions without crashing."""
+        from buildlog.core.operations import end_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        bl_dir = buildlog_dir / ".buildlog"
+        bl_dir.mkdir()
+
+        # Session 1: log mistake with empty description
+        start_session(buildlog_dir, error_class="test")
+        log_mistake(buildlog_dir, error_class="test", description="")
+        end_session(buildlog_dir)
+
+        # Session 2: log another empty description - should not crash
+        start_session(buildlog_dir, error_class="test")
+        result = log_mistake(buildlog_dir, error_class="test", description="")
+
+        # Empty descriptions have the same semantic hash, so they DO match
+        # This is expected behavior - two empty mistakes are semantically identical
+        assert result.was_repeat
+
+    def test_find_similar_mistake_across_sessions(self, tmp_path):
+        """Should detect similar mistakes across different sessions."""
+        from buildlog.core.operations import end_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        bl_dir = buildlog_dir / ".buildlog"
+        bl_dir.mkdir()
+
+        # Session 1: log a mistake
+        start_session(buildlog_dir, error_class="test")
+        log_mistake(
+            buildlog_dir,
+            error_class="test",
+            description="forgot to add unit tests for helper function",
+        )
+        end_session(buildlog_dir)
+
+        # Session 2: log a similar mistake
+        start_session(buildlog_dir, error_class="test")
+        result = log_mistake(
+            buildlog_dir,
+            error_class="test",
+            description="forgot to add unit tests for helper function",
+        )
+
+        # Same description should be detected as repeat
+        assert result.was_repeat
+
+    def test_find_similar_mistake_boundary_overlap(self, tmp_path):
+        """Test above the 0.7 overlap threshold across sessions."""
+        from buildlog.core.operations import end_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        bl_dir = buildlog_dir / ".buildlog"
+        bl_dir.mkdir()
+
+        # Session 1: 10 distinct words
+        start_session(buildlog_dir, error_class="test")
+        words = [
+            "word1",
+            "word2",
+            "word3",
+            "word4",
+            "word5",
+            "word6",
+            "word7",
+            "word8",
+            "word9",
+            "word10",
+        ]
+        log_mistake(buildlog_dir, error_class="test", description=" ".join(words))
+        end_session(buildlog_dir)
+
+        # Session 2: 8 matching words + 2 different (80% overlap, above threshold)
+        # Note: threshold is > 0.7, so 7/10 (70%) doesn't match, need 8/10 (80%)
+        start_session(buildlog_dir, error_class="test")
+        similar_words = words[:8] + ["different1", "different2"]
+        result = log_mistake(
+            buildlog_dir, error_class="test", description=" ".join(similar_words)
+        )
+
+        # Above 0.7 threshold, 8/10 matching words should be detected
+        assert result.was_repeat
+
+    def test_find_similar_mistake_below_threshold(self, tmp_path):
+        """Test below the 0.7 overlap threshold - should NOT be detected."""
+        from buildlog.core.operations import end_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        bl_dir = buildlog_dir / ".buildlog"
+        bl_dir.mkdir()
+
+        # Session 1: 10 distinct words
+        start_session(buildlog_dir, error_class="test")
+        words = [
+            "word1",
+            "word2",
+            "word3",
+            "word4",
+            "word5",
+            "word6",
+            "word7",
+            "word8",
+            "word9",
+            "word10",
+        ]
+        log_mistake(buildlog_dir, error_class="test", description=" ".join(words))
+        end_session(buildlog_dir)
+
+        # Session 2: only 6 matching words (60% overlap, below 0.7 threshold)
+        start_session(buildlog_dir, error_class="test")
+        different_words = words[:6] + ["diff1", "diff2", "diff3", "diff4"]
+        result = log_mistake(
+            buildlog_dir, error_class="test", description=" ".join(different_words)
+        )
+
+        # Below threshold, should NOT be detected as repeat
+        assert not result.was_repeat
+
+    def test_find_similar_mistake_different_error_class(self, tmp_path):
+        """Similar description with different error_class should NOT match."""
+        from buildlog.core.operations import end_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        bl_dir = buildlog_dir / ".buildlog"
+        bl_dir.mkdir()
+
+        # Session 1: error class "test"
+        start_session(buildlog_dir, error_class="test")
+        log_mistake(buildlog_dir, error_class="test", description="forgot to add tests")
+        end_session(buildlog_dir)
+
+        # Session 2: same description but different error class
+        start_session(buildlog_dir, error_class="security")
+        result = log_mistake(
+            buildlog_dir, error_class="security", description="forgot to add tests"
+        )
+
+        # Different error class means it's a different type of mistake
+        assert not result.was_repeat
