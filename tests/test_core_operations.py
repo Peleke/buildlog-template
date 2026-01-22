@@ -92,12 +92,32 @@ class TestStatusOperation:
         """promotable_ids should only contain high-confidence skills."""
         result = status(FIXTURES_DIR)
 
-        # All promotable IDs should be from high-confidence skills
-        for _skill_id in result.promotable_ids:
-            # Skill IDs have format "prefix-hash"
-            # We need to verify they're high confidence by checking by_confidence
-            pass  # Can't easily verify without skill lookup, but the count should match
+        # The fixture may or may not have high-confidence skills
+        # What we're testing is that the count matches and all promotable IDs are high confidence
+
+        # Count should always match
         assert result.by_confidence["high"] == len(result.promotable_ids)
+
+        # If there are any high-confidence skills, verify the mapping
+        if result.promotable_ids:
+            high_conf_ids = set()
+            for cat_skills in result.skills.values():
+                for skill in cat_skills:
+                    if skill.get("confidence") == "high":
+                        high_conf_ids.add(skill["id"])
+
+            for skill_id in result.promotable_ids:
+                assert (
+                    skill_id in high_conf_ids
+                ), f"{skill_id} not in high-confidence set"
+
+        # Also verify that low-confidence skills are NOT in promotable_ids
+        for cat_skills in result.skills.values():
+            for skill in cat_skills:
+                if skill.get("confidence") in ("low", "medium"):
+                    assert (
+                        skill["id"] not in result.promotable_ids
+                    ), f"Non-high confidence skill {skill['id']} should not be promotable"
 
 
 class TestPromoteOperation:
@@ -389,11 +409,13 @@ class TestFindSkillsByIds:
         # Get some actual skill IDs
         all_ids = [s.id for cat_skills in skill_set.skills.values() for s in cat_skills]
 
-        if all_ids:
-            found, not_found = find_skills_by_ids(skill_set, [all_ids[0]])
-            assert len(found) == 1
-            assert found[0].id == all_ids[0]
-            assert len(not_found) == 0
+        # Fixture must have skills - fail fast if precondition not met
+        assert all_ids, "Fixture should contain skills for this test"
+
+        found, not_found = find_skills_by_ids(skill_set, [all_ids[0]])
+        assert len(found) == 1
+        assert found[0].id == all_ids[0]
+        assert len(not_found) == 0
 
     def test_reports_not_found_ids(self):
         """Should report IDs that don't exist."""
@@ -411,10 +433,12 @@ class TestFindSkillsByIds:
         # Get one real ID
         all_ids = [s.id for cat_skills in skill_set.skills.values() for s in cat_skills]
 
-        if all_ids:
-            found, not_found = find_skills_by_ids(skill_set, [all_ids[0], "fake-id"])
-            assert len(found) == 1
-            assert "fake-id" in not_found
+        # Fixture must have skills - fail fast if precondition not met
+        assert all_ids, "Fixture should contain skills for this test"
+
+        found, not_found = find_skills_by_ids(skill_set, [all_ids[0], "fake-id"])
+        assert len(found) == 1
+        assert "fake-id" in not_found
 
 
 class TestRewardLogging:
