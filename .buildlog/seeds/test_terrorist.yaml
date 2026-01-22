@@ -1,0 +1,280 @@
+persona: test_terrorist
+version: 1
+rules:
+- rule: Tests must not depend on execution order
+  category: isolation
+  context: Test suites with multiple tests, shared fixtures, database state
+  antipattern: Test A creates data that Test B asserts on; tests fail when run individually
+  rationale: Order-dependent tests are flaky and hide real failures. Each test must be hermetic.
+  tags:
+  - isolation
+  - order-independent
+  - hermetic
+  - test_terrorist
+  references:
+  - url: https://testing.googleblog.com/2010/12/test-sizes.html
+    title: Google Testing Blog - Test Sizes
+- rule: Tests must clean up after themselves
+  category: isolation
+  context: Tests using databases, files, external services, global state
+  antipattern: Tests leaving data in shared resources; no teardown; assuming clean state
+  rationale: Test pollution causes cascading failures and makes debugging impossible.
+  tags:
+  - isolation
+  - test_terrorist
+  - cleanup
+  - teardown
+  references:
+  - url: https://testing.googleblog.com/2010/12/test-sizes.html
+    title: Google Testing Blog - Test Sizes
+- rule: Tests should run in under 10 seconds for fast feedback
+  category: anti-patterns
+  context: Unit test suites, developer workflows, pre-commit hooks
+  antipattern: Minute-long test suites; 'just run CI'; tests that require coffee breaks
+  rationale: Slow tests don't get run. Fast feedback enables TDD and catches bugs early.
+  tags:
+  - feedback
+  - anti-patterns
+  - slow-tests
+  - test_terrorist
+  references:
+  - url: https://testing.googleblog.com/2010/12/test-sizes.html
+    title: Google Testing Blog - Test Sizes
+- rule: Every public API must have at least one happy path test
+  category: coverage
+  context: New endpoints, public functions, exported modules
+  antipattern: Shipping code with no tests; 'I'll add tests later'; PRs without test changes
+  rationale: Untested code is legacy code the moment it's merged. Tests are executable documentation.
+  tags:
+  - happy-path
+  - public-api
+  - test_terrorist
+  - coverage
+  references:
+  - url: https://testing.googleblog.com/2015/04/just-say-no-to-more-end-to-end-tests.html
+    title: Google Testing Blog - Just Say No to More E2E Tests
+- rule: New bug fixes must include a regression test
+  category: coverage
+  context: Any bug fix PR or commit
+  antipattern: Fixing bugs without adding tests that would have caught them
+  rationale: A bug that escapes once will escape again. Regression tests prevent recurrence.
+  tags:
+  - regression
+  - bug-fix
+  - test_terrorist
+  - coverage
+  references:
+  - url: https://testing.googleblog.com/2015/04/just-say-no-to-more-end-to-end-tests.html
+    title: Google Testing Blog - Just Say No to More E2E Tests
+- rule: Critical paths require edge case and error path coverage
+  category: coverage
+  context: Payment flows, authentication, data mutations, external integrations
+  antipattern: Only happy path tests for critical code; no error handling tests
+  rationale: Edge cases in critical paths cause production incidents. Murphy's law applies.
+  tags:
+  - test_terrorist
+  - critical-path
+  - edge-cases
+  - coverage
+  references:
+  - url: https://martinfowler.com/articles/practical-test-pyramid.html
+    title: Martin Fowler - Testing Pyramid
+- rule: Assert on behavior, not implementation details
+  category: assertions
+  context: Unit tests, refactoring scenarios
+  antipattern: Asserting on private method calls; testing internal state; mock call counts
+  rationale: Implementation-coupled tests break on refactoring. Test the contract, not the code.
+  tags:
+  - assertions
+  - behavior
+  - test_terrorist
+  - contract
+  references:
+  - url: https://martinfowler.com/articles/practical-test-pyramid.html
+    title: Martin Fowler - Testing Pyramid
+- rule: Mock external dependencies at test boundaries
+  category: isolation
+  context: Tests calling APIs, databases, file systems, network services
+  antipattern: Real network calls in unit tests; tests that require running services
+  rationale: External dependencies make tests slow, flaky, and expensive. Mock at boundaries.
+  tags:
+  - isolation
+  - test_terrorist
+  - mocking
+  - boundaries
+  references:
+  - url: https://martinfowler.com/bliki/TestDouble.html
+    title: Martin Fowler - Test Double
+- rule: Use property-based testing for functions with clear invariants
+  category: property-testing
+  context: Serializers, parsers, encoders/decoders, sorting, mathematical operations
+  antipattern: Only example-based tests for encode/decode pairs; hand-picked edge cases
+  rationale: Property tests generate thousands of examples, finding edge cases humans miss.
+  tags:
+  - invariants
+  - hypothesis
+  - test_terrorist
+  - property
+  references:
+  - url: https://hypothesis.readthedocs.io/en/latest/
+    title: Hypothesis Documentation
+- rule: Define roundtrip properties for serialization code
+  category: property-testing
+  context: JSON, protobuf, custom serializers, data transformation pipelines
+  antipattern: Testing serialize and deserialize separately with fixed examples
+  rationale: decode(encode(x)) == x is a universal property. Hypothesis finds corner cases.
+  tags:
+  - roundtrip
+  - test_terrorist
+  - property
+  - serialization
+  references:
+  - url: https://hypothesis.readthedocs.io/en/latest/
+    title: Hypothesis Documentation
+- rule: Apply metamorphic relations when test oracles are unavailable
+  category: metamorphic-testing
+  context: ML models, search engines, optimization algorithms, complex computations
+  antipattern: No testing because 'we don't know the right answer'; only manual inspection
+  rationale: Metamorphic testing validates input-output relationships without ground truth.
+  tags:
+  - metamorphic
+  - test_terrorist
+  - ml
+  - oracle-free
+  references:
+  - url: https://www.sciencedirect.com/science/article/pii/S0950584918300016
+    title: Metamorphic Testing - Chen et al. Survey
+- rule: Define permutation invariance for order-independent operations
+  category: metamorphic-testing
+  context: Aggregations, set operations, commutative functions
+  antipattern: Testing with single fixed input order; assuming order doesn't matter
+  rationale: sum([1,2,3]) == sum([3,1,2]) is a metamorphic relation that catches bugs.
+  tags:
+  - metamorphic
+  - test_terrorist
+  - permutation
+  - invariance
+  references:
+  - url: https://www.sciencedirect.com/science/article/pii/S0950584918300016
+    title: Metamorphic Testing - Chen et al. Survey
+- rule: Validate data distributions at pipeline boundaries
+  category: statistical-testing
+  context: ETL pipelines, ML feature stores, data ingestion, API responses
+  antipattern: Assuming input data matches expected distribution; no schema validation
+  rationale: Distribution drift breaks models silently. Validate expectations at boundaries.
+  tags:
+  - statistical
+  - drift
+  - test_terrorist
+  - distribution
+  references:
+  - url: https://docs.greatexpectations.io/docs/
+    title: Great Expectations Documentation
+- rule: Define and enforce data contracts with schemas
+  category: statistical-testing
+  context: Data pipelines, API integrations, database migrations
+  antipattern: Implicit schemas; duck typing for data; hoping fields exist
+  rationale: Schema validation catches contract violations before they cause failures.
+  tags:
+  - statistical
+  - contracts
+  - test_terrorist
+  - schema
+  references:
+  - url: https://pandera.readthedocs.io/en/stable/
+    title: Pandera Documentation
+- rule: LLM outputs require structured validation beyond string matching
+  category: llm-testing
+  context: Any code using LLM-generated content in production paths
+  antipattern: No validation; trusting raw LLM output; regex-only validation
+  rationale: '[GAP] Standard test frameworks don''t cover LLM eval. See Guardrails/DeepEval for emerging
+    patterns. This is a known gap requiring specialized tooling.'
+  tags:
+  - test_terrorist
+  - emerging
+  - llm-testing
+  - validation
+  - gap
+  references:
+  - url: https://www.guardrailsai.com/docs/concepts/guard
+    title: Guardrails AI Documentation
+- rule: LLM-based features need evaluation datasets and metrics
+  category: llm-testing
+  context: RAG systems, chatbots, content generation, code assistants
+  antipattern: Vibes-based testing; manual spot checks; no regression tracking
+  rationale: '[GAP] LLM behavior is non-deterministic. Evaluation datasets with metrics enable regression
+    detection. Tooling is immature.'
+  tags:
+  - emerging
+  - llm-testing
+  - evaluation
+  - gap
+  - test_terrorist
+  references:
+  - url: https://docs.confident-ai.com/docs/getting-started
+    title: DeepEval Documentation
+- rule: Every test must have at least one meaningful assertion
+  category: assertions
+  context: All test functions
+  antipattern: Tests that only call code without asserting; assert True; empty test bodies
+  rationale: A test without assertions is not a test. It's a false sense of security.
+  tags:
+  - assertions
+  - no-pass-through
+  - meaningful
+  - test_terrorist
+  references:
+  - url: http://xunitpatterns.com/Test%20Smells.html
+    title: xUnit Test Patterns - Test Smells
+- rule: Follow Arrange-Act-Assert (AAA) pattern
+  category: structure
+  context: All test functions
+  antipattern: Interleaved setup and assertions; multiple acts per test; unclear test phases
+  rationale: AAA makes tests readable and debuggable. One logical assertion per test.
+  tags:
+  - structure
+  - aaa
+  - test_terrorist
+  - readability
+  references:
+  - url: http://xunitpatterns.com/Test%20Smells.html
+    title: xUnit Test Patterns - Test Smells
+- rule: Avoid testing implementation details that change frequently
+  category: anti-patterns
+  context: Refactoring scenarios, internal APIs, private methods
+  antipattern: Tests break on every refactor; testing private method behavior
+  rationale: Fragile tests slow development. Test stable interfaces, not implementation.
+  tags:
+  - fragile
+  - implementation-details
+  - anti-patterns
+  - test_terrorist
+  references:
+  - url: http://xunitpatterns.com/Test%20Smells.html
+    title: xUnit Test Patterns - Test Smells
+- rule: Flaky tests must be fixed or quarantined immediately
+  category: anti-patterns
+  context: CI pipelines, test suites with intermittent failures
+  antipattern: Rerunning CI until green; ignoring flaky tests; 'it works on my machine'
+  rationale: Flaky tests erode trust in the test suite. A flaky test is worse than no test.
+  tags:
+  - anti-patterns
+  - flaky
+  - ci
+  - test_terrorist
+  references:
+  - url: https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html
+    title: Google Testing Blog - Test Flakiness
+- rule: Test names should describe the scenario and expected outcome
+  category: structure
+  context: Test function naming
+  antipattern: test_1, test_function, test_it_works; names that don't explain the test
+  rationale: Test names are documentation. A failing test name should tell you what broke.
+  tags:
+  - structure
+  - documentation
+  - test_terrorist
+  - naming
+  references:
+  - url: https://docs.pytest.org/en/stable/explanation/goodpractices.html
+    title: pytest - Good Integration Practices
