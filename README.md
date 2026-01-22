@@ -1,5 +1,9 @@
 <div align="center">
 
+> **NOTE:** Forgive the agent dump; edit incoming.
+>
+> **RE: The art** — Yes, it's AI-generated. Yes, that's hypocritical for a project about rigor over vibes. Looking for an actual artist to pay for a real logo. If you know someone good, [open an issue](https://github.com/Peleke/buildlog-template/issues) or DM me. Budget exists.
+
 # buildlog
 
 ### The Only Agent Learning System You Can Prove Works
@@ -10,6 +14,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 **Falsifiable claims. Measurable outcomes. No vibes.**
+
+<img src="assets/hero-banner-perfectdeliberate.png" alt="buildlog - The Only Agent Learning System You Can Prove Works" width="800"/>
 
 [The Problem](#the-problem) · [The Claim](#the-claim) · [The Mechanism](#the-mechanism) · [Quick Start](#quick-start)
 
