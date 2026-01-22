@@ -651,3 +651,304 @@ class TestRewardEvent:
         assert event.error_class is None
         assert event.notes is None
         assert event.source is None
+
+
+# -----------------------------------------------------------------------------
+# Session Tracking Tests
+# -----------------------------------------------------------------------------
+
+
+class TestStartSession:
+    """Tests for start_session operation."""
+
+    def test_creates_active_session(self, tmp_path: Path):
+        """Should create an active session marker."""
+        from buildlog.core import start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        result = start_session(buildlog_dir, error_class="missing_test")
+
+        assert result.session_id.startswith("session-")
+        assert result.error_class == "missing_test"
+        assert result.rules_count == 0  # No promoted rules yet
+
+        # Check active session file was created
+        active_path = buildlog_dir / ".buildlog" / "active_session.json"
+        assert active_path.exists()
+
+    def test_captures_current_rules(self, tmp_path: Path):
+        """Should capture rules active at session start."""
+        from buildlog.core import start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Create some promoted rules
+        promoted_path = buildlog_dir / ".buildlog" / "promoted.json"
+        promoted_path.parent.mkdir(parents=True, exist_ok=True)
+        promoted_path.write_text('{"skill_ids": ["arch-123", "wf-456"]}')
+
+        result = start_session(buildlog_dir)
+
+        assert result.rules_count == 2
+
+
+class TestEndSession:
+    """Tests for end_session operation."""
+
+    def test_ends_active_session(self, tmp_path: Path):
+        """Should end an active session and record it."""
+        from buildlog.core import end_session, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Start a session
+        start_result = start_session(buildlog_dir, error_class="missing_test")
+
+        # End it
+        end_result = end_session(buildlog_dir)
+
+        assert end_result.session_id == start_result.session_id
+        assert end_result.duration_minutes >= 0
+        assert end_result.mistakes_logged == 0
+        assert end_result.repeated_mistakes == 0
+
+        # Active session should be removed
+        active_path = buildlog_dir / ".buildlog" / "active_session.json"
+        assert not active_path.exists()
+
+        # Session should be recorded in sessions.jsonl
+        sessions_path = buildlog_dir / ".buildlog" / "sessions.jsonl"
+        assert sessions_path.exists()
+
+    def test_raises_error_if_no_active_session(self, tmp_path: Path):
+        """Should raise ValueError if no active session."""
+        from buildlog.core import end_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        with pytest.raises(ValueError, match="No active session"):
+            end_session(buildlog_dir)
+
+
+class TestLogMistake:
+    """Tests for log_mistake operation."""
+
+    def test_logs_mistake_in_active_session(self, tmp_path: Path):
+        """Should log a mistake during an active session."""
+        from buildlog.core import log_mistake, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        start_session(buildlog_dir, error_class="missing_test")
+
+        result = log_mistake(
+            buildlog_dir,
+            error_class="missing_test",
+            description="Forgot to add unit tests for helper function",
+        )
+
+        assert result.mistake_id.startswith("mistake-")
+        assert not result.was_repeat
+        assert result.similar_prior is None
+
+    def test_detects_repeat_mistakes(self, tmp_path: Path):
+        """Should detect repeated mistakes across sessions."""
+        from buildlog.core import end_session, log_mistake, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # First session with a mistake
+        start_session(buildlog_dir, error_class="missing_test")
+        log_mistake(
+            buildlog_dir,
+            error_class="missing_test",
+            description="Forgot to add unit tests for helper function",
+        )
+        end_session(buildlog_dir)
+
+        # Second session with same mistake
+        start_session(buildlog_dir, error_class="missing_test")
+        result = log_mistake(
+            buildlog_dir,
+            error_class="missing_test",
+            description="Forgot to add unit tests for helper function",
+        )
+
+        assert result.was_repeat
+        assert result.similar_prior is not None
+
+    def test_raises_error_if_no_active_session(self, tmp_path: Path):
+        """Should raise ValueError if no active session."""
+        from buildlog.core import log_mistake
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        with pytest.raises(ValueError, match="No active session"):
+            log_mistake(
+                buildlog_dir,
+                error_class="missing_test",
+                description="Some mistake",
+            )
+
+
+class TestGetSessionMetrics:
+    """Tests for get_session_metrics operation."""
+
+    def test_returns_aggregate_metrics(self, tmp_path: Path):
+        """Should return aggregate metrics across all sessions."""
+        from buildlog.core import (
+            end_session,
+            get_session_metrics,
+            log_mistake,
+            start_session,
+        )
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Session 1
+        start_session(buildlog_dir)
+        log_mistake(buildlog_dir, "missing_test", "Mistake 1")
+        end_session(buildlog_dir)
+
+        # Session 2
+        start_session(buildlog_dir)
+        log_mistake(buildlog_dir, "missing_test", "Mistake 2")
+        log_mistake(buildlog_dir, "missing_test", "Mistake 1")  # Repeat
+        end_session(buildlog_dir)
+
+        metrics = get_session_metrics(buildlog_dir)
+
+        assert metrics.session_id == "aggregate"
+        assert metrics.total_mistakes == 3
+        assert metrics.repeated_mistakes == 1
+        assert 0 < metrics.repeated_mistake_rate < 1
+
+    def test_returns_session_specific_metrics(self, tmp_path: Path):
+        """Should return metrics for a specific session."""
+        from buildlog.core import (
+            end_session,
+            get_session_metrics,
+            log_mistake,
+            start_session,
+        )
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        result = start_session(buildlog_dir)
+        session_id = result.session_id
+
+        log_mistake(buildlog_dir, "missing_test", "Mistake 1")
+        log_mistake(buildlog_dir, "validation", "Mistake 2")
+        end_session(buildlog_dir)
+
+        metrics = get_session_metrics(buildlog_dir, session_id=session_id)
+
+        assert metrics.session_id == session_id
+        assert metrics.total_mistakes == 2
+        assert metrics.repeated_mistakes == 0
+
+
+class TestGetExperimentReport:
+    """Tests for get_experiment_report operation."""
+
+    def test_returns_comprehensive_report(self, tmp_path: Path):
+        """Should return a comprehensive experiment report."""
+        from buildlog.core import (
+            end_session,
+            get_experiment_report,
+            log_mistake,
+            start_session,
+        )
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Run some sessions
+        start_session(buildlog_dir, error_class="missing_test")
+        log_mistake(buildlog_dir, "missing_test", "Forgot tests")
+        end_session(buildlog_dir)
+
+        report = get_experiment_report(buildlog_dir)
+
+        assert "summary" in report
+        assert report["summary"]["total_sessions"] == 1
+        assert report["summary"]["total_mistakes"] == 1
+        assert "sessions" in report
+        assert "error_classes" in report
+        assert "missing_test" in report["error_classes"]
+
+
+class TestSession:
+    """Tests for Session dataclass."""
+
+    def test_to_dict_and_from_dict_roundtrip(self):
+        """Should serialize and deserialize correctly."""
+        from datetime import datetime, timezone
+
+        from buildlog.core import Session
+
+        session = Session(
+            id="session-20260121-100000",
+            started_at=datetime(2026, 1, 21, 10, 0, 0, tzinfo=timezone.utc),
+            ended_at=datetime(2026, 1, 21, 11, 0, 0, tzinfo=timezone.utc),
+            entry_file="2026-01-21.md",
+            rules_at_start=["arch-123"],
+            rules_at_end=["arch-123", "wf-456"],
+            error_class="missing_test",
+            notes="Test session",
+        )
+
+        data = session.to_dict()
+        restored = Session.from_dict(data)
+
+        assert restored.id == session.id
+        assert restored.started_at == session.started_at
+        assert restored.ended_at == session.ended_at
+        assert restored.entry_file == session.entry_file
+        assert restored.rules_at_start == session.rules_at_start
+        assert restored.rules_at_end == session.rules_at_end
+        assert restored.error_class == session.error_class
+        assert restored.notes == session.notes
+
+
+class TestMistake:
+    """Tests for Mistake dataclass."""
+
+    def test_to_dict_and_from_dict_roundtrip(self):
+        """Should serialize and deserialize correctly."""
+        from datetime import datetime, timezone
+
+        from buildlog.core import Mistake
+
+        mistake = Mistake(
+            id="mistake-test-20260121-100000",
+            session_id="session-20260121-100000",
+            timestamp=datetime(2026, 1, 21, 10, 30, 0, tzinfo=timezone.utc),
+            error_class="missing_test",
+            description="Forgot to add tests",
+            semantic_hash="abc123def456",
+            was_repeat=True,
+            corrected_by_rule="test-123",
+        )
+
+        data = mistake.to_dict()
+        restored = Mistake.from_dict(data)
+
+        assert restored.id == mistake.id
+        assert restored.session_id == mistake.session_id
+        assert restored.timestamp == mistake.timestamp
+        assert restored.error_class == mistake.error_class
+        assert restored.description == mistake.description
+        assert restored.semantic_hash == mistake.semantic_hash
+        assert restored.was_repeat == mistake.was_repeat
+        assert restored.corrected_by_rule == mistake.corrected_by_rule

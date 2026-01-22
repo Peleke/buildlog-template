@@ -583,5 +583,298 @@ def rewards(limit: int | None, output_json: bool):
             click.echo("Log your first with: buildlog reward accepted")
 
 
+# -----------------------------------------------------------------------------
+# Experiment Commands (Session Tracking for Issue #21)
+# -----------------------------------------------------------------------------
+
+
+@main.group()
+def experiment():
+    """Commands for running learning experiments.
+
+    Track sessions, log mistakes, and measure repeated-mistake rates
+    to evaluate buildlog's effectiveness.
+
+    Example workflow:
+
+        buildlog experiment start --error-class missing_test
+        # ... do work, log mistakes as you encounter them ...
+        buildlog experiment log-mistake --class missing_test --description "..."
+        buildlog experiment end
+        buildlog experiment report
+    """
+    pass
+
+
+@experiment.command("start")
+@click.option(
+    "--error-class",
+    "-e",
+    help="Error class being targeted (e.g., 'missing_test')",
+)
+@click.option("--notes", "-n", help="Notes about this session")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def experiment_start(
+    error_class: str | None,
+    notes: str | None,
+    output_json: bool,
+):
+    """Start a new experiment session.
+
+    This begins tracking for a learning experiment. Captures the current
+    set of active rules to measure learning over time.
+
+    Examples:
+
+        buildlog experiment start
+        buildlog experiment start --error-class missing_test
+        buildlog experiment start --error-class validation_boundary --notes "Testing edge cases"
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.core import start_session
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    try:
+        result = start_session(buildlog_dir, error_class=error_class, notes=notes)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(f"✓ {result.message}")
+        if error_class:
+            click.echo(f"  Error class: {error_class}")
+
+
+@experiment.command("end")
+@click.option("--entry-file", "-f", help="Corresponding buildlog entry file")
+@click.option("--notes", "-n", help="Additional notes about this session")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def experiment_end(
+    entry_file: str | None,
+    notes: str | None,
+    output_json: bool,
+):
+    """End the current experiment session.
+
+    Finalizes the session and calculates metrics including:
+    - Total mistakes logged
+    - Repeated mistakes (from prior sessions)
+    - Rules added during session
+
+    Examples:
+
+        buildlog experiment end
+        buildlog experiment end --entry-file 2026-01-21.md
+        buildlog experiment end --notes "Good session, learned 2 new rules"
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.core import end_session
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    try:
+        result = end_session(buildlog_dir, entry_file=entry_file, notes=notes)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(f"✓ {result.message}")
+        click.echo(f"  Duration: {result.duration_minutes} minutes")
+        click.echo(
+            f"  Mistakes: {result.mistakes_logged} ({result.repeated_mistakes} repeats)"
+        )
+        click.echo(f"  Rules: {result.rules_at_start} → {result.rules_at_end}")
+
+
+@experiment.command("log-mistake")
+@click.option(
+    "--class",
+    "error_class",
+    required=True,
+    help="Error class (e.g., 'missing_test', 'validation_boundary')",
+)
+@click.option(
+    "--description",
+    "-d",
+    required=True,
+    help="Description of the mistake",
+)
+@click.option(
+    "--rule",
+    "-r",
+    "corrected_by_rule",
+    help="Rule ID that should have prevented this",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def experiment_log_mistake(
+    error_class: str,
+    description: str,
+    corrected_by_rule: str | None,
+    output_json: bool,
+):
+    """Log a mistake during the current session.
+
+    Records the mistake and checks if it's a repeat of a prior mistake
+    (from earlier sessions). This enables measuring repeated-mistake rates.
+
+    Examples:
+
+        buildlog experiment log-mistake --class missing_test -d "Forgot tests"
+        buildlog experiment log-mistake --class validation -d "No max length" -r val-123
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.core import log_mistake
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    try:
+        result = log_mistake(
+            buildlog_dir,
+            error_class=error_class,
+            description=description,
+            corrected_by_rule=corrected_by_rule,
+        )
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        if result.was_repeat:
+            click.echo(f"⚠ REPEAT: {result.message}")
+            click.echo(f"  Similar to: {result.similar_prior}")
+        else:
+            click.echo(f"✓ {result.message}")
+
+
+@experiment.command("metrics")
+@click.option(
+    "--session", "-s", "session_id", help="Specific session ID (or aggregate)"
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def experiment_metrics(session_id: str | None, output_json: bool):
+    """Show metrics for a session or all sessions.
+
+    Displays mistake rates and rule changes.
+
+    Examples:
+
+        buildlog experiment metrics                           # Aggregate metrics
+        buildlog experiment metrics --session session-20260121-140000
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.core import get_session_metrics
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    try:
+        metrics = get_session_metrics(buildlog_dir, session_id=session_id)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(metrics), indent=2))
+    else:
+        click.echo(f"Session Metrics: {metrics.session_id}")
+        click.echo("=" * 40)
+        click.echo(f"Total mistakes:     {metrics.total_mistakes}")
+        click.echo(f"Repeated mistakes:  {metrics.repeated_mistakes}")
+        click.echo(f"Repeat rate:        {metrics.repeated_mistake_rate:.1%}")
+        click.echo(f"Rules at start:     {metrics.rules_at_start}")
+        click.echo(f"Rules at end:       {metrics.rules_at_end}")
+        click.echo(f"Rules added:        {metrics.rules_added:+d}")
+
+
+@experiment.command("report")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def experiment_report(output_json: bool):
+    """Generate a comprehensive experiment report.
+
+    Shows summary statistics, per-session breakdown, and error class analysis.
+
+    Examples:
+
+        buildlog experiment report
+        buildlog experiment report --json > report.json
+    """
+    import json as json_module
+
+    from buildlog.core import get_experiment_report
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    report = get_experiment_report(buildlog_dir)
+
+    if output_json:
+        click.echo(json_module.dumps(report, indent=2))
+    else:
+        summary = report["summary"]
+        click.echo("Experiment Report")
+        click.echo("=" * 50)
+        click.echo(f"Total sessions:         {summary['total_sessions']}")
+        click.echo(f"Total mistakes:         {summary['total_mistakes']}")
+        click.echo(f"Repeated mistakes:      {summary['total_repeated']}")
+        click.echo(f"Overall repeat rate:    {summary['overall_repeat_rate']:.1%}")
+        click.echo()
+
+        if report["sessions"]:
+            click.echo("Per-Session Breakdown")
+            click.echo("-" * 50)
+            for sess in report["sessions"]:
+                rate = sess["repeated_mistake_rate"]
+                click.echo(f"  {sess['session_id']}")
+                click.echo(
+                    f"    Mistakes: {sess['total_mistakes']} ({sess['repeated_mistakes']} repeats, {rate:.0%})"
+                )
+                click.echo(f"    Rules added: {sess['rules_added']:+d}")
+            click.echo()
+
+        if report["error_classes"]:
+            click.echo("Error Class Breakdown")
+            click.echo("-" * 50)
+            for ec, data in report["error_classes"].items():
+                rate = data["repeated"] / data["total"] if data["total"] > 0 else 0
+                click.echo(
+                    f"  {ec}: {data['total']} mistakes ({data['repeated']} repeats, {rate:.0%})"
+                )
+
+
 if __name__ == "__main__":
     main()
