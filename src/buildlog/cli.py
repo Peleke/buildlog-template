@@ -182,7 +182,8 @@ def list():
         raise SystemExit(1)
 
     entries = sorted(
-        buildlog_dir.glob("20??-??-??-*.md"), reverse=True  # Most recent first
+        buildlog_dir.glob("20??-??-??-*.md"),
+        reverse=True,  # Most recent first
     )
 
     if not entries:
@@ -874,6 +875,381 @@ def experiment_report(output_json: bool):
                 click.echo(
                     f"  {ec}: {data['total']} mistakes ({data['repeated']} repeats, {rate:.0%})"
                 )
+
+
+# -----------------------------------------------------------------------------
+# Gauntlet Commands (Review Personas)
+# -----------------------------------------------------------------------------
+
+PERSONAS = {
+    "security_karen": "OWASP Top 10 security review",
+    "test_terrorist": "Comprehensive testing coverage audit",
+    "ruthless_reviewer": "Code quality and functional principles",
+}
+
+
+@main.group()
+def gauntlet():
+    """Run the review gauntlet with curated personas.
+
+    The gauntlet runs your code through multiple ruthless reviewers,
+    each with domain-specific rules loaded from seed files.
+
+    Personas:
+      - security_karen: OWASP security review (12 rules)
+      - test_terrorist: Testing coverage audit (21 rules)
+      - ruthless_reviewer: Code quality review (coming soon)
+
+    Example workflow:
+
+        buildlog gauntlet list                    # See available personas
+        buildlog gauntlet rules --persona all    # Show all rules
+        buildlog gauntlet prompt src/            # Generate review prompt
+    """
+    pass
+
+
+@gauntlet.command("list")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def gauntlet_list(output_json: bool):
+    """List available reviewer personas and their rule counts.
+
+    Examples:
+
+        buildlog gauntlet list
+        buildlog gauntlet list --json
+    """
+    import json as json_module
+
+    from buildlog.seeds import load_all_seeds
+
+    # Find seeds directory
+    buildlog_dir = Path("buildlog")
+    seeds_dir = buildlog_dir / ".buildlog" / "seeds"
+
+    # Also check .buildlog at repo root (common for installed templates)
+    if not seeds_dir.exists():
+        seeds_dir = Path(".buildlog") / "seeds"
+
+    seeds = load_all_seeds(seeds_dir)
+
+    if output_json:
+        data = {
+            "personas": {
+                name: {
+                    "description": PERSONAS.get(name, "Custom persona"),
+                    "rules_count": len(sf.rules),
+                    "version": sf.version,
+                }
+                for name, sf in seeds.items()
+            },
+            "total_rules": sum(len(sf.rules) for sf in seeds.values()),
+        }
+        click.echo(json_module.dumps(data, indent=2))
+    else:
+        click.echo("Review Gauntlet Personas")
+        click.echo("=" * 50)
+
+        if not seeds:
+            click.echo("\nNo seed files found.")
+            click.echo("Initialize with: buildlog init")
+            click.echo("Or create seeds in: .buildlog/seeds/")
+            return
+
+        total = 0
+        for name, sf in sorted(seeds.items()):
+            desc = PERSONAS.get(name, "Custom persona")
+            click.echo(f"\n  {name}")
+            click.echo(f"    {desc}")
+            click.echo(f"    Rules: {len(sf.rules)} (v{sf.version})")
+            total += len(sf.rules)
+
+        click.echo(f"\nTotal: {len(seeds)} personas, {total} rules")
+
+
+@gauntlet.command("rules")
+@click.option(
+    "--persona",
+    "-p",
+    default="all",
+    help="Persona to show rules for (or 'all')",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["yaml", "json", "markdown"]),
+    default="yaml",
+    help="Output format",
+)
+@click.option("--output", "-o", type=click.Path(), help="Output file")
+def gauntlet_rules(persona: str, fmt: str, output: str | None):
+    """Show rules for reviewer personas.
+
+    Use this to see what rules are loaded for each persona,
+    or export them for use in prompts.
+
+    Examples:
+
+        buildlog gauntlet rules                         # All rules (YAML)
+        buildlog gauntlet rules -p security_karen       # Single persona
+        buildlog gauntlet rules --format json -o rules.json
+        buildlog gauntlet rules --format markdown       # For docs
+    """
+    import json as json_module
+
+    from buildlog.seeds import load_all_seeds
+
+    # Find seeds directory
+    seeds_dir = Path(".buildlog") / "seeds"
+    if not seeds_dir.exists():
+        seeds_dir = Path("buildlog") / ".buildlog" / "seeds"
+
+    seeds = load_all_seeds(seeds_dir)
+
+    if not seeds:
+        click.echo("No seed files found.", err=True)
+        click.echo("Initialize with: buildlog init", err=True)
+        raise SystemExit(1)
+
+    # Filter personas
+    if persona != "all":
+        if persona not in seeds:
+            available = ", ".join(seeds.keys())
+            click.echo(f"Unknown persona: {persona}", err=True)
+            click.echo(f"Available: {available}", err=True)
+            raise SystemExit(1)
+        seeds = {persona: seeds[persona]}
+
+    # Build output data
+    if fmt == "json":
+        data = {}
+        for name, sf in seeds.items():
+            data[name] = {
+                "version": sf.version,
+                "rules": [
+                    {
+                        "rule": r.rule,
+                        "category": r.category,
+                        "context": r.context,
+                        "antipattern": r.antipattern,
+                        "rationale": r.rationale,
+                        "tags": r.tags,
+                        "references": [
+                            {"url": ref.url, "title": ref.title} for ref in r.references
+                        ],
+                    }
+                    for r in sf.rules
+                ],
+            }
+        formatted = json_module.dumps(data, indent=2)
+
+    elif fmt == "markdown":
+        lines = ["# Review Gauntlet Rules\n"]
+        for name, sf in seeds.items():
+            lines.append(f"## {name.replace('_', ' ').title()}\n")
+            lines.append(f"*{len(sf.rules)} rules, v{sf.version}*\n")
+            for i, r in enumerate(sf.rules, 1):
+                lines.append(f"### {i}. {r.rule}\n")
+                lines.append(f"**Category**: {r.category}  ")
+                lines.append(f"**Tags**: {', '.join(r.tags)}\n")
+                if r.context:
+                    lines.append(f"**When**: {r.context}\n")
+                if r.antipattern:
+                    lines.append(f"**Antipattern**: {r.antipattern}\n")
+                if r.rationale:
+                    lines.append(f"**Why**: {r.rationale}\n")
+                if r.references:
+                    lines.append("**References**:")
+                    for ref in r.references:
+                        lines.append(f"- [{ref.title}]({ref.url})")
+                lines.append("")
+        formatted = "\n".join(lines)
+
+    else:  # yaml
+        import yaml as yaml_module
+
+        data = {}
+        for name, sf in seeds.items():
+            data[name] = {
+                "version": sf.version,
+                "rules": [
+                    {
+                        "rule": r.rule,
+                        "category": r.category,
+                        "context": r.context,
+                        "antipattern": r.antipattern,
+                        "rationale": r.rationale,
+                        "tags": r.tags,
+                    }
+                    for r in sf.rules
+                ],
+            }
+        formatted = yaml_module.dump(data, default_flow_style=False, sort_keys=False)
+
+    # Output
+    if output:
+        output_path = Path(output)
+        output_path.write_text(formatted, encoding="utf-8")
+        total = sum(len(sf.rules) for sf in seeds.values())
+        click.echo(f"Wrote {total} rules to {output_path}")
+    else:
+        click.echo(formatted)
+
+
+@gauntlet.command("prompt")
+@click.argument("target", type=click.Path(exists=True))
+@click.option(
+    "--persona",
+    "-p",
+    multiple=True,
+    help="Personas to include (default: all)",
+)
+@click.option("--output", "-o", type=click.Path(), help="Output file")
+def gauntlet_prompt(target: str, persona: tuple[str, ...], output: str | None):
+    """Generate a review prompt for the gauntlet.
+
+    Creates a prompt with rules and target code that can be
+    used with Claude or another LLM to run a review.
+
+    Examples:
+
+        buildlog gauntlet prompt src/
+        buildlog gauntlet prompt src/api.py -p security_karen
+        buildlog gauntlet prompt . -o review_prompt.md
+    """
+    from buildlog.seeds import load_all_seeds
+
+    # Find seeds directory
+    seeds_dir = Path(".buildlog") / "seeds"
+    if not seeds_dir.exists():
+        seeds_dir = Path("buildlog") / ".buildlog" / "seeds"
+
+    seeds = load_all_seeds(seeds_dir)
+
+    if not seeds:
+        click.echo("No seed files found.", err=True)
+        raise SystemExit(1)
+
+    # Filter personas
+    if persona:
+        seeds = {k: v for k, v in seeds.items() if k in persona}
+        if not seeds:
+            click.echo(f"No matching personas: {', '.join(persona)}", err=True)
+            raise SystemExit(1)
+
+    # Build the prompt
+    target_path = Path(target)
+    lines = [
+        "# Review Gauntlet Prompt\n",
+        "You are running the Review Gauntlet. Apply these rules ruthlessly.\n",
+        "## Target\n",
+        f"Review: `{target_path}`\n",
+        "## Reviewers and Rules\n",
+    ]
+
+    for name, sf in seeds.items():
+        persona_name = name.replace("_", " ").title()
+        lines.append(f"### {persona_name}\n")
+        for r in sf.rules:
+            lines.append(f"- **{r.rule}**")
+            if r.antipattern:
+                lines.append(f"  - Antipattern: {r.antipattern}")
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Output Format\n",
+            "For each issue found, output:\n",
+            "```json",
+            "{",
+            '  "reviewer": "<persona>",',
+            '  "severity": "critical|major|minor|nitpick",',
+            '  "category": "<category>",',
+            '  "location": "<file:line>",',
+            '  "description": "<what is wrong>",',
+            '  "rule_learned": "<generalizable rule>"',
+            "}",
+            "```\n",
+            "## Instructions\n",
+            "1. Read the target code thoroughly",
+            "2. Apply each rule from each reviewer",
+            "3. Report ALL violations found",
+            "4. Be ruthless - this is the gauntlet",
+            "",
+        ]
+    )
+
+    formatted = "\n".join(lines)
+
+    if output:
+        output_path = Path(output)
+        output_path.write_text(formatted, encoding="utf-8")
+        click.echo(f"Wrote prompt to {output_path}")
+    else:
+        click.echo(formatted)
+
+
+@gauntlet.command("learn")
+@click.argument("issues_file", type=click.Path(exists=True))
+@click.option("--source", "-s", help="Source identifier (e.g., 'gauntlet:PR#42')")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def gauntlet_learn(issues_file: str, source: str | None, output_json: bool):
+    """Persist learnings from a gauntlet review.
+
+    Takes a JSON file of issues (in the gauntlet output format)
+    and calls learn_from_review to persist them.
+
+    Examples:
+
+        buildlog gauntlet learn review_issues.json
+        buildlog gauntlet learn issues.json --source "gauntlet:2026-01-22"
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.core import learn_from_review
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    # Load issues
+    try:
+        with open(issues_file) as f:
+            data = json_module.load(f)
+    except json_module.JSONDecodeError as e:
+        click.echo(f"Invalid JSON: {e}", err=True)
+        raise SystemExit(1)
+
+    # Handle different formats
+    if isinstance(data, list):
+        issues = data
+    elif isinstance(data, dict) and "all_issues" in data:
+        issues = data["all_issues"]
+    elif isinstance(data, dict) and "issues" in data:
+        issues = data["issues"]
+    else:
+        click.echo(
+            "Expected list of issues or dict with 'issues'/'all_issues'", err=True
+        )
+        raise SystemExit(1)
+
+    if not issues:
+        click.echo("No issues found in file.", err=True)
+        raise SystemExit(1)
+
+    # Learn from review
+    result = learn_from_review(buildlog_dir, issues, source=source or "gauntlet")
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(f"✓ {result.message}")
+        click.echo(f"  New learnings: {result.new_learnings}")
+        click.echo(f"  Reinforced: {result.reinforced_learnings}")
+        click.echo(f"  Total processed: {result.total_issues_processed}")
 
 
 if __name__ == "__main__":
