@@ -12,12 +12,53 @@ from buildlog.seeds import (
     SeedFile,
     SeedReference,
     SeedRule,
+    get_default_seeds_dir,
+    get_package_seeds_dir,
     get_rules_for_persona,
     load_all_seeds,
     load_seed_file,
     seeds_to_skills,
 )
 from buildlog.skills import Skill
+
+
+class TestPackageSeeds:
+    """Tests for bundled package seeds."""
+
+    def test_get_package_seeds_dir_returns_path(self):
+        """Should return path to bundled seeds."""
+        seeds_dir = get_package_seeds_dir()
+        # Should find the package seeds
+        assert seeds_dir is not None
+        assert seeds_dir.exists()
+        assert (seeds_dir / "security_karen.yaml").exists()
+        assert (seeds_dir / "test_terrorist.yaml").exists()
+
+    def test_get_default_seeds_dir_finds_package_seeds(self, tmp_path, monkeypatch):
+        """Should fall back to package seeds when no local seeds exist."""
+        # Change to a directory with no local seeds
+        monkeypatch.chdir(tmp_path)
+
+        seeds_dir = get_default_seeds_dir()
+        # Should fall back to package seeds
+        assert seeds_dir is not None
+        assert seeds_dir.exists()
+
+    def test_local_seeds_take_precedence(self, tmp_path, monkeypatch):
+        """Local seeds should override package seeds."""
+        # Create local seeds
+        local_seeds = tmp_path / ".buildlog" / "seeds"
+        local_seeds.mkdir(parents=True)
+        (local_seeds / "custom.yaml").write_text(
+            "persona: custom\nversion: 1\nrules: []"
+        )
+
+        monkeypatch.chdir(tmp_path)
+
+        seeds_dir = get_default_seeds_dir()
+        # Should find local seeds, not package (compare resolved paths)
+        assert seeds_dir is not None
+        assert seeds_dir.resolve() == local_seeds.resolve()
 
 
 class TestSeedRule:
