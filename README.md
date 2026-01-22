@@ -2,7 +2,7 @@
 
 > **NOTE:** Forgive the agent dump; edit incoming.
 >
-> **RE: The art** — Yes, it's AI-generated. Yes, that's hypocritical for a project about rigor over vibes. Looking for an actual artist to pay for a real logo. If you know someone good, [open an issue](https://github.com/Peleke/buildlog-template/issues) or DM me. Budget exists.
+> **RE: The art** — Yes, it's AI-generated. Yes, that's hypocritical for a project about rigor over vibes. Now that this is no longer internal, looking for an actual artist to pay for a real logo. If you know someone good, [open an issue](https://github.com/Peleke/buildlog-template/issues) or DM me. Budget exists.
 
 # buildlog
 
