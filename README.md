@@ -75,11 +75,30 @@ RMR is not the only metric that matters. But it's one we can measure, and measur
 
 ## The Mechanism
 
-buildlog uses **contextual bandits** to select which rules to surface.
+buildlog is building toward **contextual bandits** for automatic rule selection. Here's where we are:
+
+### What Exists Today (v0.7)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    CONTEXTUAL BANDIT SETUP                      │
+│                    CURRENT INFRASTRUCTURE                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ✅ Rule extraction     From entries, reviews, curated seeds   │
+│  ✅ Confidence scoring  Frequency + recency based              │
+│  ✅ Reward logging      Accept/reject/revision signals         │
+│  ✅ Experiment tracking Sessions, mistakes, RMR calculation    │
+│  ✅ Review gauntlet     Curated persona-based code review      │
+│  ⏳ Manual promotion    Human selects rules to surface         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### What's Coming (v0.8+)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CONTEXTUAL BANDIT (PLANNED)                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  Context (c):     Error class, file type, task category        │
@@ -99,9 +118,9 @@ buildlog uses **contextual bandits** to select which rules to surface.
 
 **Reward** = did surfacing this rule actually help?
 
-The system explores (tries uncertain rules) and exploits (uses proven rules) based on accumulated evidence. Thompson Sampling provides theoretical guarantees: O(√(KT log K)) regret bounds.
+The reward infrastructure exists. The bandit policy is next. Thompson Sampling will provide theoretical guarantees: O(√(KT log K)) regret bounds.
 
-This isn't magic. It's a well-understood framework with decades of research. We're applying it to agent rule selection.
+We're building in public—the bandit implementation will be developed with full documentation of the process.
 
 ---
 
@@ -113,15 +132,19 @@ buildlog captures signal at every stage:
 flowchart LR
     A["Work Sessions"] --> B["Structured Entries"]
     B --> C["Extracted Rules"]
-    C --> D["Bandit Selection"]
+    C --> D["Manual Promotion"]
     D --> E["Rule Surfaced"]
     E --> F["Human Feedback"]
-    F --> G["Posterior Update"]
-    G --> D
+    F --> G["Reward Logged"]
+    G -.-> H["Bandit Policy"]
+    H -.-> D
 
     style F fill:#ff6b6b,color:#fff
     style G fill:#4ecdc4,color:#fff
+    style H fill:#666,color:#fff,stroke-dasharray: 5 5
 ```
+
+*Dashed: Coming in v0.8 — automatic rule selection via Thompson Sampling*
 
 ### Stage 1: Capture
 Document your work. Include the fuckups—they're the most valuable signal.
@@ -221,6 +244,27 @@ buildlog gauntlet rules --format markdown -o review_checklist.md
 buildlog gauntlet learn review_issues.json --source "PR#42"
 ```
 
+### Gauntlet Loop (Agent Integration)
+
+For AI agents, the gauntlet loop automates the fix-rerun cycle:
+
+```bash
+buildlog gauntlet loop src/ --persona security_karen --persona test_terrorist
+```
+
+The loop provides structured checkpoints:
+
+| Severity | Action | Human Needed? |
+|----------|--------|---------------|
+| **Critical** | Agent fixes, reruns | No |
+| **Major** | Checkpoint: continue? | Yes |
+| **Minor** | Accept risk or fix? | Yes |
+| **Clean** | Done | No |
+
+MCP tools for agent integration:
+- `buildlog_gauntlet_issues` — Report findings, get next action
+- `buildlog_gauntlet_accept_risk` — Accept remaining issues (optionally create GitHub issues)
+
 The gauntlet integrates with the learning loop—issues found become rules that accumulate confidence.
 
 ---
@@ -311,6 +355,8 @@ Available tools:
 | `buildlog_start_session` | Begin tracked experiment |
 | `buildlog_log_mistake` | Record mistake during session |
 | `buildlog_experiment_report` | Full experiment report |
+| `buildlog_gauntlet_issues` | Report gauntlet findings, get next action |
+| `buildlog_gauntlet_accept_risk` | Accept remaining issues, optionally create GH issues |
 
 ### CLI Commands
 
@@ -334,6 +380,7 @@ buildlog gauntlet list           # Show reviewers
 buildlog gauntlet rules          # Export rules
 buildlog gauntlet prompt <path>  # Generate review prompt
 buildlog gauntlet learn <file>   # Persist learnings
+buildlog gauntlet loop <path>    # Auto-fix loop with HITL checkpoints
 ```
 
 ---
@@ -373,21 +420,28 @@ This is how you know. Not vibes. Data.
 
 For the technically curious:
 
-| Concept | Application in buildlog |
-|---------|------------------------|
-| **Thompson Sampling** | Rule selection under uncertainty |
-| **Beta-Bernoulli model** | Posterior updates from binary reward |
-| **Contextual bandits** | Context-dependent rule selection |
-| **Regret bounds** | O(√(KT log K)) theoretical guarantee |
-| **Semantic hashing** | Mistake deduplication for RMR |
+| Concept | Application in buildlog | Status |
+|---------|------------------------|--------|
+| **Confidence scoring** | Frequency + recency decay | ✅ Implemented |
+| **Semantic hashing** | Mistake deduplication for RMR | ✅ Implemented |
+| **Reward signals** | Binary feedback infrastructure | ✅ Implemented |
+| **Thompson Sampling** | Rule selection under uncertainty | ⏳ Planned (v0.8) |
+| **Beta-Bernoulli model** | Posterior updates from binary reward | ⏳ Planned (v0.8) |
+| **Contextual bandits** | Context-dependent rule selection | ⏳ Planned (v0.8) |
+| **Regret bounds** | O(√(KT log K)) theoretical guarantee | ⏳ Planned (v0.8) |
 
-We're not inventing new math. We're applying proven frameworks to a new domain.
+We're not inventing new math. We're applying proven frameworks to a new domain. The infrastructure for reward collection is live; the bandit policy is the next milestone.
 
 ---
 
 ## Honest Limitations
 
-Things we don't have figured out yet:
+### Not Yet Implemented
+
+- **Automatic rule selection**: Currently manual promotion; Thompson Sampling bandit planned for v0.8
+- **Context-aware surfacing**: Rules are surfaced globally, not based on task context
+
+### Hard Problems We're Working On
 
 - **Credit assignment**: When multiple rules are active, which one helped?
 - **Non-stationarity**: Developer skill changes over time
