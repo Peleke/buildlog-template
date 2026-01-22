@@ -172,8 +172,8 @@ def new(slug: str, entry_date: str | None):
     click.echo(f"\nOpen it: $EDITOR {entry_path}")
 
 
-@main.command()
-def list():
+@main.command("list")
+def list_entries():
     """List all buildlog entries."""
     buildlog_dir = Path("buildlog")
 
