@@ -1,0 +1,269 @@
+persona: test_terrorist
+version: 1
+created_at: '2026-01-22T19:16:31.269941+00:00'
+updated_at: '2026-01-22T19:16:31.270102+00:00'
+entries:
+- name: Google Testing Blog - Test Sizes
+  url: https://testing.googleblog.com/2010/12/test-sizes.html
+  source_type: blog_post
+  domain: testing-philosophy
+  description: Google's definition of small/medium/large tests
+  sections:
+  - test-sizes
+  - hermetic-tests
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Google Testing Blog - Just Say No to More E2E Tests
+  url: https://testing.googleblog.com/2015/04/just-say-no-to-more-end-to-end-tests.html
+  source_type: blog_post
+  domain: testing-philosophy
+  description: The testing pyramid and why E2E tests are costly
+  sections:
+  - test-pyramid
+  - cost-of-e2e
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Martin Fowler - Testing Pyramid
+  url: https://martinfowler.com/articles/practical-test-pyramid.html
+  source_type: reference_doc
+  domain: testing-philosophy
+  description: Comprehensive guide to the test pyramid
+  sections:
+  - unit-tests
+  - integration-tests
+  - e2e-tests
+  - test-doubles
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Martin Fowler - Test Double
+  url: https://martinfowler.com/bliki/TestDouble.html
+  source_type: reference_doc
+  domain: testing-philosophy
+  description: Mocks, stubs, fakes, spies, dummies
+  sections:
+  - test-doubles
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Hypothesis Documentation
+  url: https://hypothesis.readthedocs.io/en/latest/
+  source_type: reference_doc
+  domain: property-testing
+  description: Property-based testing for Python
+  sections:
+  - quickstart
+  - settings
+  - strategies
+  - stateful-testing
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Hypothesis - What is Property-Based Testing
+  url: https://hypothesis.readthedocs.io/en/latest/quickstart.html
+  source_type: reference_doc
+  domain: property-testing
+  description: Introduction to property-based testing concepts
+  sections:
+  - properties
+  - shrinking
+  - examples
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: PropEr Testing (Erlang/Elixir)
+  url: https://propertesting.com/
+  source_type: reference_doc
+  domain: property-testing
+  description: Property testing concepts (language-agnostic principles)
+  sections:
+  - properties
+  - generators
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Metamorphic Testing - Chen et al. Survey
+  url: https://www.sciencedirect.com/science/article/pii/S0950584918300016
+  source_type: standard
+  domain: metamorphic
+  description: Comprehensive survey on metamorphic testing (2018)
+  sections:
+  - metamorphic-relations
+  - test-oracle-problem
+  - applications
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Metamorphic Testing - A Review (Segura et al.)
+  url: https://ieeexplore.ieee.org/document/7422146
+  source_type: standard
+  domain: metamorphic
+  description: IEEE TSE review of metamorphic testing
+  sections:
+  - mr-identification
+  - case-studies
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Great Expectations Documentation
+  url: https://docs.greatexpectations.io/docs/
+  source_type: reference_doc
+  domain: statistical
+  description: Data validation and profiling framework
+  sections:
+  - expectations
+  - data-docs
+  - checkpoints
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Pandera Documentation
+  url: https://pandera.readthedocs.io/en/stable/
+  source_type: reference_doc
+  domain: statistical
+  description: Statistical data validation for pandas
+  sections:
+  - schemas
+  - checks
+  - hypothesis-integration
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Evidently AI - ML Monitoring
+  url: https://docs.evidentlyai.com/
+  source_type: reference_doc
+  domain: statistical
+  description: Data drift and model monitoring
+  sections:
+  - data-drift
+  - model-performance
+  - reports
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Guardrails AI Documentation
+  url: https://www.guardrailsai.com/docs/concepts/guard
+  source_type: reference_doc
+  domain: llm-testing
+  description: LLM output validation framework - GAP FLAG
+  sections:
+  - validators
+  - guards
+  - structured-output
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: DeepEval Documentation
+  url: https://docs.confident-ai.com/docs/getting-started
+  source_type: reference_doc
+  domain: llm-testing
+  description: LLM evaluation framework - GAP FLAG
+  sections:
+  - metrics
+  - test-cases
+  - benchmarks
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: LangSmith Evaluation
+  url: https://docs.smith.langchain.com/evaluation
+  source_type: reference_doc
+  domain: llm-testing
+  description: LangChain's evaluation tools - GAP FLAG
+  sections:
+  - datasets
+  - evaluators
+  - experiments
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: xUnit Test Patterns - Test Smells
+  url: http://xunitpatterns.com/Test%20Smells.html
+  source_type: book
+  domain: anti-patterns
+  description: Meszaros' catalog of test smells
+  sections:
+  - fragile-test
+  - obscure-test
+  - slow-test
+  - erratic-test
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: Google Testing Blog - Test Flakiness
+  url: https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html
+  source_type: blog_post
+  domain: anti-patterns
+  description: How Google handles flaky tests
+  sections:
+  - flaky-tests
+  - quarantine
+  - deflaking
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: pytest Documentation
+  url: https://docs.pytest.org/en/stable/
+  source_type: reference_doc
+  domain: tooling
+  description: pytest testing framework
+  sections:
+  - fixtures
+  - parametrize
+  - markers
+  - plugins
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
+- name: pytest - Good Integration Practices
+  url: https://docs.pytest.org/en/stable/explanation/goodpractices.html
+  source_type: reference_doc
+  domain: tooling
+  description: pytest best practices
+  sections:
+  - test-layout
+  - src-layout
+  - tox
+  status: pending
+  fetched_at: null
+  cache_path: null
+  error: null
+  content_hash: null
