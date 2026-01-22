@@ -1,0 +1,162 @@
+# Security Karen - Curated Security Rules
+# Source: OWASP Top 10 (2021), CWE, security best practices
+# These rules are defensible - each links to authoritative sources
+
+persona: security_karen
+version: 1
+
+rules:
+  # A01:2021 - Broken Access Control
+  - rule: "Verify authorization on every privileged operation"
+    category: security
+    context: "Any endpoint or function that modifies data or accesses sensitive resources"
+    antipattern: "Checking authentication but not authorization; assuming authenticated = authorized"
+    rationale: "Broken access control is OWASP #1. Users can act outside intended permissions."
+    tags: [access-control, authorization, owasp-a01]
+    references:
+      - url: "https://owasp.org/Top10/A01_2021-Broken_Access_Control/"
+        title: "OWASP A01:2021 Broken Access Control"
+      - url: "https://cwe.mitre.org/data/definitions/862.html"
+        title: "CWE-862: Missing Authorization"
+
+  - rule: "Deny by default for access control decisions"
+    category: security
+    context: "Access control logic, permission checks, authorization middleware"
+    antipattern: "Allowing access unless explicitly denied; missing else clause in auth checks"
+    rationale: "Fail-open access control leads to unauthorized access. Fail-closed is safer."
+    tags: [access-control, authorization, defense-in-depth]
+    references:
+      - url: "https://owasp.org/Top10/A01_2021-Broken_Access_Control/"
+        title: "OWASP A01:2021 Broken Access Control"
+
+  # A02:2021 - Cryptographic Failures
+  - rule: "Never store passwords in plaintext or reversible encryption"
+    category: security
+    context: "User registration, password storage, credential management"
+    antipattern: "Storing raw passwords; using MD5/SHA1 without salt; using encryption instead of hashing"
+    rationale: "Password leaks expose users. Use bcrypt/argon2 with proper work factors."
+    tags: [cryptography, passwords, owasp-a02]
+    references:
+      - url: "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/"
+        title: "OWASP A02:2021 Cryptographic Failures"
+      - url: "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html"
+        title: "OWASP Password Storage Cheat Sheet"
+
+  - rule: "Use TLS 1.2+ for all data in transit"
+    category: security
+    context: "API calls, database connections, service-to-service communication"
+    antipattern: "HTTP endpoints; TLS 1.0/1.1; self-signed certs in production without pinning"
+    rationale: "Data in transit can be intercepted. TLS provides confidentiality and integrity."
+    tags: [cryptography, tls, owasp-a02]
+    references:
+      - url: "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/"
+        title: "OWASP A02:2021 Cryptographic Failures"
+
+  # A03:2021 - Injection
+  - rule: "Parameterize all database queries"
+    category: security
+    context: "Any code constructing SQL, NoSQL, LDAP, or OS commands from input"
+    antipattern: "String concatenation with user input; f-strings in queries; raw SQL with variables"
+    rationale: "SQL injection allows data theft, modification, or deletion. Parameterization prevents it."
+    tags: [injection, sql, owasp-a03]
+    references:
+      - url: "https://owasp.org/Top10/A03_2021-Injection/"
+        title: "OWASP A03:2021 Injection"
+      - url: "https://cwe.mitre.org/data/definitions/89.html"
+        title: "CWE-89: SQL Injection"
+
+  - rule: "Escape or sanitize all output to prevent XSS"
+    category: security
+    context: "Rendering user-provided content in HTML, JavaScript, or other executable contexts"
+    antipattern: "innerHTML with user data; dangerouslySetInnerHTML; template literals without escaping"
+    rationale: "XSS allows attackers to execute code in users' browsers. Always escape output."
+    tags: [injection, xss, owasp-a03]
+    references:
+      - url: "https://owasp.org/Top10/A03_2021-Injection/"
+        title: "OWASP A03:2021 Injection"
+      - url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+        title: "OWASP XSS Prevention Cheat Sheet"
+
+  # A04:2021 - Insecure Design
+  - rule: "Implement rate limiting on authentication endpoints"
+    category: security
+    context: "Login, registration, password reset, API authentication"
+    antipattern: "Unlimited login attempts; no lockout; no CAPTCHA on repeated failures"
+    rationale: "Credential stuffing and brute force attacks are common. Rate limiting mitigates them."
+    tags: [authentication, rate-limiting, owasp-a04]
+    references:
+      - url: "https://owasp.org/Top10/A04_2021-Insecure_Design/"
+        title: "OWASP A04:2021 Insecure Design"
+      - url: "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html"
+        title: "OWASP Authentication Cheat Sheet"
+
+  # A05:2021 - Security Misconfiguration
+  - rule: "Never commit secrets to version control"
+    category: security
+    context: "Any code or configuration file that might contain API keys, passwords, tokens"
+    antipattern: "Hardcoded credentials; .env files in git; secrets in docker-compose.yml"
+    rationale: "Git history is forever. Leaked secrets lead to account compromise."
+    tags: [secrets, configuration, owasp-a05]
+    references:
+      - url: "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/"
+        title: "OWASP A05:2021 Security Misconfiguration"
+
+  - rule: "Disable debug mode and verbose errors in production"
+    category: security
+    context: "Production deployments, error handling, logging configuration"
+    antipattern: "DEBUG=True in production; stack traces in API responses; verbose SQL errors"
+    rationale: "Debug info reveals implementation details useful for attackers."
+    tags: [configuration, errors, owasp-a05]
+    references:
+      - url: "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/"
+        title: "OWASP A05:2021 Security Misconfiguration"
+
+  # A07:2021 - Identification and Authentication Failures
+  - rule: "Use secure session management with httpOnly and secure flags"
+    category: security
+    context: "Session cookies, JWT storage, authentication tokens"
+    antipattern: "Tokens in localStorage; cookies without httpOnly; missing secure flag"
+    rationale: "Insecure session storage enables session hijacking via XSS."
+    tags: [authentication, sessions, owasp-a07]
+    references:
+      - url: "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/"
+        title: "OWASP A07:2021 Identification and Authentication Failures"
+      - url: "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
+        title: "OWASP Session Management Cheat Sheet"
+
+  # A08:2021 - Software and Data Integrity Failures
+  - rule: "Verify integrity of external dependencies"
+    category: security
+    context: "Package installation, CI/CD pipelines, dependency updates"
+    antipattern: "No lockfile; no hash verification; installing from arbitrary URLs"
+    rationale: "Supply chain attacks inject malicious code via dependencies."
+    tags: [dependencies, supply-chain, owasp-a08]
+    references:
+      - url: "https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/"
+        title: "OWASP A08:2021 Software and Data Integrity Failures"
+
+  # A09:2021 - Security Logging and Monitoring Failures
+  - rule: "Log security-relevant events with sufficient context"
+    category: security
+    context: "Authentication, authorization failures, input validation failures"
+    antipattern: "No logging; logging without timestamps; no user/IP context; PII in logs"
+    rationale: "Without logs, breaches go undetected. Logs enable incident response."
+    tags: [logging, monitoring, owasp-a09]
+    references:
+      - url: "https://owasp.org/Top10/A09_2021-Security_Logging_and_Monitoring_Failures/"
+        title: "OWASP A09:2021 Security Logging and Monitoring Failures"
+      - url: "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+        title: "OWASP Logging Cheat Sheet"
+
+  # A10:2021 - Server-Side Request Forgery (SSRF)
+  - rule: "Validate and allowlist URLs for server-side requests"
+    category: security
+    context: "Fetching external URLs, webhooks, image proxies, URL shorteners"
+    antipattern: "Fetching arbitrary user-provided URLs; no protocol/host validation"
+    rationale: "SSRF allows attackers to access internal services or cloud metadata."
+    tags: [ssrf, input-validation, owasp-a10]
+    references:
+      - url: "https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/"
+        title: "OWASP A10:2021 SSRF"
+      - url: "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html"
+        title: "OWASP SSRF Prevention Cheat Sheet"

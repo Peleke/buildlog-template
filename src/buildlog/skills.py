@@ -72,11 +72,17 @@ class SkillDict(_SkillDictRequired, total=False):
     """Type for skill dictionary representation.
 
     Inherits required fields from _SkillDictRequired.
-    Optional fields are only present when continuous confidence is enabled.
+    Optional fields are only present when continuous confidence is enabled
+    or when defensibility fields are populated.
     """
 
     confidence_score: float
     confidence_tier: str
+    # Defensibility fields (from #24 - tighter schema)
+    context: str  # When does this rule apply?
+    antipattern: str  # What does violation look like?
+    rationale: str  # Why does this matter?
+    persona_tags: list[str]  # Which reviewers use this rule?
 
 
 class SkillSetDict(TypedDict):
@@ -105,6 +111,10 @@ class Skill:
         tags: Extracted technology/concept tags.
         confidence_score: Continuous confidence score (0-1), if calculated.
         confidence_tier: Descriptive tier (speculative/provisional/stable/entrenched).
+        context: When does this rule apply? (defensibility)
+        antipattern: What does violation look like? (defensibility)
+        rationale: Why does this rule matter? (defensibility)
+        persona_tags: Which reviewer personas use this rule?
     """
 
     id: str
@@ -116,12 +126,16 @@ class Skill:
     tags: list[str] = field(default_factory=list)
     confidence_score: float | None = None
     confidence_tier: str | None = None
+    # Defensibility fields (#24)
+    context: str | None = None
+    antipattern: str | None = None
+    rationale: str | None = None
+    persona_tags: list[str] = field(default_factory=list)
 
     def to_dict(self) -> SkillDict:
         """Convert to dictionary for serialization.
 
-        Only includes optional fields (confidence_score, confidence_tier)
-        when they are set.
+        Only includes optional fields when they are set.
         """
         result = SkillDict(
             id=self.id,
@@ -136,6 +150,15 @@ class Skill:
             result["confidence_score"] = self.confidence_score
         if self.confidence_tier is not None:
             result["confidence_tier"] = self.confidence_tier
+        # Defensibility fields
+        if self.context is not None:
+            result["context"] = self.context
+        if self.antipattern is not None:
+            result["antipattern"] = self.antipattern
+        if self.rationale is not None:
+            result["rationale"] = self.rationale
+        if self.persona_tags:
+            result["persona_tags"] = self.persona_tags
         return result
 
 
