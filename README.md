@@ -1,9 +1,5 @@
 <div align="center">
 
-> **NOTE:** Forgive the agent dump; edit incoming.
->
-> **RE: The art** — Yes, it's AI-generated. Yes, that's hypocritical for a project about rigor over vibes. Now that this is no longer internal, looking for an actual artist to pay for a real logo. If you know someone good, [open an issue](https://github.com/Peleke/buildlog-template/issues) or DM me. Budget exists.
-
 # buildlog
 
 ### The Only Agent Learning System You Can Prove Works
@@ -17,7 +13,9 @@
 
 <img src="assets/hero-banner-perfectdeliberate.png" alt="buildlog - The Only Agent Learning System You Can Prove Works" width="800"/>
 
-[The Problem](#the-problem) · [The Claim](#the-claim) · [The Mechanism](#the-mechanism) · [Quick Start](#quick-start)
+> **RE: The art** — Yes, it's AI-generated. Yes, that's hypocritical for a project about rigor over vibes. Looking for an actual artist to pay for a real logo. If you know someone good, [open an issue](https://github.com/Peleke/buildlog-template/issues) or DM me. Budget exists.
+
+[The Problem](#the-problem) · [The Claim](#the-claim) · [The Mechanism](#the-mechanism) · [Quick Start](#quick-start) · [Review Gauntlet](#review-gauntlet)
 
 ---
 
@@ -175,6 +173,58 @@ buildlog_log_reward(
 
 ---
 
+## Review Gauntlet
+
+Run your code through ruthless reviewer personas, each with curated rules from authoritative sources.
+
+```bash
+# See available reviewers
+buildlog gauntlet list
+
+# Output:
+# Review Gauntlet Personas
+# ==================================================
+#   security_karen
+#     OWASP Top 10 security review
+#     Rules: 13 (v1)
+#
+#   test_terrorist
+#     Comprehensive testing coverage audit
+#     Rules: 21 (v1)
+#
+# Total: 2 personas, 34 rules
+```
+
+### Reviewer Personas
+
+| Persona | Focus | Rules |
+|---------|-------|-------|
+| **Security Karen** | OWASP Top 10, auth, injection, secrets | 13 |
+| **Test Terrorist** | Coverage, property-based, metamorphic, contracts | 21 |
+| **Ruthless Reviewer** | Code quality, FP principles | Coming soon |
+
+Each rule includes:
+- **Context**: When to apply it
+- **Antipattern**: What violation looks like
+- **Rationale**: Why it matters (with citations)
+
+### Usage
+
+```bash
+# Generate a review prompt
+buildlog gauntlet prompt src/api.py
+
+# Export rules for manual review
+buildlog gauntlet rules --format markdown -o review_checklist.md
+
+# After running a review, persist learnings
+buildlog gauntlet learn review_issues.json --source "PR#42"
+```
+
+The gauntlet integrates with the learning loop—issues found become rules that accumulate confidence.
+
+---
+
 ## Experiment Infrastructure
 
 buildlog ships with infrastructure to run actual experiments:
@@ -257,13 +307,34 @@ Available tools:
 | `buildlog_reject` | Mark false positives |
 | `buildlog_diff` | Rules pending review |
 | `buildlog_learn_from_review` | Extract rules from code review |
-| `buildlog_log_reward` | Record reward signal for bandit |
-| `buildlog_rewards` | View reward history |
-| `buildlog_start_session` | Begin tracked experiment session |
-| `buildlog_end_session` | End session |
+| `buildlog_log_reward` | Record reward signal |
+| `buildlog_start_session` | Begin tracked experiment |
 | `buildlog_log_mistake` | Record mistake during session |
-| `buildlog_session_metrics` | Get session statistics |
 | `buildlog_experiment_report` | Full experiment report |
+
+### CLI Commands
+
+```bash
+buildlog init                    # Initialize buildlog
+buildlog new <slug>              # Create entry
+buildlog list                    # List entries
+buildlog distill                 # Extract patterns
+buildlog skills                  # Generate rules
+buildlog stats                   # Usage statistics
+buildlog reward <outcome>        # Log reward signal
+
+# Experiments
+buildlog experiment start        # Begin tracked session
+buildlog experiment log-mistake  # Record mistake
+buildlog experiment end          # End session
+buildlog experiment report       # Full report
+
+# Review Gauntlet
+buildlog gauntlet list           # Show reviewers
+buildlog gauntlet rules          # Export rules
+buildlog gauntlet prompt <path>  # Generate review prompt
+buildlog gauntlet learn <file>   # Persist learnings
+```
 
 ---
 
