@@ -11,11 +11,16 @@ from typing import Literal
 
 from buildlog.core import (
     diff,
+    end_session,
+    get_experiment_report,
     get_rewards,
+    get_session_metrics,
     learn_from_review,
+    log_mistake,
     log_reward,
     promote,
     reject,
+    start_session,
     status,
 )
 
@@ -250,3 +255,153 @@ def buildlog_rewards(
         "mean_reward": result.mean_reward,
         "events": [e.to_dict() for e in result.events],
     }
+
+
+# -----------------------------------------------------------------------------
+# Session Tracking MCP Tools (Experiment Infrastructure)
+# -----------------------------------------------------------------------------
+
+
+def buildlog_start_session(
+    error_class: str | None = None,
+    notes: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Start a new experiment session.
+
+    Begins tracking for a learning experiment. Captures the current
+    set of active rules to measure learning over time.
+
+    Args:
+        error_class: Error class being targeted (e.g., "missing_test")
+        notes: Notes about this session
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with session_id, error_class, rules_count, message
+
+    Example:
+        buildlog_start_session(error_class="missing_test")
+    """
+    result = start_session(
+        Path(buildlog_dir),
+        error_class=error_class,
+        notes=notes,
+    )
+    return asdict(result)
+
+
+def buildlog_end_session(
+    entry_file: str | None = None,
+    notes: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """End the current experiment session.
+
+    Finalizes the session and calculates metrics including:
+    - Total mistakes logged
+    - Repeated mistakes (from prior sessions)
+    - Rules added during session
+
+    Args:
+        entry_file: Corresponding buildlog entry file, if any
+        notes: Additional notes to append
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with session_id, duration_minutes, mistakes_logged,
+        repeated_mistakes, rules_at_start, rules_at_end, message
+
+    Example:
+        buildlog_end_session(entry_file="2026-01-21.md")
+    """
+    result = end_session(
+        Path(buildlog_dir),
+        entry_file=entry_file,
+        notes=notes,
+    )
+    return asdict(result)
+
+
+def buildlog_log_mistake(
+    error_class: str,
+    description: str,
+    corrected_by_rule: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Log a mistake during the current session.
+
+    Records the mistake and checks if it's a repeat of a prior mistake
+    (from earlier sessions). This enables measuring repeated-mistake rates.
+
+    Args:
+        error_class: Category of error (e.g., "missing_test")
+        description: Description of the mistake
+        corrected_by_rule: Rule ID that should have prevented this
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with mistake_id, session_id, was_repeat, similar_prior, message
+
+    Example:
+        buildlog_log_mistake(
+            error_class="missing_test",
+            description="Forgot to add unit tests for new helper function"
+        )
+    """
+    result = log_mistake(
+        Path(buildlog_dir),
+        error_class=error_class,
+        description=description,
+        corrected_by_rule=corrected_by_rule,
+    )
+    return asdict(result)
+
+
+def buildlog_session_metrics(
+    session_id: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Get metrics for a session or all sessions.
+
+    Returns mistake rates and rule changes for analysis.
+
+    Args:
+        session_id: Specific session ID, or None for aggregate metrics
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with session_id, total_mistakes, repeated_mistakes,
+        repeated_mistake_rate, rules_at_start, rules_at_end, rules_added
+
+    Example:
+        buildlog_session_metrics()  # Aggregate metrics
+        buildlog_session_metrics(session_id="session-20260121-140000")
+    """
+    result = get_session_metrics(
+        Path(buildlog_dir),
+        session_id=session_id,
+    )
+    return asdict(result)
+
+
+def buildlog_experiment_report(
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Generate a comprehensive experiment report.
+
+    Returns summary statistics, per-session breakdown, and error class analysis.
+
+    Args:
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with:
+            - summary: Overall statistics
+            - sessions: Per-session breakdown
+            - error_classes: Breakdown by error class
+
+    Example:
+        buildlog_experiment_report()
+    """
+    return get_experiment_report(Path(buildlog_dir))

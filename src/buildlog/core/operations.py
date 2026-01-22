@@ -28,6 +28,13 @@ __all__ = [
     "RewardEvent",
     "LogRewardResult",
     "RewardSummary",
+    # Session tracking (experiment infrastructure)
+    "Session",
+    "Mistake",
+    "SessionMetrics",
+    "StartSessionResult",
+    "EndSessionResult",
+    "LogMistakeResult",
     "status",
     "promote",
     "reject",
@@ -36,6 +43,12 @@ __all__ = [
     "learn_from_review",
     "log_reward",
     "get_rewards",
+    # Session tracking operations
+    "start_session",
+    "end_session",
+    "log_mistake",
+    "get_session_metrics",
+    "get_experiment_report",
 ]
 
 
@@ -1026,3 +1039,616 @@ def get_rewards(
         mean_reward=mean_reward,
         events=events,
     )
+
+
+# -----------------------------------------------------------------------------
+# Session Tracking Data Structures (for Experimental Infrastructure)
+# -----------------------------------------------------------------------------
+
+
+class SessionDict(TypedDict, total=False):
+    """Serializable form of Session."""
+
+    id: str
+    started_at: str
+    ended_at: str | None
+    entry_file: str | None
+    rules_at_start: list[str]
+    rules_at_end: list[str]
+    error_class: str | None
+    notes: str | None
+
+
+@dataclass
+class Session:
+    """A coding session for experiment tracking.
+
+    Tracks the state of rules before and after a session to measure
+    learning effectiveness.
+
+    Attributes:
+        id: Unique identifier for this session.
+        started_at: When the session started.
+        ended_at: When the session ended (None if still active).
+        entry_file: Corresponding buildlog entry file, if any.
+        rules_at_start: Rule IDs active at session start.
+        rules_at_end: Rule IDs active at session end.
+        error_class: Error class being targeted (e.g., "missing_test").
+        notes: Optional notes about the session.
+    """
+
+    id: str
+    started_at: datetime
+    ended_at: datetime | None = None
+    entry_file: str | None = None
+    rules_at_start: list[str] = field(default_factory=list)
+    rules_at_end: list[str] = field(default_factory=list)
+    error_class: str | None = None
+    notes: str | None = None
+
+    def to_dict(self) -> SessionDict:
+        """Convert to serializable dictionary."""
+        result: SessionDict = {
+            "id": self.id,
+            "started_at": self.started_at.isoformat(),
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "rules_at_start": self.rules_at_start,
+            "rules_at_end": self.rules_at_end,
+        }
+        if self.entry_file is not None:
+            result["entry_file"] = self.entry_file
+        if self.error_class is not None:
+            result["error_class"] = self.error_class
+        if self.notes is not None:
+            result["notes"] = self.notes
+        return result
+
+    @classmethod
+    def from_dict(cls, data: SessionDict) -> "Session":
+        """Reconstruct from serialized dictionary."""
+        started_at = datetime.fromisoformat(data["started_at"])
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+
+        ended_at = None
+        ended_at_str = data.get("ended_at")
+        if ended_at_str:
+            ended_at = datetime.fromisoformat(ended_at_str)
+            if ended_at.tzinfo is None:
+                ended_at = ended_at.replace(tzinfo=timezone.utc)
+
+        return cls(
+            id=data["id"],
+            started_at=started_at,
+            ended_at=ended_at,
+            entry_file=data.get("entry_file"),
+            rules_at_start=data.get("rules_at_start", []),
+            rules_at_end=data.get("rules_at_end", []),
+            error_class=data.get("error_class"),
+            notes=data.get("notes"),
+        )
+
+
+class MistakeDict(TypedDict, total=False):
+    """Serializable form of Mistake."""
+
+    id: str
+    session_id: str
+    timestamp: str
+    error_class: str
+    description: str
+    semantic_hash: str  # Simplified from embedding - hash of description
+    was_repeat: bool
+    corrected_by_rule: str | None
+
+
+@dataclass
+class Mistake:
+    """A logged mistake during a session.
+
+    Tracks mistakes to measure repeated-mistake rate.
+
+    Attributes:
+        id: Unique identifier for this mistake.
+        session_id: Session in which this mistake occurred.
+        timestamp: When the mistake was logged.
+        error_class: Category of error (e.g., "missing_test").
+        description: Description of the mistake.
+        semantic_hash: Hash of description for similarity matching.
+        was_repeat: Whether this was a repeat of a prior mistake.
+        corrected_by_rule: Rule ID that should have prevented this, if any.
+    """
+
+    id: str
+    session_id: str
+    timestamp: datetime
+    error_class: str
+    description: str
+    semantic_hash: str
+    was_repeat: bool = False
+    corrected_by_rule: str | None = None
+
+    def to_dict(self) -> MistakeDict:
+        """Convert to serializable dictionary."""
+        result: MistakeDict = {
+            "id": self.id,
+            "session_id": self.session_id,
+            "timestamp": self.timestamp.isoformat(),
+            "error_class": self.error_class,
+            "description": self.description,
+            "semantic_hash": self.semantic_hash,
+            "was_repeat": self.was_repeat,
+        }
+        if self.corrected_by_rule is not None:
+            result["corrected_by_rule"] = self.corrected_by_rule
+        return result
+
+    @classmethod
+    def from_dict(cls, data: MistakeDict) -> "Mistake":
+        """Reconstruct from serialized dictionary."""
+        timestamp = datetime.fromisoformat(data["timestamp"])
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        return cls(
+            id=data["id"],
+            session_id=data["session_id"],
+            timestamp=timestamp,
+            error_class=data["error_class"],
+            description=data["description"],
+            semantic_hash=data["semantic_hash"],
+            was_repeat=data.get("was_repeat", False),
+            corrected_by_rule=data.get("corrected_by_rule"),
+        )
+
+
+@dataclass
+class SessionMetrics:
+    """Metrics for a session or aggregated across sessions.
+
+    Attributes:
+        session_id: Session ID (or "aggregate" for combined metrics).
+        total_mistakes: Total mistakes in the session(s).
+        repeated_mistakes: Mistakes that were repeats.
+        repeated_mistake_rate: Ratio of repeated to total mistakes.
+        rules_at_start: Number of rules at session start.
+        rules_at_end: Number of rules at session end.
+        rules_added: Net rules added during session(s).
+    """
+
+    session_id: str
+    total_mistakes: int
+    repeated_mistakes: int
+    repeated_mistake_rate: float
+    rules_at_start: int
+    rules_at_end: int
+    rules_added: int
+
+
+@dataclass
+class StartSessionResult:
+    """Result of starting a new session."""
+
+    session_id: str
+    error_class: str | None
+    rules_count: int
+    message: str
+
+
+@dataclass
+class EndSessionResult:
+    """Result of ending a session."""
+
+    session_id: str
+    duration_minutes: float
+    mistakes_logged: int
+    repeated_mistakes: int
+    rules_at_start: int
+    rules_at_end: int
+    message: str
+
+
+@dataclass
+class LogMistakeResult:
+    """Result of logging a mistake."""
+
+    mistake_id: str
+    session_id: str
+    was_repeat: bool
+    similar_prior: str | None  # ID of similar prior mistake if repeat
+    message: str
+
+
+# -----------------------------------------------------------------------------
+# Session Tracking Helper Functions
+# -----------------------------------------------------------------------------
+
+
+def _get_sessions_path(buildlog_dir: Path) -> Path:
+    """Get path to sessions JSONL file."""
+    return buildlog_dir / ".buildlog" / "sessions.jsonl"
+
+
+def _get_mistakes_path(buildlog_dir: Path) -> Path:
+    """Get path to mistakes JSONL file."""
+    return buildlog_dir / ".buildlog" / "mistakes.jsonl"
+
+
+def _get_active_session_path(buildlog_dir: Path) -> Path:
+    """Get path to active session marker file."""
+    return buildlog_dir / ".buildlog" / "active_session.json"
+
+
+def _generate_session_id(now: datetime) -> str:
+    """Generate a unique session ID."""
+    # Include microseconds for uniqueness when sessions are created quickly
+    return f"session-{now.strftime('%Y%m%d-%H%M%S')}-{now.microsecond:06d}"
+
+
+def _generate_mistake_id(error_class: str, now: datetime) -> str:
+    """Generate a unique mistake ID."""
+    # Include microseconds for uniqueness
+    return f"mistake-{error_class[:10]}-{now.strftime('%Y%m%d-%H%M%S')}-{now.microsecond:06d}"
+
+
+def _compute_semantic_hash(description: str) -> str:
+    """Compute a hash for semantic similarity matching.
+
+    This is a simplified approach - in production, you'd use embeddings.
+    For now, we normalize and hash the description.
+    """
+    import hashlib
+
+    # Normalize: lowercase, remove extra whitespace
+    normalized = " ".join(description.lower().split())
+    return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+
+
+def _get_current_rules(buildlog_dir: Path) -> list[str]:
+    """Get list of current promoted rule IDs."""
+    promoted_path = _get_promoted_path(buildlog_dir)
+    return list(_load_json_set(promoted_path, "skill_ids"))
+
+
+def _load_sessions(buildlog_dir: Path) -> list[Session]:
+    """Load all sessions from JSONL file."""
+    sessions_path = _get_sessions_path(buildlog_dir)
+    if not sessions_path.exists():
+        return []
+
+    sessions = []
+    for line in sessions_path.read_text().strip().split("\n"):
+        if line:
+            try:
+                data = json.loads(line)
+                sessions.append(Session.from_dict(data))
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return sessions
+
+
+def _load_mistakes(buildlog_dir: Path) -> list[Mistake]:
+    """Load all mistakes from JSONL file."""
+    mistakes_path = _get_mistakes_path(buildlog_dir)
+    if not mistakes_path.exists():
+        return []
+
+    mistakes = []
+    for line in mistakes_path.read_text().strip().split("\n"):
+        if line:
+            try:
+                data = json.loads(line)
+                mistakes.append(Mistake.from_dict(data))
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return mistakes
+
+
+def _find_similar_prior_mistake(
+    description: str,
+    error_class: str,
+    current_session_id: str,
+    all_mistakes: list[Mistake],
+) -> Mistake | None:
+    """Find a similar mistake from a prior session.
+
+    Uses semantic hash for similarity matching (simplified approach).
+    """
+    semantic_hash = _compute_semantic_hash(description)
+
+    for mistake in all_mistakes:
+        # Only check mistakes from prior sessions with same error class
+        if (
+            mistake.session_id != current_session_id
+            and mistake.error_class == error_class
+        ):
+            # Check for semantic similarity (hash match or high description overlap)
+            if mistake.semantic_hash == semantic_hash:
+                return mistake
+            # Also check for high word overlap
+            desc_words = set(description.lower().split())
+            mistake_words = set(mistake.description.lower().split())
+            if len(desc_words & mistake_words) / max(len(desc_words), 1) > 0.7:
+                return mistake
+
+    return None
+
+
+# -----------------------------------------------------------------------------
+# Session Tracking Operations
+# -----------------------------------------------------------------------------
+
+
+def start_session(
+    buildlog_dir: Path,
+    error_class: str | None = None,
+    notes: str | None = None,
+) -> StartSessionResult:
+    """Start a new experiment session.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        error_class: Error class being targeted (e.g., "missing_test").
+        notes: Optional notes about the session.
+
+    Returns:
+        StartSessionResult with session ID and current rules count.
+    """
+    now = datetime.now(timezone.utc)
+    session_id = _generate_session_id(now)
+    current_rules = _get_current_rules(buildlog_dir)
+
+    session = Session(
+        id=session_id,
+        started_at=now,
+        rules_at_start=current_rules,
+        error_class=error_class,
+        notes=notes,
+    )
+
+    # Save as active session
+    active_path = _get_active_session_path(buildlog_dir)
+    active_path.parent.mkdir(parents=True, exist_ok=True)
+    active_path.write_text(json.dumps(session.to_dict(), indent=2))
+
+    return StartSessionResult(
+        session_id=session_id,
+        error_class=error_class,
+        rules_count=len(current_rules),
+        message=f"Started session {session_id} with {len(current_rules)} active rules",
+    )
+
+
+def end_session(
+    buildlog_dir: Path,
+    entry_file: str | None = None,
+    notes: str | None = None,
+) -> EndSessionResult:
+    """End the current experiment session.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        entry_file: Corresponding buildlog entry file, if any.
+        notes: Additional notes to append.
+
+    Returns:
+        EndSessionResult with session metrics.
+    """
+    active_path = _get_active_session_path(buildlog_dir)
+
+    if not active_path.exists():
+        raise ValueError("No active session to end")
+
+    # Load active session
+    session_data = json.loads(active_path.read_text())
+    session = Session.from_dict(session_data)
+
+    # Update session with end info
+    now = datetime.now(timezone.utc)
+    session.ended_at = now
+    session.rules_at_end = _get_current_rules(buildlog_dir)
+    if entry_file:
+        session.entry_file = entry_file
+    if notes:
+        session.notes = f"{session.notes or ''}\n{notes}".strip()
+
+    # Append to sessions log
+    sessions_path = _get_sessions_path(buildlog_dir)
+    sessions_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(sessions_path, "a") as f:
+        f.write(json.dumps(session.to_dict()) + "\n")
+
+    # Remove active session marker
+    active_path.unlink()
+
+    # Calculate session metrics
+    all_mistakes = _load_mistakes(buildlog_dir)
+    session_mistakes = [m for m in all_mistakes if m.session_id == session.id]
+    repeated = sum(1 for m in session_mistakes if m.was_repeat)
+
+    duration = (session.ended_at - session.started_at).total_seconds() / 60
+
+    return EndSessionResult(
+        session_id=session.id,
+        duration_minutes=round(duration, 1),
+        mistakes_logged=len(session_mistakes),
+        repeated_mistakes=repeated,
+        rules_at_start=len(session.rules_at_start),
+        rules_at_end=len(session.rules_at_end),
+        message=f"Ended session {session.id} ({duration:.1f}min, {len(session_mistakes)} mistakes, {repeated} repeats)",
+    )
+
+
+def log_mistake(
+    buildlog_dir: Path,
+    error_class: str,
+    description: str,
+    corrected_by_rule: str | None = None,
+) -> LogMistakeResult:
+    """Log a mistake during an experiment session.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        error_class: Category of error (e.g., "missing_test").
+        description: Description of the mistake.
+        corrected_by_rule: Rule ID that should have prevented this.
+
+    Returns:
+        LogMistakeResult indicating if this was a repeat.
+    """
+    active_path = _get_active_session_path(buildlog_dir)
+
+    if not active_path.exists():
+        raise ValueError(
+            "No active session - start one with 'buildlog experiment start'"
+        )
+
+    # Get current session
+    session_data = json.loads(active_path.read_text())
+    session_id = session_data["id"]
+
+    now = datetime.now(timezone.utc)
+    mistake_id = _generate_mistake_id(error_class, now)
+
+    # Check for similar prior mistakes
+    all_mistakes = _load_mistakes(buildlog_dir)
+    similar = _find_similar_prior_mistake(
+        description, error_class, session_id, all_mistakes
+    )
+
+    mistake = Mistake(
+        id=mistake_id,
+        session_id=session_id,
+        timestamp=now,
+        error_class=error_class,
+        description=description,
+        semantic_hash=_compute_semantic_hash(description),
+        was_repeat=similar is not None,
+        corrected_by_rule=corrected_by_rule,
+    )
+
+    # Append to mistakes log
+    mistakes_path = _get_mistakes_path(buildlog_dir)
+    mistakes_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(mistakes_path, "a") as f:
+        f.write(json.dumps(mistake.to_dict()) + "\n")
+
+    message = f"Logged mistake: {error_class}"
+    if similar:
+        message += f" (REPEAT of {similar.id})"
+
+    return LogMistakeResult(
+        mistake_id=mistake_id,
+        session_id=session_id,
+        was_repeat=similar is not None,
+        similar_prior=similar.id if similar else None,
+        message=message,
+    )
+
+
+def get_session_metrics(
+    buildlog_dir: Path,
+    session_id: str | None = None,
+) -> SessionMetrics:
+    """Get metrics for a session or all sessions.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        session_id: Specific session ID, or None for aggregate metrics.
+
+    Returns:
+        SessionMetrics with mistake rates and rule changes.
+    """
+    sessions = _load_sessions(buildlog_dir)
+    mistakes = _load_mistakes(buildlog_dir)
+
+    if session_id:
+        # Filter to specific session
+        session = next((s for s in sessions if s.id == session_id), None)
+        if not session:
+            raise ValueError(f"Session not found: {session_id}")
+
+        session_mistakes = [m for m in mistakes if m.session_id == session_id]
+        total = len(session_mistakes)
+        repeated = sum(1 for m in session_mistakes if m.was_repeat)
+
+        return SessionMetrics(
+            session_id=session_id,
+            total_mistakes=total,
+            repeated_mistakes=repeated,
+            repeated_mistake_rate=repeated / total if total > 0 else 0.0,
+            rules_at_start=len(session.rules_at_start),
+            rules_at_end=len(session.rules_at_end),
+            rules_added=len(session.rules_at_end) - len(session.rules_at_start),
+        )
+    else:
+        # Aggregate across all sessions
+        total = len(mistakes)
+        repeated = sum(1 for m in mistakes if m.was_repeat)
+
+        rules_start = sessions[0].rules_at_start if sessions else []
+        rules_end = sessions[-1].rules_at_end if sessions else []
+
+        return SessionMetrics(
+            session_id="aggregate",
+            total_mistakes=total,
+            repeated_mistakes=repeated,
+            repeated_mistake_rate=repeated / total if total > 0 else 0.0,
+            rules_at_start=len(rules_start),
+            rules_at_end=len(rules_end),
+            rules_added=len(rules_end) - len(rules_start),
+        )
+
+
+def get_experiment_report(buildlog_dir: Path) -> dict:
+    """Generate a comprehensive experiment report.
+
+    Returns:
+        Dictionary with sessions, metrics, and analysis.
+    """
+    sessions = _load_sessions(buildlog_dir)
+    mistakes = _load_mistakes(buildlog_dir)
+
+    # Per-session metrics
+    session_metrics = []
+    for session in sessions:
+        session_mistakes = [m for m in mistakes if m.session_id == session.id]
+        total = len(session_mistakes)
+        repeated = sum(1 for m in session_mistakes if m.was_repeat)
+        session_metrics.append(
+            {
+                "session_id": session.id,
+                "started_at": session.started_at.isoformat(),
+                "error_class": session.error_class,
+                "total_mistakes": total,
+                "repeated_mistakes": repeated,
+                "repeated_mistake_rate": repeated / total if total > 0 else 0.0,
+                "rules_added": len(session.rules_at_end) - len(session.rules_at_start),
+            }
+        )
+
+    # Aggregate metrics
+    total_mistakes = len(mistakes)
+    total_repeated = sum(1 for m in mistakes if m.was_repeat)
+
+    # Error class breakdown
+    error_classes: dict[str, dict] = {}
+    for mistake in mistakes:
+        if mistake.error_class not in error_classes:
+            error_classes[mistake.error_class] = {"total": 0, "repeated": 0}
+        error_classes[mistake.error_class]["total"] += 1
+        if mistake.was_repeat:
+            error_classes[mistake.error_class]["repeated"] += 1
+
+    return {
+        "summary": {
+            "total_sessions": len(sessions),
+            "total_mistakes": total_mistakes,
+            "total_repeated": total_repeated,
+            "overall_repeat_rate": (
+                total_repeated / total_mistakes if total_mistakes > 0 else 0.0
+            ),
+        },
+        "sessions": session_metrics,
+        "error_classes": error_classes,
+    }
