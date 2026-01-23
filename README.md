@@ -77,7 +77,7 @@ RMR is not the only metric that matters. But it's one we can measure, and measur
 
 buildlog is building toward **contextual bandits** for automatic rule selection. Here's where we are:
 
-### What Exists Today (v0.7)
+### What Exists Today (v0.8)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -89,38 +89,46 @@ buildlog is building toward **contextual bandits** for automatic rule selection.
 │  ✅ Reward logging      Accept/reject/revision signals         │
 │  ✅ Experiment tracking Sessions, mistakes, RMR calculation    │
 │  ✅ Review gauntlet     Curated persona-based code review      │
-│  ⏳ Manual promotion    Human selects rules to surface         │
+│  ✅ Thompson Sampling   Automatic rule selection via bandit    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### What's Coming (v0.8+)
+### Thompson Sampling Bandit (NEW in v0.8)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    CONTEXTUAL BANDIT (PLANNED)                  │
+│                    CONTEXTUAL BANDIT (IMPLEMENTED)              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Context (c):     Error class, file type, task category        │
+│  Context (c):     Error class (e.g., "type-errors")            │
 │  Arms (a):        Candidate rules to surface                   │
-│  Reward (r):      Human feedback (👍 helpful / 👎 not helpful) │
+│  Reward (r):      Binary feedback from mistakes & rewards      │
 │                                                                 │
-│  Policy π(c) → a:  Thompson Sampling with Beta-Bernoulli       │
-│                                                                 │
-│  Objective:       Minimize regret = Σ(r* - r_chosen)           │
+│  Model:           Beta-Bernoulli (conjugate prior)             │
+│  Policy:          Thompson Sampling (sample, don't exploit)    │
+│  Learning:        Bayesian updates on every feedback signal    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Arms** = learned rules (from buildlog entries, code reviews, explicit teaching)
+**How it works:**
 
-**Context** = what kind of problem you're working on
+1. **Session starts** → Bandit samples from Beta distributions, selects top-k rules
+2. **Mistake logged** → Selected rules get reward=0 (they didn't prevent the mistake)
+3. **Explicit reward** → Rules get reward based on outcome (accepted=1, rejected=0)
 
-**Reward** = did surfacing this rule actually help?
+**Why Thompson Sampling?**
 
-The reward infrastructure exists. The bandit policy is next. Thompson Sampling will provide theoretical guarantees: O(√(KT log K)) regret bounds.
+The magic is in *sampling* instead of using the mean:
+- Rules we're uncertain about have high-variance distributions
+- High variance → occasional high samples → exploration
+- As data accumulates, variance shrinks → exploitation
 
-We're building in public—the bandit implementation will be developed with full documentation of the process.
+This naturally balances explore-exploit without tuning hyperparameters.
+
+**Seed-boosted priors:**
+Curated rules from gauntlet personas start with boosted priors (Beta(3,1) instead of Beta(1,1)), reflecting our belief that expert-curated rules are likely effective.
 
 ---
 
@@ -132,19 +140,20 @@ buildlog captures signal at every stage:
 flowchart LR
     A["Work Sessions"] --> B["Structured Entries"]
     B --> C["Extracted Rules"]
-    C --> D["Manual Promotion"]
+    C --> D["Bandit Selection"]
     D --> E["Rule Surfaced"]
     E --> F["Human Feedback"]
     F --> G["Reward Logged"]
-    G -.-> H["Bandit Policy"]
-    H -.-> D
+    G --> H["Bandit Updates"]
+    H --> D
 
+    style D fill:#4ecdc4,color:#fff
     style F fill:#ff6b6b,color:#fff
     style G fill:#4ecdc4,color:#fff
-    style H fill:#666,color:#fff,stroke-dasharray: 5 5
+    style H fill:#4ecdc4,color:#fff
 ```
 
-*Dashed: Coming in v0.8 — automatic rule selection via Thompson Sampling*
+*Thompson Sampling closes the loop: rules are selected based on learned effectiveness, and feedback updates the model.*
 
 ### Stage 1: Capture
 Document your work. Include the fuckups—they're the most valuable signal.
@@ -351,10 +360,11 @@ Available tools:
 | `buildlog_reject` | Mark false positives |
 | `buildlog_diff` | Rules pending review |
 | `buildlog_learn_from_review` | Extract rules from code review |
-| `buildlog_log_reward` | Record reward signal |
-| `buildlog_start_session` | Begin tracked experiment |
-| `buildlog_log_mistake` | Record mistake during session |
+| `buildlog_log_reward` | Record reward signal (updates bandit) |
+| `buildlog_start_session` | Begin tracked session (bandit selects rules) |
+| `buildlog_log_mistake` | Record mistake (negative feedback to bandit) |
 | `buildlog_experiment_report` | Full experiment report |
+| `buildlog_bandit_status` | View Thompson Sampling bandit state |
 | `buildlog_gauntlet_issues` | Report gauntlet findings, get next action |
 | `buildlog_gauntlet_accept_risk` | Accept remaining issues, optionally create GH issues |
 
@@ -425,28 +435,29 @@ For the technically curious:
 | **Confidence scoring** | Frequency + recency decay | ✅ Implemented |
 | **Semantic hashing** | Mistake deduplication for RMR | ✅ Implemented |
 | **Reward signals** | Binary feedback infrastructure | ✅ Implemented |
-| **Thompson Sampling** | Rule selection under uncertainty | ⏳ Planned (v0.8) |
-| **Beta-Bernoulli model** | Posterior updates from binary reward | ⏳ Planned (v0.8) |
-| **Contextual bandits** | Context-dependent rule selection | ⏳ Planned (v0.8) |
-| **Regret bounds** | O(√(KT log K)) theoretical guarantee | ⏳ Planned (v0.8) |
+| **Thompson Sampling** | Rule selection under uncertainty | ✅ Implemented (v0.8) |
+| **Beta-Bernoulli model** | Posterior updates from binary reward | ✅ Implemented (v0.8) |
+| **Contextual bandits** | Context-dependent rule selection | ✅ Implemented (v0.8) |
+| **Regret bounds** | O(√(KT log K)) theoretical guarantee | ✅ Follows from TS |
 
-We're not inventing new math. We're applying proven frameworks to a new domain. The infrastructure for reward collection is live; the bandit policy is the next milestone.
+We're not inventing new math. We're applying proven frameworks to a new domain. The bandit implementation serves as a **canonical example** of Thompson Sampling with Beta-Bernoulli distributions—heavily documented for educational purposes.
 
 ---
 
 ## Honest Limitations
 
-### Not Yet Implemented
+### Current Constraints
 
-- **Automatic rule selection**: Currently manual promotion; Thompson Sampling bandit planned for v0.8
-- **Context-aware surfacing**: Rules are surfaced globally, not based on task context
+- **Single context feature**: Currently only error_class; file type, task category coming
+- **CLI session commands**: Session management via MCP only (CLI exposure in progress)
+- **Batch attribution**: All selected rules get same reward (individual attribution TBD)
 
 ### Hard Problems We're Working On
 
 - **Credit assignment**: When multiple rules are active, which one helped?
 - **Non-stationarity**: Developer skill changes over time
-- **Cold start**: New rules have high uncertainty
-- **Context representation**: What features actually matter?
+- **Cold start**: New rules have high uncertainty (mitigated by seed-boosted priors)
+- **Context representation**: What features actually matter beyond error_class?
 
 These are hard problems. We have directional ideas, not solutions. If you're a researcher working on bandit algorithms or causal inference, we'd love to talk.
 

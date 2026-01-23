@@ -24,6 +24,7 @@ from buildlog.core.operations import (
     find_skills_by_ids,
     gauntlet_accept_risk,
     gauntlet_process_issues,
+    get_bandit_status,
     get_experiment_report,
     get_rewards,
     get_session_metrics,
@@ -71,6 +72,7 @@ __all__ = [
     "log_mistake",
     "get_session_metrics",
     "get_experiment_report",
+    "get_bandit_status",
     # Gauntlet loop operations
     "gauntlet_process_issues",
     "gauntlet_accept_risk",
