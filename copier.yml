@@ -20,10 +20,6 @@ update_claude_md:
   help: Add buildlog instructions to CLAUDE.md if it exists?
   default: true
 
-# Post-generation tasks
-_tasks:
-  - "{{ 'python3 post_gen.py' if update_claude_md else 'echo Skipping CLAUDE.md update' }}"
-
 _message_after_copy: |
   Build journal installed!
 

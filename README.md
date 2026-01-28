@@ -175,7 +175,8 @@ buildlog skills     # Deduplicate into rules
 Surface rules to your agent via CLAUDE.md, settings.json, or Agent Skills.
 
 ```bash
-buildlog promote --target skill
+buildlog status                          # See what's ready
+buildlog promote <skill-ids> --target skill  # Surface to agent
 ```
 
 ### Stage 4: Measure
@@ -294,18 +295,20 @@ buildlog experiment log-mistake \
 # End session
 buildlog experiment end
 
-# Get metrics
+# Get metrics for the current (or most recent) session
 buildlog experiment metrics
 
-# Full report across all sessions
+# Full report across ALL sessions (aggregate RMR, per-session breakdown)
 buildlog experiment report
 ```
+
+`metrics` shows a single session; `report` shows the full picture across all sessions.
 
 The report includes:
 - Total sessions, total mistakes
 - Repeat rate (RMR)
+- Per-session breakdown
 - Mistakes by error class
-- Rules that correlate with corrections
 
 This is the data you need to make claims.
 
@@ -314,10 +317,10 @@ This is the data you need to make claims.
 ## Quick Start
 
 ```bash
-# Install
-pip install buildlog
+# Install (use a venv or uv — PEP 668 blocks system-level installs)
+uv pip install buildlog   # or: pip install buildlog (inside a venv)
 
-# Initialize
+# Initialize (use --defaults for non-interactive environments)
 buildlog init
 
 # Create your first entry
@@ -371,7 +374,7 @@ Available tools:
 ### CLI Commands
 
 ```bash
-buildlog init                    # Initialize buildlog
+buildlog init                    # Initialize buildlog (--defaults for non-interactive)
 buildlog new <slug>              # Create entry
 buildlog list                    # List entries
 buildlog distill                 # Extract patterns
@@ -379,11 +382,18 @@ buildlog skills                  # Generate rules
 buildlog stats                   # Usage statistics
 buildlog reward <outcome>        # Log reward signal
 
+# Skill Management
+buildlog status                  # Show skills by category and confidence
+buildlog promote <ids> --target  # Promote skills to agent (claude_md, settings_json, skill)
+buildlog reject <ids>            # Mark false positives
+buildlog diff                    # Show skills pending review
+
 # Experiments
-buildlog experiment start        # Begin tracked session
-buildlog experiment log-mistake  # Record mistake
+buildlog experiment start        # Begin tracked session (bandit selects rules)
+buildlog experiment log-mistake  # Record mistake (--error-class, -d)
 buildlog experiment end          # End session
-buildlog experiment report       # Full report
+buildlog experiment metrics      # Single-session metrics
+buildlog experiment report       # Full report across all sessions
 
 # Review Gauntlet
 buildlog gauntlet list           # Show reviewers
@@ -484,7 +494,8 @@ We're especially interested in:
 ```bash
 git clone https://github.com/Peleke/buildlog-template
 cd buildlog-template
-pip install -e ".[dev]"
+uv venv && source .venv/bin/activate
+uv pip install -e ".[dev]"
 pytest
 ```
 
