@@ -12,20 +12,23 @@ These are [Marimo](https://marimo.io) notebooks: reactive Python notebooks that 
 
 ### 0. On Learning What Works
 
-**File:** `notebooks/00-the-problem.py` | [View rendered notebook](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.html){:target="_blank"}
+**File:** [`notebooks/00-the-problem.py`](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.py)
 
 The explore-exploit tradeoff, from first principles. Why do agents need to balance trying new things against sticking with what works? This notebook lets you simulate the tension directly — pull slot machine arms, watch regret accumulate, and build intuition for why naive strategies fail.
 
 Covers the same ground as [Tutorial 0: Background Concepts](00-background.md), but you're driving.
 
-!!! tip "Quick demo"
+!!! tip "Run it"
 
-    **View it now:** [Open the pre-rendered HTML](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.html){:target="_blank"} (static, read-only)
-
-    **Run it live:**
     ```bash
+    # Interactive — edit cells, drag sliders, watch outputs update
     uv run marimo edit notebooks/00-the-problem.py
+
+    # Read-only — runs the notebook without the editor UI
+    uv run marimo run notebooks/00-the-problem.py
     ```
+
+    A pre-rendered `00-the-problem.html` is also in the `notebooks/` directory — open it directly in any browser for offline viewing.
 
 ---
 
@@ -34,11 +37,11 @@ Covers the same ground as [Tutorial 0: Background Concepts](00-background.md), b
 ### Quick start
 
 ```bash
-# Interactive — edit cells, tweak params, watch outputs update
-uv run marimo edit notebooks/00-the-problem.py
+# Clone the repo
+git clone https://github.com/Peleke/buildlog-template && cd buildlog-template
 
-# Read-only — runs the notebook without the editor UI
-uv run marimo run notebooks/00-the-problem.py
+# Run any notebook interactively
+uv run marimo edit notebooks/00-the-problem.py
 ```
 
 ### Dependencies
@@ -60,7 +63,7 @@ Each notebook has a pre-rendered `.html` export in the `notebooks/` directory fo
 
 | Notebook | Tutorial | What you'll learn |
 |----------|----------|-------------------|
-| [`00-the-problem.py`](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.html) | [Background Concepts](00-background.md) | Explore-exploit tradeoff, why naive strategies fail |
+| [`00-the-problem.py`](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.py) | [Background Concepts](00-background.md) | Explore-exploit tradeoff, why naive strategies fail |
 | *coming soon* | [Beta Distribution](01-beta-distribution.md) | Shape of uncertainty, how beliefs update |
 | *coming soon* | [Bayesian Updates](02-bayesian-updates.md) | Prior → evidence → posterior, live |
 | *coming soon* | [Thompson Sampling](03-thompson-sampling.md) | The algorithm buildlog actually uses |
