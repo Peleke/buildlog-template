@@ -12,7 +12,7 @@ These are [Marimo](https://marimo.io) notebooks: reactive Python notebooks that 
 
 ### 0. On Learning What Works
 
-**File:** [`notebooks/00-the-problem.py`](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.py)
+**File:** `notebooks/00-the-problem.py` | [View rendered notebook](../notebooks/00-the-problem.md)
 
 The explore-exploit tradeoff, from first principles. Why do agents need to balance trying new things against sticking with what works? This notebook lets you simulate the tension directly — pull slot machine arms, watch regret accumulate, and build intuition for why naive strategies fail.
 
@@ -20,15 +20,12 @@ Covers the same ground as [Tutorial 0: Background Concepts](00-background.md), b
 
 !!! tip "Run it"
 
+    **[View the rendered notebook](../notebooks/00-the-problem.md)** — the full Marimo output, right in the docs.
+
+    **Run it live** (interactive, with sliders and editable cells):
     ```bash
-    # Interactive — edit cells, drag sliders, watch outputs update
     uv run marimo edit notebooks/00-the-problem.py
-
-    # Read-only — runs the notebook without the editor UI
-    uv run marimo run notebooks/00-the-problem.py
     ```
-
-    A pre-rendered `00-the-problem.html` is also in the `notebooks/` directory — open it directly in any browser for offline viewing.
 
 ---
 
@@ -63,7 +60,7 @@ Each notebook has a pre-rendered `.html` export in the `notebooks/` directory fo
 
 | Notebook | Tutorial | What you'll learn |
 |----------|----------|-------------------|
-| [`00-the-problem.py`](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.py) | [Background Concepts](00-background.md) | Explore-exploit tradeoff, why naive strategies fail |
+| [`00-the-problem.py`](../notebooks/00-the-problem.md) | [Background Concepts](00-background.md) | Explore-exploit tradeoff, why naive strategies fail |
 | *coming soon* | [Beta Distribution](01-beta-distribution.md) | Shape of uncertainty, how beliefs update |
 | *coming soon* | [Bayesian Updates](02-bayesian-updates.md) | Prior → evidence → posterior, live |
 | *coming soon* | [Thompson Sampling](03-thompson-sampling.md) | The algorithm buildlog actually uses |

@@ -75,6 +75,8 @@ nav:
     - Thompson Sampling: theory/03-thompson-sampling.md
     - Contextual Bandits: theory/04-contextual-bandits.md
     - Interactive Notebooks: theory/notebooks.md
+  - Notebooks:
+    - "On Learning What Works": notebooks/00-the-problem.md
   - Development:
     - Contributing: development/contributing.md
   - Philosophy: philosophy.md
