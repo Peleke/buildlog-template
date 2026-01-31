@@ -12,11 +12,20 @@ These are [Marimo](https://marimo.io) notebooks: reactive Python notebooks that 
 
 ### 0. On Learning What Works
 
-**File:** `notebooks/00-the-problem.py`
+**File:** `notebooks/00-the-problem.py` | [View rendered notebook](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.html){:target="_blank"}
 
 The explore-exploit tradeoff, from first principles. Why do agents need to balance trying new things against sticking with what works? This notebook lets you simulate the tension directly — pull slot machine arms, watch regret accumulate, and build intuition for why naive strategies fail.
 
 Covers the same ground as [Tutorial 0: Background Concepts](00-background.md), but you're driving.
+
+!!! tip "Quick demo"
+
+    **View it now:** [Open the pre-rendered HTML](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.html){:target="_blank"} (static, read-only)
+
+    **Run it live:**
+    ```bash
+    uv run marimo edit notebooks/00-the-problem.py
+    ```
 
 ---
 
@@ -25,11 +34,12 @@ Covers the same ground as [Tutorial 0: Background Concepts](00-background.md), b
 ### Quick start
 
 ```bash
-# From the project root
+# Interactive — edit cells, tweak params, watch outputs update
 uv run marimo edit notebooks/00-the-problem.py
-```
 
-This opens the notebook in your browser with a live Python kernel. Edit any cell and everything downstream updates automatically.
+# Read-only — runs the notebook without the editor UI
+uv run marimo run notebooks/00-the-problem.py
+```
 
 ### Dependencies
 
@@ -40,15 +50,9 @@ The notebooks declare their own dependencies via [PEP 723 inline metadata](https
 uv add --group dev marimo
 ```
 
-### Read-only mode
+### Pre-rendered HTML
 
-If you just want to read without editing:
-
-```bash
-uv run marimo run notebooks/00-the-problem.py
-```
-
-A pre-rendered HTML export is also available at `notebooks/00-the-problem.html` for offline viewing.
+Each notebook has a pre-rendered `.html` export in the `notebooks/` directory for offline viewing or quick demos. These are self-contained — no server needed, just open in a browser.
 
 ---
 
@@ -56,7 +60,7 @@ A pre-rendered HTML export is also available at `notebooks/00-the-problem.html` 
 
 | Notebook | Tutorial | What you'll learn |
 |----------|----------|-------------------|
-| `00-the-problem.py` | [Background Concepts](00-background.md) | Explore-exploit tradeoff, why naive strategies fail |
+| [`00-the-problem.py`](https://github.com/Peleke/buildlog-template/blob/main/notebooks/00-the-problem.html) | [Background Concepts](00-background.md) | Explore-exploit tradeoff, why naive strategies fail |
 | *coming soon* | [Beta Distribution](01-beta-distribution.md) | Shape of uncertainty, how beliefs update |
 | *coming soon* | [Bayesian Updates](02-bayesian-updates.md) | Prior → evidence → posterior, live |
 | *coming soon* | [Thompson Sampling](03-thompson-sampling.md) | The algorithm buildlog actually uses |
