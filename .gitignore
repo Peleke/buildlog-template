@@ -52,3 +52,4 @@ sketches/
 
 # buildlog runtime data (in project root, not in src/)
 buildlog/.buildlog/
+site/
