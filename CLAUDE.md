@@ -1,13 +1,15 @@
 # buildlog Development Guidelines
 
-## Learned Rules (auto-generated 2026-01-22)
+<!-- buildlog:rules:start -->
+
+## Learned Rules (buildlog, updated 2026-01-31)
 
 ### Architectural
 
 - Always define interfaces before implementations
 
-## Learned Rules (auto-generated 2026-01-22)
+### Security
 
-### Architectural
+- Always validate parsed dates are within valid ranges
 
-- Always define interfaces before implementations
+<!-- buildlog:rules:end -->

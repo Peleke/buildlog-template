@@ -84,3 +84,29 @@ The agent-as-auditor pattern was the most valuable discovery. Having an AI read 
 2. **Accept `available_rules`**: The coupling fix that makes the engine truly agent-agnostic
 3. **Registry pattern for renderers**: `RENDERERS` dict means adding a new agent is one import + one dict entry
 4. **Empty extras**: `pip install buildlog[engine]` is documentation, not dependency management
+
+---
+
+### Phase 4: Documentation Migration
+
+**Date:** 2026-01-30
+
+Migrated from a 520-line README that tried to be everything (landing page, tutorial, reference, philosophy manifesto) to a proper MkDocs Material docs site with the README slimmed to ~90 lines.
+
+**What we did:**
+- Set up MkDocs Material with tabs nav, mermaid support, code copy, dark/light toggle, MathJax
+- Extracted README sections into 11 focused docs pages across getting-started/, guides/, theory/, development/, and philosophy
+- Moved the 5 Thompson Sampling tutorials from docs/tutorials/ to docs/theory/ for the new nav structure
+- Created GitHub Actions workflow for automatic deployment to GitHub Pages on push to main
+- Slimmed README to hero + badges + 2-paragraph pitch + features list + quick start + docs table
+
+**Decisions:**
+- **GitHub Pages over ReadTheDocs** — already using GH Actions, no extra account, faster setup
+- **Manual reference docs over mkdocstrings** — the engine is ~5 files, auto-gen adds complexity without proportional value
+- **Move tutorials, don't rewrite** — they were already well-written with runnable code examples
+- **No API auto-gen yet** — can add mkdocstrings later if the engine surface area grows
+
+**Mistakes:**
+- None yet — this was a straightforward content migration. The hardest part was deciding what to keep in the README vs what to move.
+
+**Meta-observation:** This is buildlog tracking the process of building buildlog's documentation. The dogfooding continues to be the most useful pattern — writing about what you're doing forces you to notice the decisions you're making implicitly.
