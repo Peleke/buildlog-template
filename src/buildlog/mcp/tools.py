@@ -12,6 +12,7 @@ from typing import Literal
 from buildlog.core import (
     diff,
     end_session,
+    get_bandit_status,
     get_experiment_report,
     get_rewards,
     get_session_metrics,
@@ -52,17 +53,17 @@ def buildlog_status(
 
 def buildlog_promote(
     skill_ids: list[str],
-    target: Literal["claude_md", "settings_json", "skill"] = "claude_md",
+    target: str = "claude_md",
     buildlog_dir: str = "buildlog",
 ) -> dict:
     """Promote skills to your agent's rules.
 
-    Writes selected skills to CLAUDE.md, .claude/settings.json, or
-    .claude/skills/buildlog-learned/SKILL.md (Anthropic Agent Skills format).
+    Writes selected skills to agent-specific rule files.
 
     Args:
         skill_ids: List of skill IDs to promote (e.g., ["arch-b0fcb62a1e"])
-        target: Where to write rules ("claude_md", "settings_json", or "skill")
+        target: Where to write rules. One of: claude_md, settings_json,
+            skill, cursor, copilot, windsurf, continue_dev.
         buildlog_dir: Path to buildlog directory
 
     Returns:
@@ -262,36 +263,47 @@ def buildlog_rewards(
 # -----------------------------------------------------------------------------
 
 
-def buildlog_start_session(
+def buildlog_experiment_start(
     error_class: str | None = None,
     notes: str | None = None,
+    select_k: int = 3,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Start a new experiment session.
+    """Start a new experiment session with Thompson Sampling rule selection.
 
-    Begins tracking for a learning experiment. Captures the current
-    set of active rules to measure learning over time.
+    Begins tracking for a learning experiment. Uses Thompson Sampling
+    to select which rules will be "active" for this session based on
+    the error class context.
+
+    The selected rules will receive feedback:
+    - Negative feedback (reward=0) when log_mistake() is called
+    - Explicit feedback when log_reward() is called
+
+    This teaches the bandit which rules are effective for which contexts.
 
     Args:
-        error_class: Error class being targeted (e.g., "missing_test")
+        error_class: Error class being targeted (e.g., "missing_test").
+                    This is the CONTEXT for contextual bandits.
         notes: Notes about this session
+        select_k: Number of rules to select via Thompson Sampling
         buildlog_dir: Path to buildlog directory
 
     Returns:
-        Dict with session_id, error_class, rules_count, message
+        Dict with session_id, error_class, rules_count, selected_rules, message
 
     Example:
-        buildlog_start_session(error_class="missing_test")
+        buildlog_start_session(error_class="type-errors", select_k=5)
     """
     result = start_session(
         Path(buildlog_dir),
         error_class=error_class,
         notes=notes,
+        select_k=select_k,
     )
     return asdict(result)
 
 
-def buildlog_end_session(
+def buildlog_experiment_end(
     entry_file: str | None = None,
     notes: str | None = None,
     buildlog_dir: str = "buildlog",
@@ -358,7 +370,7 @@ def buildlog_log_mistake(
     return asdict(result)
 
 
-def buildlog_session_metrics(
+def buildlog_experiment_metrics(
     session_id: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
@@ -405,6 +417,42 @@ def buildlog_experiment_report(
         buildlog_experiment_report()
     """
     return get_experiment_report(Path(buildlog_dir))
+
+
+def buildlog_bandit_status(
+    buildlog_dir: str = "buildlog",
+    context: str | None = None,
+    top_k: int = 10,
+) -> dict:
+    """Get Thompson Sampling bandit status and rule rankings.
+
+    Shows the bandit's learned beliefs about which rules are effective
+    for each error class context. Higher mean = bandit believes rule
+    is more effective.
+
+    The bandit uses Beta distributions to model uncertainty:
+    - High variance (wide CI) = uncertain, will explore more
+    - Low variance (narrow CI) = confident, will exploit
+
+    Args:
+        buildlog_dir: Path to buildlog directory
+        context: Specific error class to filter by (optional)
+        top_k: Number of top rules to show per context
+
+    Returns:
+        Dict with:
+            - summary: Total contexts, arms, observations
+            - top_rules: Best rules per context by expected value
+            - all_rules: Full stats if filtering by context
+
+    Example:
+        # See all bandit state
+        buildlog_bandit_status()
+
+        # See state for specific error class
+        buildlog_bandit_status(context="type-errors")
+    """
+    return get_bandit_status(Path(buildlog_dir), context, top_k)
 
 
 # -----------------------------------------------------------------------------

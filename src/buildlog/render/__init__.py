@@ -7,8 +7,12 @@ from typing import TYPE_CHECKING, Literal
 
 from buildlog.render.base import RenderTarget
 from buildlog.render.claude_md import ClaudeMdRenderer
+from buildlog.render.continue_dev import ContinueRenderer
+from buildlog.render.copilot import CopilotRenderer
+from buildlog.render.cursor import CursorRenderer
 from buildlog.render.settings_json import SettingsJsonRenderer
 from buildlog.render.skill import SkillRenderer
+from buildlog.render.windsurf import WindsurfRenderer
 
 if TYPE_CHECKING:
     from typing import Any
@@ -18,8 +22,13 @@ __all__ = [
     "ClaudeMdRenderer",
     "SettingsJsonRenderer",
     "SkillRenderer",
+    "CursorRenderer",
+    "CopilotRenderer",
+    "WindsurfRenderer",
+    "ContinueRenderer",
     "get_renderer",
     "RENDERERS",
+    "RENDER_TARGETS",
 ]
 
 # Registry of available renderers
@@ -28,18 +37,26 @@ RENDERERS: dict[str, type[RenderTarget]] = {
     "claude_md": ClaudeMdRenderer,
     "settings_json": SettingsJsonRenderer,
     "skill": SkillRenderer,
+    "cursor": CursorRenderer,
+    "copilot": CopilotRenderer,
+    "windsurf": WindsurfRenderer,
+    "continue_dev": ContinueRenderer,
 }
+
+# Valid target names (useful for CLI choices and type hints)
+RENDER_TARGETS = list(RENDERERS.keys())
 
 
 def get_renderer(
-    target: Literal["claude_md", "settings_json", "skill"],
+    target: str,
     path: Path | None = None,
     **kwargs: Any,
 ) -> RenderTarget:
     """Get renderer for target.
 
     Args:
-        target: Target format - "claude_md", "settings_json", or "skill".
+        target: Target format - one of: claude_md, settings_json, skill,
+            cursor, copilot, windsurf, continue_dev.
         path: Optional custom path for the target file.
         **kwargs: Additional arguments passed to the renderer constructor.
             Common kwargs (accepted by all renderers):

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from buildlog.confidence import ConfidenceMetrics, merge_confidence_metrics
+from buildlog.core.bandit import ThompsonSamplingBandit
 from buildlog.render import get_renderer
 from buildlog.skills import Skill, SkillSet, generate_skills
 
@@ -52,6 +53,7 @@ __all__ = [
     "log_mistake",
     "get_session_metrics",
     "get_experiment_report",
+    "get_bandit_status",
     # Gauntlet loop operations
     "gauntlet_process_issues",
     "gauntlet_accept_risk",
@@ -558,7 +560,7 @@ def status(
 def promote(
     buildlog_dir: Path,
     skill_ids: list[str],
-    target: Literal["claude_md", "settings_json", "skill"] = "claude_md",
+    target: str = "claude_md",
     target_path: Path | None = None,
 ) -> PromoteResult:
     """Promote skills to agent rules.
@@ -566,7 +568,8 @@ def promote(
     Args:
         buildlog_dir: Path to buildlog directory.
         skill_ids: List of skill IDs to promote.
-        target: Where to write rules ("claude_md", "settings_json", or "skill").
+        target: Where to write rules. One of: claude_md, settings_json,
+            skill, cursor, copilot, windsurf, continue_dev.
         target_path: Optional custom path for the target file.
 
     Returns:
@@ -938,14 +941,27 @@ def log_reward(
 ) -> LogRewardResult:
     """Log a reward event for bandit learning.
 
-    Appends to reward_events.jsonl for later analysis.
+    This is where the bandit learns from EXPLICIT feedback:
+
+    The reward signal comes from the outcome:
+        - accepted (reward=1.0): Rules helped produce good output
+        - rejected (reward=0.0): Rules failed to prevent bad output
+        - revision (reward=1-distance): Partial credit based on correction needed
+
+    Unlike log_mistake() which gives implicit negative feedback, this allows
+    direct positive feedback when rules DO help. This is crucial for learning
+    which rules are genuinely effective, not just which ones don't fail.
+
+    Appends to reward_events.jsonl for analysis AND updates the bandit.
 
     Args:
         buildlog_dir: Path to buildlog directory.
         outcome: Type of feedback (accepted/revision/rejected).
         rules_active: List of rule IDs that were in context.
+                     If None, tries to use session's selected_rules.
         revision_distance: How much correction was needed (0-1, for revisions).
         error_class: Category of error if applicable.
+                    If None, tries to use session's error_class.
         notes: Optional notes about the feedback.
         source: Where this feedback came from.
 
@@ -955,6 +971,15 @@ def log_reward(
     now = datetime.now(timezone.utc)
     reward_id = _generate_reward_id(outcome, now)
     reward_value = _compute_reward_value(outcome, revision_distance)
+
+    # Try to get rules and context from active session if not provided
+    active_path = _get_active_session_path(buildlog_dir)
+    if active_path.exists():
+        session_data = json.loads(active_path.read_text())
+        if rules_active is None:
+            rules_active = session_data.get("selected_rules", [])
+        if error_class is None:
+            error_class = session_data.get("error_class")
 
     event = RewardEvent(
         id=reward_id,
@@ -975,6 +1000,32 @@ def log_reward(
     with open(rewards_path, "a") as f:
         f.write(json.dumps(event.to_dict()) + "\n")
 
+    # =========================================================================
+    # BANDIT LEARNING: Update with explicit reward
+    # =========================================================================
+    #
+    # For accepted (reward=1): Beta(α, β) → Beta(α + 1, β)
+    #   → Distribution shifts RIGHT, increasing expected value
+    #   → Rule becomes MORE likely to be selected
+    #
+    # For rejected (reward=0): Beta(α, β) → Beta(α, β + 1)
+    #   → Distribution shifts LEFT, decreasing expected value
+    #   → Rule becomes LESS likely to be selected
+    #
+    # For revision (0 < reward < 1): Both α and β increase proportionally
+    #   → Distribution narrows (more confident) with moderate expected value
+    # =========================================================================
+
+    if rules_active:
+        bandit_path = buildlog_dir / "bandit_state.jsonl"
+        bandit = ThompsonSamplingBandit(bandit_path)
+
+        bandit.batch_update(
+            rule_ids=rules_active,
+            reward=reward_value,
+            context=error_class or "general",
+        )
+
     # Count total events
     total_events = 0
     if rewards_path.exists():
@@ -982,11 +1033,16 @@ def log_reward(
             1 for line in rewards_path.read_text().strip().split("\n") if line
         )
 
+    rules_count = len(rules_active) if rules_active else 0
+    message = f"Logged {outcome} (reward={reward_value:.2f})"
+    if rules_count > 0:
+        message += f" | Updated bandit: {rules_count} rules"
+
     return LogRewardResult(
         reward_id=reward_id,
         reward_value=reward_value,
         total_events=total_events,
-        message=f"Logged {outcome} (reward={reward_value:.2f})",
+        message=message,
     )
 
 
@@ -1061,6 +1117,7 @@ class SessionDict(TypedDict, total=False):
     entry_file: str | None
     rules_at_start: list[str]
     rules_at_end: list[str]
+    selected_rules: list[str]  # Bandit-selected subset for this session
     error_class: str | None
     notes: str | None
 
@@ -1070,15 +1127,17 @@ class Session:
     """A coding session for experiment tracking.
 
     Tracks the state of rules before and after a session to measure
-    learning effectiveness.
+    learning effectiveness. The bandit selects a subset of rules
+    (selected_rules) to be "active" for this session based on context.
 
     Attributes:
         id: Unique identifier for this session.
         started_at: When the session started.
         ended_at: When the session ended (None if still active).
         entry_file: Corresponding buildlog entry file, if any.
-        rules_at_start: Rule IDs active at session start.
-        rules_at_end: Rule IDs active at session end.
+        rules_at_start: All rule IDs available at session start.
+        rules_at_end: All rule IDs available at session end.
+        selected_rules: Bandit-selected subset active for this session.
         error_class: Error class being targeted (e.g., "missing_test").
         notes: Optional notes about the session.
     """
@@ -1089,6 +1148,7 @@ class Session:
     entry_file: str | None = None
     rules_at_start: list[str] = field(default_factory=list)
     rules_at_end: list[str] = field(default_factory=list)
+    selected_rules: list[str] = field(default_factory=list)
     error_class: str | None = None
     notes: str | None = None
 
@@ -1101,6 +1161,8 @@ class Session:
             "rules_at_start": self.rules_at_start,
             "rules_at_end": self.rules_at_end,
         }
+        if self.selected_rules:
+            result["selected_rules"] = self.selected_rules
         if self.entry_file is not None:
             result["entry_file"] = self.entry_file
         if self.error_class is not None:
@@ -1130,6 +1192,7 @@ class Session:
             entry_file=data.get("entry_file"),
             rules_at_start=data.get("rules_at_start", []),
             rules_at_end=data.get("rules_at_end", []),
+            selected_rules=data.get("selected_rules", []),
             error_class=data.get("error_class"),
             notes=data.get("notes"),
         )
@@ -1233,11 +1296,15 @@ class SessionMetrics:
 
 @dataclass
 class StartSessionResult:
-    """Result of starting a new session."""
+    """Result of starting a new session.
+
+    Includes both the full rule set and the bandit-selected subset.
+    """
 
     session_id: str
     error_class: str | None
     rules_count: int
+    selected_rules: list[str]  # Bandit-selected rules for this session
     message: str
 
 
@@ -1316,6 +1383,31 @@ def _get_current_rules(buildlog_dir: Path) -> list[str]:
     return list(_load_json_set(promoted_path, "skill_ids"))
 
 
+def _get_seed_rule_ids(buildlog_dir: Path) -> set[str]:
+    """Get IDs of rules that come from seed personas.
+
+    Seed rules (from gauntlet personas like Test Terrorist, Security Karen)
+    have non-empty persona_tags. These rules get boosted priors in the
+    bandit because they represent curated, expert knowledge.
+
+    Returns:
+        Set of rule IDs that have persona_tags.
+    """
+    try:
+        skill_set = generate_skills(buildlog_dir)
+        seed_ids: set[str] = set()
+
+        for category_skills in skill_set.skills.values():
+            for skill in category_skills:
+                if skill.persona_tags:  # Non-empty means it's from a seed
+                    seed_ids.add(skill.id)
+
+        return seed_ids
+    except Exception:
+        # If skill generation fails, treat no rules as seeds
+        return set()
+
+
 def _load_sessions(buildlog_dir: Path) -> list[Session]:
     """Load all sessions from JSONL file."""
     sessions_path = _get_sessions_path(buildlog_dir)
@@ -1389,25 +1481,78 @@ def start_session(
     buildlog_dir: Path,
     error_class: str | None = None,
     notes: str | None = None,
+    select_k: int = 3,
 ) -> StartSessionResult:
-    """Start a new experiment session.
+    """Start a new experiment session with bandit-selected rules.
+
+    This is where Thompson Sampling kicks in:
+
+    1. Load all available rules (candidates)
+    2. Identify which rules are from seeds (get boosted priors)
+    3. Use bandit to select top-k rules for this error_class context
+    4. Store selected rules in session for later attribution
+
+    The selected rules are the ones "active" for this session. When a
+    mistake occurs, we'll give negative feedback to these rules (they
+    didn't prevent the mistake). This teaches the bandit which rules
+    are effective for which error classes.
 
     Args:
         buildlog_dir: Path to buildlog directory.
         error_class: Error class being targeted (e.g., "missing_test").
+                    This is the CONTEXT for contextual bandits - rules
+                    are evaluated per-context.
         notes: Optional notes about the session.
+        select_k: Number of rules to select via Thompson Sampling.
+                 Default 3 balances coverage with attribution clarity.
 
     Returns:
-        StartSessionResult with session ID and current rules count.
+        StartSessionResult with session ID, rules count, and selected rules.
     """
     now = datetime.now(timezone.utc)
     session_id = _generate_session_id(now)
     current_rules = _get_current_rules(buildlog_dir)
 
+    # =========================================================================
+    # THOMPSON SAMPLING: Select rules for this session
+    # =========================================================================
+    #
+    # The bandit maintains a Beta distribution for each (context, rule) pair.
+    # At session start, we SAMPLE from each distribution and pick the top-k.
+    #
+    # Why sample instead of using the mean?
+    #   - Arms we're uncertain about have high variance
+    #   - High variance means occasional high samples
+    #   - This causes us to explore uncertain arms
+    #   - As we gather data, variance shrinks, and we exploit
+    #
+    # This is the elegant explore-exploit balance of Thompson Sampling.
+    # =========================================================================
+
+    selected_rules: list[str] = []
+
+    if current_rules:
+        # Initialize bandit
+        bandit_path = buildlog_dir / "bandit_state.jsonl"
+        bandit = ThompsonSamplingBandit(bandit_path)
+
+        # Identify seed rules (those with persona_tags from gauntlet)
+        # Seeds get boosted priors - we believe curated rules are good
+        seed_rule_ids = _get_seed_rule_ids(buildlog_dir)
+
+        # SELECT: Sample from Beta distributions, pick top-k
+        selected_rules = bandit.select(
+            candidates=current_rules,
+            context=error_class or "general",
+            k=min(select_k, len(current_rules)),
+            seed_rule_ids=seed_rule_ids,
+        )
+
     session = Session(
         id=session_id,
         started_at=now,
         rules_at_start=current_rules,
+        selected_rules=selected_rules,
         error_class=error_class,
         notes=notes,
     )
@@ -1421,7 +1566,11 @@ def start_session(
         session_id=session_id,
         error_class=error_class,
         rules_count=len(current_rules),
-        message=f"Started session {session_id} with {len(current_rules)} active rules",
+        selected_rules=selected_rules,
+        message=(
+            f"Started session {session_id}: selected {len(selected_rules)}/"
+            f"{len(current_rules)} rules via Thompson Sampling"
+        ),
     )
 
 
@@ -1493,6 +1642,16 @@ def log_mistake(
 ) -> LogMistakeResult:
     """Log a mistake during an experiment session.
 
+    This is where the bandit learns from NEGATIVE feedback:
+
+    When a mistake occurs, the selected rules for this session FAILED
+    to prevent it. We update the bandit with reward=0 for each selected
+    rule, teaching it that these rules aren't effective for this context.
+
+    Over time, rules that consistently fail to prevent mistakes will
+    have their Beta distributions shift left (lower expected value),
+    and the bandit will stop selecting them.
+
     Args:
         buildlog_dir: Path to buildlog directory.
         error_class: Category of error (e.g., "missing_test").
@@ -1539,9 +1698,39 @@ def log_mistake(
     with open(mistakes_path, "a") as f:
         f.write(json.dumps(mistake.to_dict()) + "\n")
 
+    # =========================================================================
+    # BANDIT LEARNING: Negative feedback for selected rules
+    # =========================================================================
+    #
+    # The selected rules were supposed to help prevent mistakes. A mistake
+    # occurred anyway, so we give them reward=0 (failure).
+    #
+    # Bayesian update: Beta(α, β) → Beta(α + 0, β + 1) = Beta(α, β + 1)
+    #
+    # This shifts the distribution LEFT, decreasing the expected value.
+    # Rules that repeatedly fail will become less likely to be selected.
+    # =========================================================================
+
+    selected_rules = session_data.get("selected_rules", [])
+    if selected_rules:
+        bandit_path = buildlog_dir / "bandit_state.jsonl"
+        bandit = ThompsonSamplingBandit(bandit_path)
+
+        # Use session's error_class as context, not the mistake's
+        # (they should match, but session context is authoritative)
+        context = session_data.get("error_class") or "general"
+
+        bandit.batch_update(
+            rule_ids=selected_rules,
+            reward=0.0,  # Failure: rules didn't prevent mistake
+            context=context,
+        )
+
     message = f"Logged mistake: {error_class}"
     if similar:
         message += f" (REPEAT of {similar.id})"
+    if selected_rules:
+        message += f" | Updated bandit: {len(selected_rules)} rules got reward=0"
 
     return LogMistakeResult(
         mistake_id=mistake_id,
@@ -1657,6 +1846,71 @@ def get_experiment_report(buildlog_dir: Path) -> dict:
         },
         "sessions": session_metrics,
         "error_classes": error_classes,
+    }
+
+
+def get_bandit_status(
+    buildlog_dir: Path,
+    context: str | None = None,
+    top_k: int = 10,
+) -> dict:
+    """Get current bandit state and statistics.
+
+    Provides insight into the Thompson Sampling bandit's learned beliefs.
+    Useful for debugging and understanding which rules are being favored.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        context: Specific error class to show. If None, shows all contexts.
+        top_k: Number of top rules to show per context.
+
+    Returns:
+        Dictionary with:
+            - summary: Overall bandit statistics
+            - contexts: Per-context rule rankings
+            - top_rules: Top rules by expected value per context
+    """
+    bandit_path = buildlog_dir / "bandit_state.jsonl"
+    bandit = ThompsonSamplingBandit(bandit_path)
+
+    stats = bandit.get_stats(context)
+
+    # Group stats by context
+    contexts: dict[str, list[dict]] = {}
+    for key, rule_stats in stats.items():
+        ctx = rule_stats["context"]
+        if ctx not in contexts:
+            contexts[ctx] = []
+        contexts[ctx].append(
+            {
+                "rule_id": key.split(":")[-1] if ":" in key else key,
+                **{k: v for k, v in rule_stats.items() if k != "context"},
+            }
+        )
+
+    # Sort by mean (descending) and take top_k
+    top_rules: dict[str, list[dict]] = {}
+    for ctx, rules in contexts.items():
+        sorted_rules = sorted(rules, key=lambda x: x["mean"], reverse=True)
+        top_rules[ctx] = sorted_rules[:top_k]
+
+    # Summary stats
+    total_arms = sum(len(rules) for rules in contexts.values())
+    total_observations = sum(
+        rule.get("total_observations", 0)
+        for rules in contexts.values()
+        for rule in rules
+    )
+
+    return {
+        "summary": {
+            "total_contexts": len(contexts),
+            "total_arms": total_arms,
+            "total_observations": total_observations,
+            "state_file": str(bandit_path),
+        },
+        "top_rules": top_rules,
+        "all_rules": contexts if context else None,  # Only include all if filtering
     }
 
 

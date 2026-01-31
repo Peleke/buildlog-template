@@ -52,3 +52,5 @@ sketches/
 
 # buildlog runtime data (in project root, not in src/)
 buildlog/.buildlog/
+buildlog/bandit_state.jsonl
+site/

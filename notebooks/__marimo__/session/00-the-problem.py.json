@@ -1,0 +1,391 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.19.5"
+  },
+  "cells": [
+    {
+      "id": "MJUe",
+      "code_hash": "db20a208c323c87d1dc7a651009f6528",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"on-learning-what-works\">On Learning What Works</h1>\n<span class=\"paragraph\"><strong>Time</strong>: ~30-40 minutes | <strong>Prerequisites</strong>: Basic Python, curiosity about how learning happens, allergy to </span>\n<hr />\n<span class=\"paragraph\">There is a beautiful tension at the heart of learning itself.</span>\n<span class=\"paragraph\">To improve, you must try new things\u2014venture into unknown territory, risk failure, gather\ninformation about what you don't yet understand. But to <em>perform well</em>, you must exploit what\nyou already know\u2014stick with what works, avoid costly mistakes, capitalize on hard-won knowledge.</span>\n<span class=\"paragraph\">Every teacher faces this tension. Every scientist faces it. Every organism that has ever\nadapted to an environment faces it. The question\u2014how to balance exploration against\nexploitation\u2014sounds philosophical, and it is. But it also admits a precise mathematical\ntreatment, one that has been discovered and rediscovered independently by statisticians,\neconomists, psychologists, and machine learning researchers over the past century.</span>\n<span class=\"paragraph\">I find this convergence remarkable. When thinkers from different traditions, asking different\nquestions, arrive at the same mathematical structure, it suggests we've touched something real\u2014\nsome genuine feature of how learning must work in an uncertain world.</span>\n<span class=\"paragraph\">The algorithm we'll build today, <strong>Thompson Sampling</strong>, is perhaps the most elegant solution\nto this problem ever devised. It was published in 1933 by William R. Thompson, a statistician\nworking on clinical trials, and then largely forgotten for decades. Rediscovered in the 2010s\nby the machine learning community, it has since proven optimal or near-optimal across an\nextraordinary range of problems. The same mathematical idea that helps doctors allocate\npatients to treatments now helps Netflix recommend movies, helps ad platforms allocate\nimpressions, and\u2014as we'll see\u2014can help AI coding assistants learn which suggestions actually\nhelp their users.</span>\n<span class=\"paragraph\">What strikes me most about Thompson Sampling is its <em>philosophical</em> elegance, not just its\nmathematical elegance. Most approaches to the exploration-exploitation tradeoff require you\nto explicitly balance two competing objectives: gather information vs. maximize reward. You\nend up with tuning parameters, exploration bonuses, decaying schedules. Thompson Sampling\nsidesteps all of this. It says: <em>just sample your uncertainty, then act as if the sample\nwere true</em>. That's it. Exploration emerges naturally from the width of your uncertainty.\nAs you learn, uncertainty shrinks, exploitation dominates, and you never had to tune anything.</span>\n<span class=\"paragraph\">There's a lesson here that extends beyond algorithms: sometimes the right way to handle\nuncertainty isn't to fight it or schedule around it, but to <em>embrace it as information</em>.\nYour uncertainty about the world <em>is</em> knowledge\u2014knowledge about what you don't know. Acting\non samples from that uncertainty turns ignorance into exploration, automatically, elegantly,\nwithout any explicit planning.</span>\n<hr />\n<h2 id=\"the-concrete-problem-and-the-larger-question\">The Concrete Problem (And the Larger Question)</h2>\n<span class=\"paragraph\">But I've gotten ahead of myself. Let me ground this in something specific\u2014and then zoom\nback out, because the specific case opens onto a much larger question.</span>\n<span class=\"paragraph\"><strong>The immediate problem:</strong> You're pair programming with an AI assistant. It suggests a\npattern. You reject it\u2014<em>that's not how we do things here</em>. Five minutes later, it suggests\nthe same thing. The AI isn't stupid. It's <strong>stuck</strong>. It has no mechanism to learn from\nyour corrections. Every session starts fresh.</span>\n<span class=\"paragraph\">And the \"solutions\" currently on offer? I find them almost comically inadequate.</span>\n<span class=\"paragraph\">December 2025: Sequoia publishes \"AGI is 2030s, at earliest.\" January 2026\u201443 days later\u2014they\npublish \"This is AGI\" and write a check at a $350 billion valuation. What changed? Not the\ntechnology. The narrative.</span>\n<span class=\"paragraph\">Go read the code these narratives are built on. CrewAI's \"human feedback\" is flow control:\n<code>if feedback == \"approved\": route_here()</code>. Agno's \"memory\" is CRUD: get, add, update, delete.\nThat's not learning. That's a key-value store with a marketing team.</span>\n<span class=\"paragraph\">Where is the uncertainty quantification? Where are the feedback loops that update beliefs?\nWhere is the mechanism that says \"this rule helped, surface it again\" or \"this pattern keeps\nfailing, deprioritize it\"? Nowhere. The entire industry is building agentic systems that\ncannot learn from their own mistakes\u2014and calling it progress.</span>\n<span class=\"paragraph\">And the problem? You. You let them.</span>\n<ul>\n<li>\"Our agents have memory\" \u2014 <em>it's a database with get/set</em></li>\n<li>\"Human-in-the-loop learning\" \u2014 <em>it's an if-statement with a modal</em></li>\n<li>\"Continuous improvement through evals\" \u2014 <em>evals measure; they don't teach</em></li>\n</ul>\n<span class=\"paragraph\">If you nodded along to any of these\u2014don't pretend\u2014yes, I'm talking to you\u2014then you're\npart of how we got here. Smart people, pattern-matching on keywords, not asking \"where's\nthe actual learning loop?\" It's fine. I did it too. But we're done now.</span>\n<span class=\"paragraph\">The thesis papers know something is wrong. \"Evals aren't enough,\" they say\u2014correctly!\u2014then\npropose solutions that amount to \"what if we added more vibes to the prompt?\" No regret\nbounds. No convergence guarantees. No formal model of what \"learning\" even means.</span>\n<span class=\"paragraph\">Meanwhile, Sequoia's own David Cahn calculated that AI needs <em><em><marimo-tex class=\"arithmatex\">||(600 billion in annual\nrevenue** to justify current infrastructure investment. Actual revenue: ~||)</marimo-tex>100 billion.\nThat's a $500 billion gap\u2014</em>his</em> number, not mine\u2014and nobody has shipped the learning\nmachinery that might close it.</span>\n<span class=\"paragraph\">Anyway. Back to the science.</span>\n<span class=\"paragraph\">Here's <a href=\"https://github.com/peleke/buildlog-template/blob/main/src/buildlog/core/bandit.py\" rel=\"noopener noreferrer\" target=\"_blank\">an actual bandit</a>.</span>\n<span class=\"paragraph\">If you're reading that link thinking \"what's a bandit?\"\u2014good. That's why we're here.\nBy the end of this notebook, you'll know what most people importing <code>CrewBase</code> don't:\nhow to build systems that actually learn from feedback, with math you can prove and\nintuition you can trust. That's the gap. This closes it.</span>\n<span class=\"paragraph\"><strong>buildlog</strong> maintains a lightweight learning layer that tracks which rules help, which\ndon't, and adapts\u2014without fine-tuning the underlying model, without risking catastrophic\nforgetting, without any infrastructure beyond a local file. Thompson Sampling is the\nalgorithm that makes this work.</span>\n<span class=\"paragraph\">But here's what I want you to see: <strong>buildlog is an instance of a much larger pattern.</strong></span>\n<span class=\"paragraph\">Any system that must select among options based on uncertain, evolving evidence faces the\nsame fundamental challenge. Which clinical trial arm should this patient receive? Which\nad variant should this user see? Which API endpoint should this request route to? Which\n<em>rules</em> should this AI assistant surface to <em>this</em> developer on <em>this</em> codebase?</span>\n<span class=\"paragraph\">The structure is identical: arms (options), rewards (outcomes), uncertainty (limited data),\nand the explore-exploit tradeoff (try new things vs. stick with what works). What changes\nis the domain\u2014not the mathematics.</span>\n<span class=\"paragraph\">This suggests something exciting. If we can:</span>\n<ol>\n<li>Formalize the learning dynamics precisely</li>\n<li>Prove properties about convergence and regret</li>\n<li>Build a reusable abstraction that captures the pattern</li>\n</ol>\n<span class=\"paragraph\">...then we haven't just built a feature for buildlog. We've built a <strong>framework primitive</strong>\u2014\na component that any agentic system could use to learn from feedback. The agent framework\nthat integrates this correctly gets adaptive behavior for free: route to the right tool,\nsurface the right context, select the right strategy\u2014all learned from actual outcomes,\nnot hardcoded heuristics.</span>\n<span class=\"paragraph\">That's where this course is headed. We'll start concrete (buildlog, Thompson Sampling,\nworking code) and end abstract (provable guarantees, framework integration, contribution\nto the field). The notebooks build toward a real artifact: a bandit module that ships,\na set of experiments that demonstrate it works, and documentation rigorous enough that\nothers can build on it.</span>\n<span class=\"paragraph\">But first, we need to understand the algorithm deeply. Not just <em>how</em> it works\u2014<em>why</em> it\nworks, and why its particular form of elegance might be telling us something true about\nlearning.</span>\n<span class=\"paragraph\">By the end of this notebook, you'll:</span>\n<ul>\n<li>Understand why \"just pick the best\" fails\u2014and <em>why</em> it fails, not just <em>that</em> it fails</li>\n<li>See uncertainty as a <em>feature</em>, not a bug to be eliminated</li>\n<li>Build a working bandit that learns from feedback</li>\n<li>Watch it outperform both random and greedy strategies</li>\n<li>Have intuition for <em>why</em> sampling uncertainty leads to optimal exploration</li>\n</ul>\n<span class=\"paragraph\">The mathematics is not difficult. What I hope to convey is something harder: the <em>sense</em> of\nthis algorithm, why it works, and why its particular form of elegance might teach us something\nabout learning more generally.</span>\n<span class=\"paragraph\">Let's begin.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "1ab5d5636cdf2e40de970323b4bac656",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h1 id=\"the-shape-of-the-problem\">The Shape of the Problem</h1>\n<h2 id=\"a-thought-experiment\">A Thought Experiment</h2>\n<span class=\"paragraph\">Imagine you're in a city you've never visited, staying for ten nights. There are three\nrestaurants within walking distance of your hotel. You know nothing about any of them.</span>\n<span class=\"paragraph\">On your first night, you pick one at random\u2014call it Restaurant A. The meal is good. Not\ntranscendent, but solid. A 7 out of 10.</span>\n<span class=\"paragraph\">Now it's night two. Where do you eat?</span>\n<span class=\"paragraph\">This is not a trick question, but it is a <em>deep</em> question. The utilitarian calculus seems\nsimple: you want to maximize total dining pleasure across your ten nights. But notice the\nbind you're in:</span>\n<ul>\n<li>If you return to A, you get a predictable 7. Safe. But restaurants B and C remain mysteries.\n  One of them might be a 9. You'll never know.</li>\n<li>If you try B or C, you gather information\u2014but at a cost. Tonight's meal might be a 4.\n  You've sacrificed immediate reward for knowledge.</li>\n</ul>\n<span class=\"paragraph\">This is the <strong>exploration-exploitation dilemma</strong>, and I want you to feel its teeth before\nwe formalize it. The dilemma isn't artificial. Every time you choose whether to try a new\napproach or stick with what works, you're navigating this tradeoff. Every time a doctor\nchooses between a proven treatment and an experimental one, every time a scientist chooses\nbetween refining a known technique and testing a wild hypothesis, the same structure appears.</span>\n<span class=\"paragraph\">The obvious strategies are obviously flawed:</span>\n<span class=\"paragraph\"><strong>Pure exploitation</strong>: Return to A every night. You finish your trip never knowing that\nRestaurant C was extraordinary\u2014a hidden gem that would have given you seven nights of 9s\ninstead of 7s. You left pleasure on the table because you stopped learning too soon.</span>\n<span class=\"paragraph\"><strong>Pure exploration</strong>: Rotate randomly among all three, giving each equal attention regardless\nof what you observe. By night eight you <em>know</em> C is the best, but you dutifully waste nights\nnine and ten on mediocre A and B anyway. You kept learning when you should have exploited.</span>\n<span class=\"paragraph\">Neither extreme is rational. But what <em>is</em> the right balance? This question occupied some of\nthe best minds in statistics for decades. The answer they found is surprising: there is no\nsingle right balance. The optimal strategy isn't a fixed ratio of exploration to exploitation.\nIt's a <em>dynamic</em> policy that explores more when uncertain and exploits more when confident.</span>\n<span class=\"paragraph\">The challenge is making \"uncertain\" and \"confident\" precise, and then acting on them correctly.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "8a544626b929bbabdb3aea47bb99b307",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h1 id=\"making-abstraction-concrete\">Making Abstraction Concrete</h1>\n<span class=\"paragraph\">Enough philosophy. Let's build something.</span>\n<span class=\"paragraph\">The exploration-exploitation dilemma has a classical formalization called the <strong>multi-armed\nbandit problem</strong>. The name comes from slot machines (\"one-armed bandits\")\u2014imagine facing a\nrow of them, each with a different (unknown) payout probability. You have a finite number of\npulls. Which machines do you play?</span>\n<span class=\"paragraph\">The metaphor is deliberately sterile. Slot machines, unlike restaurants, have no ambiance,\nno service, no intangible qualities. They're pure reward generators, and this purity is the\npoint. By stripping away everything but the essential structure\u2014choices, rewards, uncertainty\u2014\nwe can see the problem clearly.</span>\n<span class=\"paragraph\">We'll simulate three arms with hidden success probabilities. Think of each \"pull\" as a\nBernoulli trial: success (reward = 1) or failure (reward = 0). The true probabilities are\nknown to us as experimenters, but hidden from the learner. This asymmetry\u2014between what we\nknow as designers and what the algorithm knows\u2014is crucial for building intuition about\nlearning systems.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "59bf2e8682574ab1a95f6740d22d5030",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"the-setup-three-arms-hidden-truth\">The Setup: Three Arms, Hidden Truth</h2>\n<span class=\"paragraph\">Remember those three restaurants? Let's strip away the wine lists, the ambiance, the\nfriendly waiter who remembers your name. All that matters now is a single binary\nquestion: <em>did this meal satisfy you or not?</em></span>\n<span class=\"paragraph\">Restaurant A satisfies you 30% of the time. B, 50%. C\u2014the hidden gem\u201470%. But you\ndon't know any of this. You walk in blind.</span>\n<table>\n<thead>\n<tr>\n<th>Arm</th>\n<th>True P(success)</th>\n<th>In restaurant terms</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>0</td>\n<td>0.30</td>\n<td>Usually disappointing</td>\n</tr>\n<tr>\n<td>1</td>\n<td>0.50</td>\n<td>Coin flip</td>\n</tr>\n<tr>\n<td>2</td>\n<td>0.70</td>\n<td><strong>Usually great</strong></td>\n</tr>\n</tbody>\n</table>\n<span class=\"paragraph\">This is the asymmetry that makes learning interesting: <em>we</em> can see the truth (we're\nthe experimenters, the ones running the simulation), but the algorithm is stuck inside\nthe problem, learning only from what it experiences. It starts knowing nothing. Every\nmeal\u2014every pull of the arm\u2014teaches it something. The question is whether it learns\nfast enough to matter.</span>\n<span class=\"paragraph\">The code below defines this ground truth and a function to simulate one meal\u2014one pull.\nSuccess (1) or disappointment (0), randomly, according to the hidden probabilities.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "76721d9278ef54389b47b81a81ef71d2",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"three-baseline-strategies-and-how-to-keep-score\">Three Baseline Strategies (And How to Keep Score)</h2>\n<span class=\"paragraph\">Before we build something smart, let's see how naive strategies fail. But first\u2014how do\nwe even measure \"failing\" at a learning problem?</span>\n<span class=\"paragraph\">Here's one way: imagine an oracle who already knows Restaurant C is the best. The oracle\neats at C every night and averages 7 out of 10 satisfaction. You, meanwhile, are stumbling\naround\u2014night one at A (6/10), night two at B (4/10), night three back to A... By the end\nof your trip, you've accumulated less total satisfaction than the oracle. The <em>gap</em> between\nwhat you got and what you <em>could have gotten</em>\u2014that's <strong>regret</strong>.</span>\n<blockquote>\n<span class=\"paragraph\">Invert the narrative, here. S</span>\n</blockquote>\n<span class=\"paragraph\">You know this feeling. Three bites into a mediocre pasta, you realize you should have\nordered the fish. That twinge? That's instant regret. Now imagine keeping a running tally\nof every suboptimal decision across your whole trip. That running tally is <strong>cumulative regret</strong>.</span>\n<span class=\"paragraph\">More precisely: if the best option gives you 0.7 expected reward, and you chose something\nthat gives 0.3, you just accumulated 0.4 regret for that round. Add it up over all rounds.\nLower is better. A strategy that figures things out quickly will see its regret curve\n<em>flatten</em>\u2014it stops making mistakes. A strategy that never learns will see regret climb\nforever, a straight line of accumulating loss.</span>\n<span class=\"paragraph\">Now, the three naive strategies we'll race:</span>\n<ol>\n<li><strong>Random</strong>: Pick uniformly at random. No learning at all. Pure chaos.</li>\n<li><strong>Greedy</strong>: Always pick whatever <em>looks</em> best so far. Pure exploitation.</li>\n<li><strong>\u03b5-Greedy</strong>: Usually greedy, but explore randomly 10% of the time. The classic compromise.</li>\n</ol>\n<span class=\"paragraph\">Let's see how they do.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "5b95a6d15290ce7c66ca28f82f325ad8",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"the-race-500-rounds-three-strategies\">The Race: 500 Rounds, Three Strategies</h2>\n<span class=\"paragraph\">Now we run each strategy for 500 rounds and plot cumulative regret over time.\nWatch the curves: their <em>shape</em> tells you everything about how the strategy learns (or doesn't).</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "e71eb3f1016be2b5e913fc588c33b3c3",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Reading the curves:</strong></span>\n<ul>\n<li><strong>Random</strong> (blue): A straight line climbing forever. No learning. The algorithm is as\n  ignorant at round 500 as at round 1. This is the cost of pure exploration with no exploitation.</li>\n<li><strong>Greedy</strong> (orange): The outcome depends on luck. If the first few pulls happen to favor\n  the best arm, greedy locks on and does well. If they favor a mediocre arm, greedy locks on\n  and does <em>terribly</em>\u2014forever. This is the cost of pure exploitation with no exploration.\n  (Run the cell multiple times with different seeds to see the variance.)</li>\n<li><strong>\u03b5-Greedy</strong> (green): A genuine improvement. The 10% exploration prevents catastrophic\n  lock-in. But notice: the line keeps climbing, just more slowly. Even after the algorithm\n  <em>knows</em> arm 2 is best, it wastes 10% of pulls on random exploration. The exploration rate\n  is fixed, not adaptive. This is the cost of ad-hoc compromise.</li>\n</ul>\n<span class=\"paragraph\">None of these are satisfying. We want something that explores <em>when uncertain</em> and exploits\n<em>when confident</em>\u2014automatically, without tuning.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "f83a19556fdcbe229e356250f0038f1e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h1 id=\"uncertainty-as-information\">Uncertainty as Information</h1>\n<h2 id=\"the-conceptual-shift\">The Conceptual Shift</h2>\n<span class=\"paragraph\">Here is where many treatments of this problem go wrong. They see uncertainty as an obstacle\u2014\na thing to be minimized, routed around, or tuned away with exploration parameters. I want to\nsuggest a different view: <strong>uncertainty is information</strong>.</span>\n<span class=\"paragraph\">Consider two scenarios:</span>\n<ol>\n<li>Arm A has succeeded 1 time out of 1 attempt. Success rate: 100%.</li>\n<li>Arm B has succeeded 70 times out of 100 attempts. Success rate: 70%.</li>\n</ol>\n<span class=\"paragraph\">Which arm is better? If you answered \"A, obviously\u2014it has a higher success rate,\" you've\nfallen into a trap. You've thrown away information. The <em>point estimate</em> (1/1 = 100% vs\n70/100 = 70%) tells you nothing about how confident you should be in each estimate.</span>\n<span class=\"paragraph\">What we need is not a single number summarizing each arm, but a <em>distribution</em> over possible\nvalues that arm's true probability might take. We need to track our full state of knowledge,\nincluding our ignorance.</span>\n<span class=\"paragraph\">Enter the <strong>Beta distribution</strong>. Don't let the name scare you. It's just a way of keeping\nscore.</span>\n<span class=\"paragraph\">Here's the idea: instead of saying \"this arm has a 70% success rate\" (a single number), you\nkeep <em>two</em> counters:</span>\n<ul>\n<li><strong>Wins</strong>: how many times it worked</li>\n<li><strong>Losses</strong>: how many times it didn't</li>\n</ul>\n<span class=\"paragraph\">That's it. You're just counting. A restaurant with 7 wins and 3 losses feels different from\na restaurant with 70 wins and 30 losses\u2014even though both are \"70%\". The first one, you're\nstill not sure. The second one, you <em>know</em>. The Beta distribution captures exactly this:\nnot just your best guess, but <em>how confident you are in that guess</em>.</span>\n<span class=\"paragraph\">The formula is almost insultingly simple:</span>\n<span class=\"paragraph\"><strong>Beta(wins + 1, losses + 1)</strong></span>\n<span class=\"paragraph\">Start with 1 in each counter (that's your \"I have no idea\" starting point). Every time\nsomething works, add 1 to wins. Every time it fails, add 1 to losses. The shape of your\nbelief updates automatically.</span>\n<span class=\"paragraph\">Why the \"+1\"? It's a technical thing\u2014it keeps the math well-behaved when you have no data\nyet. Don't worry about it. Just remember: <strong>wins + 1, losses + 1</strong>. That's your belief.</span>\n<span class=\"paragraph\">What makes this powerful is that <em>uncertainty becomes visible</em>:</span>\n<ul>\n<li><strong>Few observations</strong> \u2192 wide, spread-out curve \u2192 \"could be almost anything\"</li>\n<li><strong>Many observations</strong> \u2192 tight, peaked curve \u2192 \"I'm pretty sure it's around here\"</li>\n</ul>\n<span class=\"paragraph\">And here's the key: Thompson Sampling uses that <em>width</em> as a guide. Wide curve? You'll\nsample all over the place\u2014lots of exploration. Tight curve? Your samples cluster near\nthe peak\u2014mostly exploitation. No tuning required. The math does it for you.</span>\n<span class=\"paragraph\">(For the formally trained: yes, Beta is the conjugate prior for the Bernoulli likelihood,\nwhich is why the update rule is so clean. The posterior is always another Beta. If you\nknow what that means, you know why this is elegant. If you don't, it doesn't matter\u2014the\ncounting version is exactly correct and you can derive everything from it.)</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "4986308205d87866a4ad78c7a3f16c0a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"seeing-uncertainty-the-beta-distribution-in-action\">Seeing Uncertainty: The Beta Distribution in Action</h2>\n<span class=\"paragraph\">We've talked about the Beta distribution as a way of keeping score. But what does a\nbelief actually <em>look like</em>?</span>\n<span class=\"paragraph\">Here's what I want you to see: a belief isn't just a number (\"70% chance\"). It's a\n<em>shape</em>\u2014a curve that spreads across all the possibilities, weighted by how plausible\neach one feels given what you've observed.</span>\n<span class=\"paragraph\">When you know nothing, what shape should that belief take? When you've seen 100\nobservations, how should it change? The four panels below show this evolution.</span>\n<span class=\"paragraph\">Two things to watch:</span>\n<ul>\n<li><strong>Where the curve peaks</strong>: your current best guess</li>\n<li><strong>How wide it spreads</strong>: how much you'd bet on that guess</li>\n</ul>\n<span class=\"paragraph\">Both will shift as evidence accumulates. Let's watch.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "qnkX",
+      "code_hash": "4f7c0e9cc1005248d56224930632d9b8",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Reading the shapes:</strong></span>\n<ol>\n<li><strong>Beta(1,1)</strong>: Flat. Uniform. \"I literally have no idea\u2014any probability from 0 to 1 is\n   equally plausible.\" This is the mathematically correct representation of complete ignorance.</li>\n<li><strong>Beta(2,2)</strong>: After one success and one failure, the distribution peaks at 0.5 but remains\n   wide. We have a <em>guess</em>, but not much <em>confidence</em>. Two data points aren't many.</li>\n<li><strong>Beta(8,4)</strong>: After 10 observations (7 successes, 3 failures), the peak is near 0.7 and\n   the distribution is noticeably narrower. We're starting to have an opinion.</li>\n<li><strong>Beta(71,31)</strong>: After 100 observations, the distribution is tight\u2014a spike around 0.7.\n   We're <em>confident</em>. Additional observations will barely move the needle.</li>\n</ol>\n<span class=\"paragraph\">This is <strong>Bayesian inference</strong>: start with prior beliefs, update with evidence, end with\nposterior beliefs. The machinery is mechanical; the insight is representational. By encoding\nuncertainty explicitly, we can <em>reason about</em> it\u2014and, crucially, <em>act on</em> it.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TqIu",
+      "code_hash": "178eb437dfbccb1b682ac5e5fe00eb4d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h1 id=\"thompson-sampling-the-algorithm\">Thompson Sampling: The Algorithm</h1>\n<h2 id=\"an-idea-so-simple-it-feels-like-cheating\">An Idea So Simple It Feels Like Cheating</h2>\n<span class=\"paragraph\">We've established that the Beta distribution encodes our uncertainty about each arm's true\nprobability. Now comes Thompson's insight, published in 1933 and then inexplicably ignored\nfor the better part of a century:</span>\n<span class=\"paragraph\"><strong>Don't compute an exploration bonus. Just sample your uncertainty and act greedily on the sample.</strong></span>\n<span class=\"paragraph\">The algorithm:</span>\n<ol>\n<li>For each arm, draw one random sample from its Beta distribution</li>\n<li>Pick the arm whose sample came out highest</li>\n<li>Pull that arm, observe the reward</li>\n<li>Update that arm's Beta parameters (increment \u03b1 if success, \u03b2 if failure)</li>\n<li>Repeat</li>\n</ol>\n<span class=\"paragraph\">That's it. That's the whole algorithm. There's no exploration parameter. No schedule to tune.\nNo bonus terms to balance. Just: sample, act, update.</span>\n<span class=\"paragraph\">Why does this work? The reasoning is almost philosophical:</span>\n<ul>\n<li>If you're <strong>uncertain</strong> about an arm, its Beta distribution is <em>wide</em>. Samples from a wide\n  distribution have high variance. Sometimes you'll sample high by chance\u2014and that arm gets\n  pulled. This is exploration, emerging naturally from uncertainty.</li>\n<li>If you're <strong>confident</strong> about an arm (lots of data, narrow distribution), your samples\n  will cluster tightly around the true mean. If that mean is high, you'll pull it consistently.\n  If it's low, you'll rarely pull it. This is exploitation, emerging naturally from confidence.</li>\n<li>As you <strong>learn</strong>, distributions narrow. The random element that drove exploration gradually\n  fades, replaced by deterministic exploitation of the best arm. No decay schedule needed\u2014\n  the mathematics of Bayesian updating <em>is</em> the schedule.</li>\n</ul>\n<span class=\"paragraph\">I find this deeply satisfying. Most optimization algorithms require you to manually balance\ncompeting objectives (explore vs. exploit), which means tuning hyperparameters, which means\nmeta-optimization, which means turtles all the way down. Thompson Sampling collapses the\ntwo objectives into one: <em>act optimally given your current beliefs</em>. The exploration isn't\na tax you pay for future information; it's a natural consequence of epistemic honesty about\nwhat you don't know.</span>\n<span class=\"paragraph\">There's a philosophical lesson here that extends beyond bandits: perhaps the right way to\nhandle uncertainty isn't to engineer around it, but to <em>encode it faithfully and then act\non samples</em>. Your uncertainty about the world is not noise to be filtered out\u2014it's signal\nabout where to look next.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Vxnm",
+      "code_hash": "d326c5fb5f11ee095ca46cb08d0a92eb",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"implementation-thompson-sampling-in-ten-lines\">Implementation: Thompson Sampling in Ten Lines</h2>\n<span class=\"paragraph\">The algorithm is almost disappointingly simple. For each arm, sample from its Beta posterior.\nPick the arm with the highest sample. That's it.</span>\n<span class=\"paragraph\">The magic is in what this <em>implies</em>: uncertain arms (wide distributions) sometimes produce\nhigh samples and get explored. Confident arms (narrow distributions) produce consistent\nsamples near their true mean. No explicit exploration logic\u2014just probability doing its thing.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ulZA",
+      "code_hash": "9383d168b053cb94631646c804c27282",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"the-showdown-thompson-sampling-enters-the-race\">The Showdown: Thompson Sampling Enters the Race</h2>\n<span class=\"paragraph\">Now we add Thompson Sampling to the competition. Same setup: 500 rounds, same three arms.\nThe question: can principled uncertainty quantification beat ad-hoc exploration strategies?</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZBYS",
+      "code_hash": "a234c77e0a8ed6b767609db3c26faaee",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>Thompson Sampling (dark green) wins decisively.</strong></span>\n<span class=\"paragraph\">Look at the shape: early on, regret grows (the algorithm is exploring, making \"mistakes\"\nto gather information). But then\u2014crucially\u2014the curve <em>flattens</em>. Once Thompson Sampling\nis confident that arm 2 is best, it exploits relentlessly. No wasted pulls on known-bad arms.</span>\n<span class=\"paragraph\">Compare to \u03b5-Greedy: even at round 500, it's still climbing. The 10% exploration tax\nis eternal. Thompson Sampling's \"exploration tax\" is <em>adaptive</em>\u2014high when uncertain,\nnear-zero when confident.</span>\n<span class=\"paragraph\">This isn't just an academic comparison. This is what buildlog uses to select which rules\nto surface. Rules that help get reinforced. Rules that don't get deprioritized. And the\nalgorithm figures out which is which\u2014automatically, without hardcoded preferences, without\nmanual tuning. That's the promise of principled uncertainty quantification.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "aLJB",
+      "code_hash": "45ce4448b3748dbf1bbd68641305abfb",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"watching-beliefs-evolve\">Watching Beliefs Evolve</h2>\n<span class=\"paragraph\">The regret curves showed you <em>that</em> Thompson Sampling wins. But what does it look like\n<em>inside the algorithm's head</em> as it figures this out?</span>\n<span class=\"paragraph\">Here's something you don't get to see with most learning systems: the actual shape of\nuncertainty, updating in real time. We're about to watch three beliefs\u2014one for each arm\u2014\nstart identical (total ignorance) and gradually separate as evidence accumulates.</span>\n<span class=\"paragraph\">The visualization below shows six snapshots: round 0, 10, 30, 70, 150, and 199. The\ndotted vertical lines mark where the <em>true</em> probabilities are. Watch the peaks hunt\ntoward truth. Watch the curves narrow as confidence grows. This is Bayesian learning,\nmade visible.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "xXTn",
+      "code_hash": "bf50c50d37653694c6fb3cfed411b972",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\"><strong>The story the curves tell:</strong></span>\n<ul>\n<li><strong>Round 0</strong>: Perfect symmetry. All three arms have identical flat priors. The algorithm\n  knows nothing, and its beliefs reflect that.</li>\n<li><strong>Round 10-30</strong>: Differentiation begins. The arms have been pulled different numbers of\n  times (Thompson Sampling explores unevenly, guided by samples). Beliefs start to diverge.</li>\n<li><strong>Round 70+</strong>: Arm 2 (green) emerges as the clear winner. Its distribution is tight and\n  centered near 0.7. The algorithm is <em>confident</em>. Meanwhile, arms 0 and 1 have been explored\n  less\u2014their distributions are tighter than at round 0, but wider than arm 2's.</li>\n<li><strong>Round 199</strong>: Convergence. All three distributions are tight, all centered near their true\n  values. The algorithm has learned the structure of the world.</li>\n</ul>\n<span class=\"paragraph\">The dotted vertical lines are the <em>true</em> probabilities. Notice how the peaks converge toward\nthem. This is Bayesian inference doing what it's supposed to do: turning observations into\naccurate beliefs, with calibrated confidence.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "AjVT",
+      "code_hash": "93fe2d26c7aa62d4d6b38d8b6a93fa93",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h1 id=\"going-deeper-exercises\">Going Deeper: Exercises</h1>\n<span class=\"paragraph\">Understanding comes from <em>doing</em>, not just reading. The exercises below probe the edges\nof what we've built\u2014places where the algorithm's behavior becomes interesting, non-obvious,\nor breaks down entirely. Each one teaches something the main text couldn't.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "pHFh",
+      "code_hash": "4ce4dfae942ffae2dd9b6a4a34ba69b3",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"exercise-1-the-power-of-priors\">Exercise 1: The Power of Priors</h2>\n<span class=\"paragraph\">We started every arm with Beta(1, 1)\u2014the \"I have no idea\" prior. But what if you <em>do</em> have\nan idea? What if arm 2 came recommended by an expert, and you wanted to give it a head start?</span>\n<span class=\"paragraph\">Modify the algorithm to accept <strong>boosted priors</strong>. Give arm 2 a prior of Beta(5, 1) instead\nof Beta(1, 1). Run the simulation. What happens?</span>\n<span class=\"paragraph\">This isn't academic. In buildlog, \"seed rules\"\u2014expert-curated axioms\u2014get boosted priors\nprecisely so they're favored early, before the system has gathered its own evidence. The\nprior encodes prior knowledge. That's the whole point.</span>\n<span class=\"paragraph\"><em>Implementation hint: Pass <code>prior_alphas</code> and <code>prior_betas</code> arrays to the strategy function.</em></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "aqbW",
+      "code_hash": "35a2d211c17e7597299b30de50030508",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"exercise-2-when-the-world-changes\">Exercise 2: When the World Changes</h2>\n<span class=\"paragraph\">We assumed the true probabilities are fixed. But what if they're not? What if arm 1\nbecomes the best arm after round 250\u2014the world shifts under your feet?</span>\n<span class=\"paragraph\">This is the <strong>non-stationary bandit</strong> problem, and it's deeply relevant to real applications.\nUser preferences drift. Code patterns evolve. The optimal choice last month may not be\noptimal today.</span>\n<span class=\"paragraph\">Modify the simulation so TRUE_PROBS changes at round 250. Compare Thompson Sampling to \u03b5-Greedy.\nWhich adapts faster? Why?</span>\n<span class=\"paragraph\"><em>Insight: Thompson Sampling never fully stops exploring\u2014it just explores less as confidence\ngrows. This \"always a little uncertain\" property becomes a feature, not a bug, when the\nworld is non-stationary. \u03b5-Greedy's forced 10% exploration looks less ad-hoc suddenly.</em></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TXez",
+      "code_hash": "b55e88b51f325284ebbc6b225cea63d9",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"exercise-3-the-curse-of-similar-arms\">Exercise 3: The Curse of Similar Arms</h2>\n<span class=\"paragraph\">Add a 4th arm with true probability 0.65\u2014very close to arm 2's 0.70.</span>\n<span class=\"paragraph\">Run the simulation. What happens to regret? To the time it takes to converge?</span>\n<span class=\"paragraph\">This exercise reveals a fundamental truth about bandits: <strong>distinguishing similar options\nis hard</strong>. The algorithm needs many samples to confidently separate 0.65 from 0.70. During\nthat time, it's making \"mistakes\" that are barely mistakes at all\u2014pulling a 0.65 arm when\n0.70 was optimal costs only 0.05 per round.</span>\n<span class=\"paragraph\">This connects to a deep result in bandit theory: regret bounds depend on the <em>gaps</em> between\narms. Tiny gaps \u2192 slow learning \u2192 more regret. The math makes precise what intuition suggests:\nhard problems are hard.</span>\n<span class=\"paragraph\"><em>Try it: What if the 4th arm were 0.69 instead of 0.65? 0.71?</em></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "yCnT",
+      "code_hash": "4721f11ee3ebfdeab4b6617305c9f887",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h1 id=\"reflection-what-we-built-and-where-were-going\">Reflection: What We Built and Where We're Going</h1>\n<span class=\"paragraph\">Let's step back and consider what just happened\u2014and where it leads.</span>\n<span class=\"paragraph\">You implemented <strong>Thompson Sampling</strong>\u2014an algorithm published in 1933, forgotten for decades,\nrediscovered around 2010, and now recognized as one of the most elegant and effective\nsolutions to the exploration-exploitation problem ever devised. The same mathematical\nstructure that helps doctors allocate patients to clinical trials helps your coding\nassistant learn which suggestions actually help.</span>\n<span class=\"paragraph\">But I hope you've taken away more than an algorithm. I hope you've internalized a <em>way of\nthinking</em> about uncertainty:</span>\n<span class=\"paragraph\"><strong>1. Uncertainty is not the enemy.</strong> Most engineering approaches treat uncertainty as noise\nto be minimized or ignored. The Bayesian view\u2014which Thompson Sampling embodies\u2014treats\nuncertainty as information. Wide distributions don't just mean \"I don't know\"; they mean\n\"I should explore here.\" Narrow distributions don't just mean \"I know\"; they mean \"I should\nexploit here.\" Your ignorance <em>guides</em> your learning.</span>\n<span class=\"paragraph\"><strong>2. The explore-exploit tradeoff dissolves when you represent beliefs correctly.</strong> If you\ntrack point estimates (arm A has 70% success rate), you need explicit mechanisms to force\nexploration. If you track full distributions, exploration emerges from sampling. The dichotomy\nwas an artifact of impoverished representation.</span>\n<span class=\"paragraph\"><strong>3. Simple algorithms can be optimal.</strong> Thompson Sampling has been proven optimal or\nnear-optimal across a remarkable range of problems. Its simplicity is not a limitation\u2014it's\na sign that we've found the right level of abstraction. When an algorithm is this simple and\nthis good, it usually means we've understood something true about the structure of the problem.</span>\n<span class=\"paragraph\"><strong>4. There's a deeper reason this works\u2014and it's geometric.</strong> I'm planting a seed here\nthat won't fully bloom until notebook 08, but I want you to carry it with you:</span>\n<span class=\"paragraph\">Probability distributions aren't just abstract bookkeeping. They live somewhere. There's\na space\u2014a curved space, it turns out\u2014where each distribution is a point, and learning is\n<em>movement</em> through that space. The Beta distributions we've been drawing? They're points\non a manifold. Bayesian updating? That's tracing a path. Thompson Sampling? That's\nsampling directions from where you currently stand.</span>\n<span class=\"paragraph\">The mathematics here is called <em>information geometry</em>, and it explains why \"sample your\nuncertainty and act\" isn't just a clever trick\u2014it's respecting the actual shape of the\nspace you're navigating. We'll get there. For now, just know: there's structure beneath\nthis, and it's beautiful.</span>\n<hr />\n<h2 id=\"the-arc-of-this-course\">The Arc of This Course</h2>\n<span class=\"paragraph\">This notebook is the first in a series. Here's where we're headed:</span>\n<table>\n<thead>\n<tr>\n<th>Notebook</th>\n<th>Question</th>\n<th>Outcome</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><strong>00</strong> (this one)</td>\n<td>Why does \"just pick the best\" fail?</td>\n<td>Working intuition for Thompson Sampling</td>\n</tr>\n<tr>\n<td><strong>01</strong></td>\n<td>What <em>is</em> uncertainty, mathematically?</td>\n<td>Deep understanding of Beta distributions</td>\n</tr>\n<tr>\n<td><strong>02</strong></td>\n<td>How do beliefs update with evidence?</td>\n<td>Bayesian inference as a computational tool</td>\n</tr>\n<tr>\n<td><strong>03</strong></td>\n<td>Why does sampling uncertainty work?</td>\n<td>Regret bounds, optimality proofs</td>\n</tr>\n<tr>\n<td><strong>04</strong></td>\n<td>What if context matters?</td>\n<td>Contextual bandits, feature-based selection</td>\n</tr>\n<tr>\n<td><strong>05</strong></td>\n<td>How does buildlog use this?</td>\n<td>Production integration, real feedback loops</td>\n</tr>\n<tr>\n<td><strong>06</strong></td>\n<td>Is it actually working?</td>\n<td>Evaluation methodology, A/B testing</td>\n</tr>\n<tr>\n<td><strong>07</strong></td>\n<td>Can we generalize this?</td>\n<td>Framework abstraction, contribution to the field</td>\n</tr>\n<tr>\n<td><strong>08</strong></td>\n<td>Why does <em>any</em> of this work?</td>\n<td>Information geometry, the manifold of beliefs</td>\n</tr>\n</tbody>\n</table>\n<span class=\"paragraph\">By the end, you won't just know how to use Thompson Sampling\u2014you'll understand <em>why</em> it\nworks, have intuition for when it breaks down, and be equipped to adapt it to new domains.\nMore ambitiously: you'll have contributed to building a reusable primitive for adaptive\nlearning in agentic systems.</span>\n<span class=\"paragraph\">That's the goal. Not just learning\u2014<em>building something that others can learn from</em>.</span>\n<hr />\n<h2 id=\"whats-next\">What's Next</h2>\n<span class=\"paragraph\">In <strong>01-uncertainty-as-superpower</strong>, we'll go deeper on the Beta distribution itself:</span>\n<ul>\n<li>Why Beta(1,1) is the mathematically correct \"I have no idea\" prior</li>\n<li>How the shape parameters \u03b1 and \u03b2 encode sample size, confidence, and prior beliefs</li>\n<li>The beautiful theory of conjugate priors, and why this particular pairing (Beta-Bernoulli)\n  is no accident</li>\n</ul>\n<span class=\"paragraph\">For now: <strong>you have a working bandit</strong>. Change the true probabilities. Watch the curves shift.\nAdd a fourth arm. Make two arms nearly identical and watch the algorithm struggle to\ndistinguish them. Break things. The best way to understand an algorithm is to find its limits.</span>\n<span class=\"paragraph\">\u2192 <a href=\"./01-uncertainty-as-superpower.py\">01-uncertainty-as-superpower.py</a></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "wlCL",
+      "code_hash": "be7d65edb4ae6162eb1c3850b614866f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h1 id=\"resources\">Resources</h1>\n<span class=\"paragraph\"><strong>This notebook</strong>: Part of the <a href=\"https://github.com/peleke/buildlog-template\" rel=\"noopener noreferrer\" target=\"_blank\">buildlog</a> Thompson Sampling tutorial series.</span>\n<span class=\"paragraph\"><strong>Theory deep-dive</strong>: See <code>docs/tutorials/</code> for the full mathematical treatment.</span>\n<span class=\"paragraph\"><strong>The algorithm in production</strong>: <code>src/buildlog/core/bandit.py</code></span>\n<span class=\"paragraph\"><strong>Further reading</strong>:</span>\n<ul>\n<li><a href=\"https://arxiv.org/abs/1707.02038\" rel=\"noopener noreferrer\" target=\"_blank\">A Tutorial on Thompson Sampling</a> \u2014 Russo et al., comprehensive</li>\n<li><a href=\"https://tor-lattimore.com/downloads/book/book.pdf\" rel=\"noopener noreferrer\" target=\"_blank\">Bandit Algorithms</a> \u2014 Lattimore &amp; Szepesv\u00e1ri, the textbook</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "4e9a099f25557b535ce50e67f8e42c88",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "b83a03b50c4bf41e5aff15edf47c25fe",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "629a71db7a1d05c1bd93778888f714e1",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "b0b8bc48b06ed6285b679028ef156988",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "656b52511cfb245c07213443b33417ff",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "a945eacb27b465dcacac5e1cbf756400",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "3822ffcba1ce91743bf3a99a883c5357",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "DnEU",
+      "code_hash": "2a759b9c4a5c022a2f400d2c949bbc00",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ecfG",
+      "code_hash": "95595789b0a0c4321734fe3491091410",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Pvdt",
+      "code_hash": "ae20e53505ed2deef6d69f68ad52b7c6",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "nHfw",
+      "code_hash": "9922c986e4a2d0e4fc76eab0203a1f92",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "NCOB",
+      "code_hash": "2ef4d59ad4acf6fad6102308ca6e9aec",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "TRpd",
+      "code_hash": "e688aadf048007e7840961893e97ef0f",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "dNNg",
+      "code_hash": "e688aadf048007e7840961893e97ef0f",
+      "outputs": [],
+      "console": []
+    }
+  ]
+}

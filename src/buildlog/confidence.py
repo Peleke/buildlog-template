@@ -32,6 +32,7 @@ __all__ = [
     "get_confidence_tier",
     "merge_confidence_metrics",
     "add_contradiction",
+    "apply_severity_weight",
 ]
 
 
@@ -309,3 +310,29 @@ def add_contradiction(metrics: ConfidenceMetrics) -> ConfidenceMetrics:
         contradiction_count=metrics.contradiction_count + 1,
         first_seen=metrics.first_seen,
     )
+
+
+# Severity weight multipliers for confidence scoring
+SEVERITY_WEIGHTS: dict[str, float] = {
+    "critical": 1.5,
+    "major": 1.2,
+    "minor": 1.0,
+    "info": 0.8,
+}
+
+
+def apply_severity_weight(confidence_score: float, severity: str) -> float:
+    """Apply severity weighting to a continuous confidence score.
+
+    Severity acts as a multiplier: critical rules get boosted,
+    info rules get dampened. Result is capped at 1.0.
+
+    Args:
+        confidence_score: Base confidence score in [0, 1].
+        severity: One of: critical, major, minor, info.
+
+    Returns:
+        Weighted confidence score, capped at 1.0.
+    """
+    weight = SEVERITY_WEIGHTS.get(severity, 1.0)
+    return min(confidence_score * weight, 1.0)

@@ -8,7 +8,8 @@ from pathlib import Path
 
 import click
 
-from buildlog.core import get_rewards, log_reward
+from buildlog.core import diff as core_diff
+from buildlog.core import get_rewards, log_reward, promote, reject, status
 from buildlog.distill import CATEGORIES, distill_all, format_output
 from buildlog.skills import format_skills, generate_skills
 from buildlog.stats import calculate_stats, format_dashboard, format_json
@@ -49,11 +50,18 @@ def main():
 
 @main.command()
 @click.option("--no-claude-md", is_flag=True, help="Don't update CLAUDE.md")
-def init(no_claude_md: bool):
+@click.option(
+    "--defaults",
+    is_flag=True,
+    help="Use default values for all prompts (non-interactive)",
+)
+def init(no_claude_md: bool, defaults: bool):
     """Initialize buildlog in the current directory.
 
     Sets up the buildlog/ directory with templates and optionally
     adds instructions to CLAUDE.md.
+
+    Use --defaults for non-interactive environments (CI, scripts, agents).
     """
     buildlog_dir = Path("buildlog")
 
@@ -66,46 +74,186 @@ def init(no_claude_md: bool):
     if template_dir:
         # Use local template
         click.echo("Initializing buildlog from local template...")
-        try:
-            subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "copier",
-                    "copy",
-                    "--trust",
-                    *(["--data", "update_claude_md=false"] if no_claude_md else []),
-                    str(template_dir),
-                    ".",
-                ],
-                check=True,
-            )
-        except subprocess.CalledProcessError:
-            click.echo("Failed to initialize buildlog.", err=True)
-            raise SystemExit(1)
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "copier",
+                "copy",
+                "--trust",
+                *(["--defaults"] if defaults else []),
+                *(["--data", "update_claude_md=false"] if no_claude_md else []),
+                str(template_dir),
+                ".",
+            ],
+        )
     else:
         # Fall back to GitHub
         click.echo("Initializing buildlog from GitHub...")
-        try:
-            subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "copier",
-                    "copy",
-                    "--trust",
-                    *(["--data", "update_claude_md=false"] if no_claude_md else []),
-                    "gh:Peleke/buildlog-template",
-                    ".",
-                ],
-                check=True,
-            )
-        except subprocess.CalledProcessError:
-            click.echo("Failed to initialize buildlog.", err=True)
-            raise SystemExit(1)
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "copier",
+                "copy",
+                "--trust",
+                *(["--defaults"] if defaults else []),
+                *(["--data", "update_claude_md=false"] if no_claude_md else []),
+                "gh:Peleke/buildlog-template",
+                ".",
+            ],
+        )
+
+    # Verify the buildlog directory was actually created
+    if not buildlog_dir.exists():
+        click.echo("Failed to initialize buildlog.", err=True)
+        raise SystemExit(1)
+
+    # Update CLAUDE.md if it exists and user didn't opt out
+    if not no_claude_md:
+        claude_md = Path("CLAUDE.md")
+        if claude_md.exists():
+            content = claude_md.read_text()
+            if "## Build Journal" not in content:
+                section = (
+                    "\n## Build Journal\n\n"
+                    "After completing significant work (features, debugging sessions, "
+                    "deployments,\n"
+                    "2+ hour focused sessions), write a build journal entry.\n\n"
+                    "**Location:** `buildlog/YYYY-MM-DD-{slug}.md`\n"
+                    "**Template:** `buildlog/_TEMPLATE.md`\n"
+                )
+                with open(claude_md, "a") as f:
+                    f.write(section)
+                click.echo("Added Build Journal section to CLAUDE.md")
 
     click.echo("\n✓ buildlog initialized!")
-    click.echo("\nNext: buildlog new my-feature")
+    click.echo()
+    click.echo("How it works:")
+    click.echo("  1. Write entries     buildlog new my-feature (or --quick)")
+    click.echo("  2. Extract rules     buildlog skills")
+    click.echo("  3. Promote to agent  buildlog promote <id> --target cursor")
+    click.echo("  4. Measure learning  buildlog overview")
+    click.echo()
+    click.echo(
+        "Targets: claude_md, cursor, copilot, windsurf, continue_dev, settings_json, skill"
+    )
+    click.echo()
+    click.echo("Start now: buildlog new my-first-task --quick")
+
+
+@main.command()
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def overview(output_json: bool):
+    """Show the full state of your buildlog at a glance.
+
+    Entries, skills, promoted rules, experiments — everything in one view.
+
+    Examples:
+
+        buildlog overview
+        buildlog overview --json
+    """
+    import json as json_module
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    # Count entries
+    entries = sorted(buildlog_dir.glob("20??-??-??-*.md"))
+
+    # Try to get skills
+    try:
+        skill_set = generate_skills(buildlog_dir)
+        total_skills = skill_set.total_skills
+        by_confidence = {"high": 0, "medium": 0, "low": 0}
+        for cat_skills in skill_set.skills.values():
+            for s in cat_skills:
+                by_confidence[s.confidence] += 1
+    except Exception:
+        total_skills = 0
+        by_confidence = {"high": 0, "medium": 0, "low": 0}
+
+    # Promoted/rejected counts
+    promoted_path = buildlog_dir / ".buildlog" / "promoted.json"
+    rejected_path = buildlog_dir / ".buildlog" / "rejected.json"
+    promoted_count = 0
+    rejected_count = 0
+    if promoted_path.exists():
+        try:
+            data = json_module.loads(promoted_path.read_text())
+            promoted_count = len(data.get("skill_ids", []))
+        except (json_module.JSONDecodeError, OSError):
+            pass
+    if rejected_path.exists():
+        try:
+            data = json_module.loads(rejected_path.read_text())
+            rejected_count = len(data.get("skill_ids", []))
+        except (json_module.JSONDecodeError, OSError):
+            pass
+
+    # Active session?
+    active_session_path = buildlog_dir / ".buildlog" / "active_session.json"
+    active_session = None
+    if active_session_path.exists():
+        try:
+            active_session = json_module.loads(active_session_path.read_text())
+        except (json_module.JSONDecodeError, OSError):
+            pass
+
+    # Render targets with files
+    from buildlog.render import RENDERERS
+
+    result = {
+        "entries": len(entries),
+        "skills": {
+            "total": total_skills,
+            "by_confidence": by_confidence,
+            "promoted": promoted_count,
+            "rejected": rejected_count,
+            "pending": total_skills - promoted_count - rejected_count,
+        },
+        "active_session": active_session.get("id") if active_session else None,
+        "render_targets": list(RENDERERS.keys()),
+    }
+
+    if output_json:
+        click.echo(json_module.dumps(result, indent=2))
+    else:
+        click.echo("buildlog overview")
+        click.echo("=" * 40)
+        click.echo(f"  Entries:     {len(entries)}")
+        click.echo(f"  Skills:      {total_skills}")
+        if total_skills > 0:
+            conf_parts = [f"{k}={v}" for k, v in by_confidence.items() if v > 0]
+            click.echo(f"    confidence: {', '.join(conf_parts)}")
+        click.echo(f"  Promoted:    {promoted_count}")
+        click.echo(f"  Rejected:    {rejected_count}")
+        pending = total_skills - promoted_count - rejected_count
+        if pending > 0:
+            click.echo(f"  Pending:     {pending}")
+        if active_session:
+            click.echo(f"  Session:     {active_session.get('id', '?')} (active)")
+        click.echo()
+
+        if len(entries) == 0:
+            click.echo("Get started:")
+            click.echo("  buildlog new my-first-task        # Full template")
+            click.echo("  buildlog new my-first-task --quick # Short template")
+        elif total_skills == 0:
+            click.echo("Next steps:")
+            click.echo(
+                "  buildlog skills                    # Extract rules from entries"
+            )
+        elif promoted_count == 0:
+            click.echo("Next steps:")
+            click.echo("  buildlog status                    # See extracted skills")
+            click.echo("  buildlog promote <id> --target cursor  # Push to your agent")
+        else:
+            click.echo("Targets: " + ", ".join(RENDERERS.keys()))
 
 
 @main.command()
@@ -113,7 +261,12 @@ def init(no_claude_md: bool):
 @click.option(
     "--date", "-d", "entry_date", default=None, help="Date for entry (YYYY-MM-DD)"
 )
-def new(slug: str, entry_date: str | None):
+@click.option(
+    "--quick",
+    is_flag=True,
+    help="Use the short template (good for small tasks)",
+)
+def new(slug: str, entry_date: str | None, quick: bool):
     """Create a new buildlog entry.
 
     SLUG is a short identifier for the entry (e.g., 'auth-api', 'bugfix-login').
@@ -121,10 +274,16 @@ def new(slug: str, entry_date: str | None):
     Examples:
 
         buildlog new auth-api
+        buildlog new bugfix-login --quick
         buildlog new runpod-deploy --date 2026-01-15
     """
     buildlog_dir = Path("buildlog")
-    template_file = buildlog_dir / "_TEMPLATE.md"
+    template_name = "_TEMPLATE_QUICK.md" if quick else "_TEMPLATE.md"
+    template_file = buildlog_dir / template_name
+
+    # Fall back to full template if quick template doesn't exist
+    if quick and not template_file.exists():
+        template_file = buildlog_dir / "_TEMPLATE.md"
 
     if not buildlog_dir.exists():
         click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
@@ -257,7 +416,18 @@ def update():
     type=click.Choice(CATEGORIES),
     help="Filter to a specific category",
 )
-def distill(output: str | None, fmt: str, since: datetime | None, category: str | None):
+@click.option(
+    "--llm",
+    is_flag=True,
+    help="Use LLM-backed extraction (Ollama/Anthropic, falls back to regex)",
+)
+def distill(
+    output: str | None,
+    fmt: str,
+    since: datetime | None,
+    category: str | None,
+    llm: bool,
+):
     """Extract patterns from all buildlog entries.
 
     Parses the Improvements section of each buildlog entry and aggregates
@@ -282,7 +452,9 @@ def distill(output: str | None, fmt: str, since: datetime | None, category: str 
 
     # Run distillation
     try:
-        result = distill_all(buildlog_dir, since=since_date, category_filter=category)
+        result = distill_all(
+            buildlog_dir, since=since_date, category_filter=category, llm=llm
+        )
     except Exception as e:
         click.echo(f"Failed to distill entries: {e}", err=True)
         raise SystemExit(1)
@@ -383,12 +555,18 @@ def stats(output_json: bool, detailed: bool, since_date: str | None):
     default=None,
     help="Embedding backend for semantic deduplication",
 )
+@click.option(
+    "--llm",
+    is_flag=True,
+    help="Use LLM for extraction, canonical selection, and scoring (Ollama/Anthropic)",
+)
 def skills(
     output: str | None,
     fmt: str,
     min_frequency: int,
     since: datetime | None,
     embeddings: str | None,
+    llm: bool = False,
 ):
     """Generate agent-consumable skills from buildlog patterns.
 
@@ -424,6 +602,7 @@ def skills(
             min_frequency=min_frequency,
             since_date=since_date,
             embedding_backend=embeddings,
+            llm=llm,
         )
     except ImportError as e:
         click.echo(f"Missing dependency: {e}", err=True)
@@ -585,6 +764,219 @@ def rewards(limit: int | None, output_json: bool):
 
 
 # -----------------------------------------------------------------------------
+# Skill Management Commands (status, promote, reject, diff)
+# -----------------------------------------------------------------------------
+
+
+@main.command()
+@click.option(
+    "--min-confidence",
+    type=click.Choice(["low", "medium", "high"]),
+    default="low",
+    help="Minimum confidence level to include",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def status_cmd(min_confidence: str, output_json: bool):
+    """Show extracted skills by category and confidence.
+
+    Displays all skills extracted from buildlog entries, grouped by category,
+    with confidence levels and promotion status.
+
+    Examples:
+
+        buildlog status
+        buildlog status --min-confidence medium
+        buildlog status --json
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    result = status(buildlog_dir, min_confidence=min_confidence)  # type: ignore[arg-type]
+
+    if result.error:
+        click.echo(f"Error: {result.error}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(
+            f"Skills: {result.total_skills} total from {result.total_entries} entries"
+        )
+        conf_str = ", ".join(
+            f"{k}={v}" for k, v in result.by_confidence.items() if v > 0
+        )
+        click.echo(f"  By confidence: {conf_str}")
+        click.echo()
+        for category, skills in result.skills.items():
+            if not skills:
+                continue
+            click.echo(f"  {category} ({len(skills)})")
+            for s in skills:
+                conf = s.get("confidence", "?")
+                click.echo(f"    [{conf}] {s['id']}: {s['rule'][:70]}")
+        if result.promotable_ids:
+            click.echo(f"\nPromotable: {', '.join(result.promotable_ids)}")
+
+
+# Register with the name "status" (avoiding collision with Python builtin)
+status_cmd.name = "status"
+
+
+@main.command()
+@click.argument("skill_ids", nargs=-1, required=True)
+@click.option(
+    "--target",
+    type=click.Choice(
+        [
+            "claude_md",
+            "settings_json",
+            "skill",
+            "cursor",
+            "copilot",
+            "windsurf",
+            "continue_dev",
+        ]
+    ),
+    default="claude_md",
+    help="Where to write promoted rules",
+)
+@click.option(
+    "--target-path", type=click.Path(), help="Custom path for the target file"
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def promote_cmd(
+    skill_ids: tuple[str, ...], target: str, target_path: str | None, output_json: bool
+):
+    """Promote skills to agent rules.
+
+    Surface high-confidence skills to your agent via CLAUDE.md, settings.json,
+    or Agent Skills.
+
+    Examples:
+
+        buildlog promote arch-b0fcb62a1e
+        buildlog promote arch-123 wf-456 --target skill
+        buildlog promote arch-123 --target settings_json --target-path .claude/settings.json
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    result = promote(
+        buildlog_dir,
+        skill_ids=list(skill_ids),
+        target=target,  # type: ignore[arg-type]
+        target_path=Path(target_path) if target_path else None,
+    )
+
+    if result.error:
+        click.echo(f"Error: {result.error}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(f"✓ {result.message}")
+        if result.not_found_ids:
+            click.echo(f"  Not found: {', '.join(result.not_found_ids)}")
+
+
+promote_cmd.name = "promote"
+
+
+@main.command("reject")
+@click.argument("skill_ids", nargs=-1, required=True)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def reject_cmd(skill_ids: tuple[str, ...], output_json: bool):
+    """Mark skills as rejected (false positives).
+
+    Rejected skills won't be suggested for promotion again.
+
+    Examples:
+
+        buildlog reject arch-b0fcb62a1e
+        buildlog reject dk-123 wf-456
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    result = reject(buildlog_dir, skill_ids=list(skill_ids))
+
+    if result.error:
+        click.echo(f"Error: {result.error}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(f"✓ Rejected {len(result.rejected_ids)} skills")
+        click.echo(f"  Total rejected: {result.total_rejected}")
+
+
+@main.command("diff")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def diff_cmd(output_json: bool):
+    """Show skills pending review (not yet promoted or rejected).
+
+    Useful for seeing what's new since the last time you reviewed skills.
+
+    Examples:
+
+        buildlog diff
+        buildlog diff --json
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    result = core_diff(buildlog_dir)
+
+    if result.error:
+        click.echo(f"Error: {result.error}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(
+            f"Pending: {result.total_pending} | "
+            f"Promoted: {result.already_promoted} | "
+            f"Rejected: {result.already_rejected}"
+        )
+        click.echo()
+        for category, skills in result.pending.items():
+            if not skills:
+                continue
+            click.echo(f"  {category} ({len(skills)})")
+            for s in skills:
+                conf = s.get("confidence", "?")
+                click.echo(f"    [{conf}] {s['id']}: {s['rule'][:70]}")
+
+
+# -----------------------------------------------------------------------------
 # Experiment Commands (Session Tracking for Issue #21)
 # -----------------------------------------------------------------------------
 
@@ -708,7 +1100,7 @@ def experiment_end(
 
 @experiment.command("log-mistake")
 @click.option(
-    "--class",
+    "--error-class",
     "error_class",
     required=True,
     help="Error class (e.g., 'missing_test', 'validation_boundary')",
@@ -739,8 +1131,8 @@ def experiment_log_mistake(
 
     Examples:
 
-        buildlog experiment log-mistake --class missing_test -d "Forgot tests"
-        buildlog experiment log-mistake --class validation -d "No max length" -r val-123
+        buildlog experiment log-mistake --error-class missing_test -d "Forgot tests"
+        buildlog experiment log-mistake --error-class validation -d "No max length" -r val-123
     """
     import json as json_module
     from dataclasses import asdict
