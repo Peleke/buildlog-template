@@ -47,6 +47,19 @@ embeddings = [
 openai = [
     "openai>=1.0.0",
 ]
+# Ollama for local LLM-backed extraction
+ollama = [
+    "ollama>=0.4.0",
+]
+# Anthropic Claude for cloud LLM-backed extraction
+anthropic = [
+    "anthropic>=0.40.0",
+]
+# Both LLM providers (convenience)
+llm = [
+    "ollama>=0.4.0",
+    "anthropic>=0.40.0",
+]
 # MCP server for Claude Code integration
 mcp = [
     "mcp>=1.0.0",
@@ -56,6 +69,8 @@ all = [
     "sentence-transformers>=2.2.0",
     "openai>=1.0.0",
     "mcp>=1.0.0",
+    "ollama>=0.4.0",
+    "anthropic>=0.40.0",
 ]
 # Development dependencies
 dev = [
@@ -68,6 +83,7 @@ dev = [
     "flake8>=7.0.0",
     "types-PyYAML>=6.0.0",
     "pre-commit>=3.6.0",
+    "mkdocs-material>=9.5.0",
 ]
 
 [project.urls]

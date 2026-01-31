@@ -23,7 +23,10 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Final, Literal, TypedDict
+from typing import TYPE_CHECKING, Final, Literal, TypedDict
+
+if TYPE_CHECKING:
+    from buildlog.llm import LLMBackend
 
 from buildlog.confidence import ConfidenceConfig, ConfidenceMetrics
 from buildlog.confidence import calculate_confidence as calculate_continuous_confidence
@@ -83,6 +86,10 @@ class SkillDict(_SkillDictRequired, total=False):
     antipattern: str  # What does violation look like?
     rationale: str  # Why does this matter?
     persona_tags: list[str]  # Which reviewers use this rule?
+    # LLM-extracted scoring fields
+    severity: str  # critical/major/minor/info
+    scope: str  # global/module/function
+    applicability: list[str]  # contexts where relevant
 
 
 class SkillSetDict(TypedDict):
@@ -115,6 +122,9 @@ class Skill:
         antipattern: What does violation look like? (defensibility)
         rationale: Why does this rule matter? (defensibility)
         persona_tags: Which reviewer personas use this rule?
+        severity: How bad is ignoring this rule? (critical/major/minor/info)
+        scope: How broadly does this rule apply? (global/module/function)
+        applicability: Contexts where this rule is relevant.
     """
 
     id: str
@@ -131,6 +141,10 @@ class Skill:
     antipattern: str | None = None
     rationale: str | None = None
     persona_tags: list[str] = field(default_factory=list)
+    # LLM-extracted scoring
+    severity: str | None = None
+    scope: str | None = None
+    applicability: list[str] = field(default_factory=list)
 
     def to_dict(self) -> SkillDict:
         """Convert to dictionary for serialization.
@@ -159,6 +173,12 @@ class Skill:
             result["rationale"] = self.rationale
         if self.persona_tags:
             result["persona_tags"] = self.persona_tags
+        if self.severity is not None:
+            result["severity"] = self.severity
+        if self.scope is not None:
+            result["scope"] = self.scope
+        if self.applicability:
+            result["applicability"] = self.applicability
         return result
 
 
@@ -326,6 +346,7 @@ def _deduplicate_insights(
     patterns: list[PatternDict],
     threshold: float = MIN_SIMILARITY_THRESHOLD,
     backend: EmbeddingBackend | None = None,
+    llm_backend: LLMBackend | None = None,
 ) -> list[tuple[str, int, list[str], date | None, date | None]]:
     """Deduplicate similar insights into merged rules.
 
@@ -366,9 +387,17 @@ def _deduplicate_insights(
     results: list[tuple[str, int, list[str], date | None, date | None]] = []
 
     for group in groups:
-        # Use the shortest insight as the canonical rule (often cleaner)
-        canonical = min(group, key=lambda p: len(p["insight"]))
-        rule = canonical["insight"]
+        # Use LLM to select canonical form if available and group has >1 member
+        if llm_backend is not None and len(group) > 1:
+            try:
+                candidates = [p["insight"] for p in group]
+                rule = llm_backend.select_canonical(candidates)
+            except Exception:
+                canonical = min(group, key=lambda p: len(p["insight"]))
+                rule = canonical["insight"]
+        else:
+            canonical = min(group, key=lambda p: len(p["insight"]))
+            rule = canonical["insight"]
         frequency = len(group)
         sources = sorted(set(p["source"] for p in group))
 
@@ -434,6 +463,7 @@ def generate_skills(
     embedding_backend: str | None = None,
     confidence_config: ConfidenceConfig | None = None,
     include_review_learnings: bool = True,
+    llm: bool = False,
 ) -> SkillSet:
     """Generate skills from buildlog patterns and review learnings.
 
@@ -449,12 +479,21 @@ def generate_skills(
         include_review_learnings: Whether to include learnings from code reviews.
             When True, loads .buildlog/review_learnings.json and merges
             review learnings into the skill set.
+        llm: If True and an LLM backend is available, use LLM for extraction,
+            canonical selection, and scoring. Falls back gracefully.
 
     Returns:
         SkillSet with generated skills.
     """
+    # Resolve LLM backend if requested
+    llm_backend = None
+    if llm:
+        from buildlog.llm import get_llm_backend
+
+        llm_backend = get_llm_backend(buildlog_dir=buildlog_dir)
+
     # Get distilled patterns
-    result = distill_all(buildlog_dir, since=since_date)
+    result = distill_all(buildlog_dir, since=since_date, llm=llm)
 
     # Get embedding backend
     backend = (
@@ -471,7 +510,9 @@ def generate_skills(
 
     for category in CATEGORIES:
         patterns = result.patterns.get(category, [])
-        deduplicated = _deduplicate_insights(patterns, backend=backend)
+        deduplicated = _deduplicate_insights(
+            patterns, backend=backend, llm_backend=llm_backend
+        )
 
         skills: list[Skill] = []
         for rule, frequency, sources, most_recent, earliest in deduplicated:
@@ -490,6 +531,25 @@ def generate_skills(
                     confidence_score, confidence_config
                 ).value
 
+            # LLM scoring for severity/scope/applicability
+            severity: str | None = None
+            scope: str | None = None
+            applicability_tags: list[str] = []
+            if llm_backend is not None:
+                try:
+                    scoring = llm_backend.score_rule(rule, category)
+                    severity = scoring.severity
+                    scope = scoring.scope
+                    applicability_tags = scoring.applicability
+                except Exception:
+                    pass  # Keep defaults (None/empty)
+
+            # Apply severity weighting to confidence score
+            if confidence_score is not None and severity is not None:
+                from buildlog.confidence import apply_severity_weight
+
+                confidence_score = apply_severity_weight(confidence_score, severity)
+
             skill = Skill(
                 id=_generate_skill_id(category, rule),
                 category=category,
@@ -500,6 +560,9 @@ def generate_skills(
                 tags=_extract_tags(rule),
                 confidence_score=confidence_score,
                 confidence_tier=confidence_tier,
+                severity=severity,
+                scope=scope,
+                applicability=applicability_tags,
             )
             skills.append(skill)
 

@@ -416,7 +416,18 @@ def update():
     type=click.Choice(CATEGORIES),
     help="Filter to a specific category",
 )
-def distill(output: str | None, fmt: str, since: datetime | None, category: str | None):
+@click.option(
+    "--llm",
+    is_flag=True,
+    help="Use LLM-backed extraction (Ollama/Anthropic, falls back to regex)",
+)
+def distill(
+    output: str | None,
+    fmt: str,
+    since: datetime | None,
+    category: str | None,
+    llm: bool,
+):
     """Extract patterns from all buildlog entries.
 
     Parses the Improvements section of each buildlog entry and aggregates
@@ -441,7 +452,9 @@ def distill(output: str | None, fmt: str, since: datetime | None, category: str 
 
     # Run distillation
     try:
-        result = distill_all(buildlog_dir, since=since_date, category_filter=category)
+        result = distill_all(
+            buildlog_dir, since=since_date, category_filter=category, llm=llm
+        )
     except Exception as e:
         click.echo(f"Failed to distill entries: {e}", err=True)
         raise SystemExit(1)
@@ -542,12 +555,18 @@ def stats(output_json: bool, detailed: bool, since_date: str | None):
     default=None,
     help="Embedding backend for semantic deduplication",
 )
+@click.option(
+    "--llm",
+    is_flag=True,
+    help="Use LLM for extraction, canonical selection, and scoring (Ollama/Anthropic)",
+)
 def skills(
     output: str | None,
     fmt: str,
     min_frequency: int,
     since: datetime | None,
     embeddings: str | None,
+    llm: bool = False,
 ):
     """Generate agent-consumable skills from buildlog patterns.
 
@@ -583,6 +602,7 @@ def skills(
             min_frequency=min_frequency,
             since_date=since_date,
             embedding_backend=embeddings,
+            llm=llm,
         )
     except ImportError as e:
         click.echo(f"Missing dependency: {e}", err=True)

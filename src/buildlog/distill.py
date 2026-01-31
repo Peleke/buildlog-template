@@ -8,6 +8,7 @@ __all__ = [
     "distill_all",
     "format_output",
     "parse_improvements",
+    "parse_improvements_llm",
     "parse_date_from_filename",
     "iter_buildlog_entries",
 ]
@@ -19,7 +20,10 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Final, Literal, TypedDict
+from typing import TYPE_CHECKING, Final, Literal, TypedDict
+
+if TYPE_CHECKING:
+    from buildlog.llm import ExtractedRule, LLMBackend
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +195,36 @@ def parse_improvements(content: str) -> dict[str, list[str]]:
     return result
 
 
+def parse_improvements_llm(content: str, backend: LLMBackend) -> list[ExtractedRule]:
+    """Extract improvements using an LLM backend for richer extraction.
+
+    Sends the Improvements section to the LLM for structured extraction
+    of rules with severity, scope, applicability, and defensibility fields.
+
+    Args:
+        content: The full markdown content of a buildlog entry.
+        backend: An LLM backend implementing the LLMBackend protocol.
+
+    Returns:
+        List of ExtractedRule objects with rich metadata.
+    """
+    # Extract the Improvements section
+    improvements_match = re.search(
+        r"^##\s+Improvements\s*\n(.*?)(?=^#{1,2}\s|\Z)",
+        content,
+        re.MULTILINE | re.DOTALL,
+    )
+
+    if not improvements_match:
+        return []
+
+    improvements_text = improvements_match.group(1).strip()
+    if not improvements_text:
+        return []
+
+    return backend.extract_rules(improvements_text)
+
+
 def parse_date_from_filename(filename: str) -> str | None:
     """Extract date from buildlog filename (YYYY-MM-DD-slug.md format)."""
     match = re.match(r"^(\d{4}-\d{2}-\d{2})-", filename)
@@ -290,6 +324,7 @@ def distill_all(
     buildlog_dir: Path,
     since: date | None = None,
     category_filter: str | None = None,
+    llm: bool = False,
 ) -> DistillResult:
     """Parse all buildlog entries and aggregate patterns.
 
@@ -297,10 +332,23 @@ def distill_all(
         buildlog_dir: Path to the buildlog directory.
         since: If provided, only include entries from this date onward.
         category_filter: If provided, only include patterns from this category.
+        llm: If True and an LLM backend is available, use LLM extraction.
+            Falls back to regex on failure or if no backend is available.
 
     Returns:
         DistillResult with aggregated patterns and statistics.
     """
+    # Resolve LLM backend if requested
+    llm_backend: LLMBackend | None = None
+    if llm:
+        from buildlog.llm import get_llm_backend
+
+        llm_backend = get_llm_backend(buildlog_dir=buildlog_dir)
+        if llm_backend is None:
+            logger.warning(
+                "--llm requested but no LLM provider available, using regex fallback"
+            )
+
     patterns: dict[str, list[PatternDict]] = {cat: [] for cat in CATEGORIES}
     by_month: dict[str, int] = {}
     entry_count = 0
@@ -318,6 +366,37 @@ def distill_all(
         month_key = _extract_month_key(date_str)
         by_month[month_key] = by_month.get(month_key, 0) + 1
 
+        # Try LLM extraction first, fall back to regex
+        if llm_backend is not None:
+            try:
+                extracted = parse_improvements_llm(content, llm_backend)
+                if extracted:
+                    # Convert ExtractedRule objects to standard PatternDict format
+                    for rule in extracted:
+                        cat = (
+                            rule.category
+                            if rule.category in CATEGORIES
+                            else "architectural"
+                        )
+                        if cat not in patterns:
+                            patterns[cat] = []
+                        patterns[cat].append(
+                            PatternDict(
+                                insight=rule.rule,
+                                source=str(entry_path),
+                                date=date_str,
+                                context=context,
+                            )
+                        )
+                    continue  # Skip regex if LLM succeeded
+            except Exception as e:
+                logger.warning(
+                    "LLM extraction failed for %s, falling back to regex: %s",
+                    entry_path,
+                    e,
+                )
+
+        # Regex fallback (default behavior)
         try:
             improvements = parse_improvements(content)
         except re.error as e:
