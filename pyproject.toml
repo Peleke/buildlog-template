@@ -35,6 +35,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Engine-only: bandit, confidence, embeddings, experiment tracking.
+# Zero extra deps — the engine is part of the base package.
+# This extra documents the clean namespace: from buildlog.engine import X
+engine = []
 # Local embeddings for semantic deduplication (offline)
 embeddings = [
     "sentence-transformers>=2.2.0",

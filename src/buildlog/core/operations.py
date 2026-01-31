@@ -560,7 +560,7 @@ def status(
 def promote(
     buildlog_dir: Path,
     skill_ids: list[str],
-    target: Literal["claude_md", "settings_json", "skill"] = "claude_md",
+    target: str = "claude_md",
     target_path: Path | None = None,
 ) -> PromoteResult:
     """Promote skills to agent rules.
@@ -568,7 +568,8 @@ def promote(
     Args:
         buildlog_dir: Path to buildlog directory.
         skill_ids: List of skill IDs to promote.
-        target: Where to write rules ("claude_md", "settings_json", or "skill").
+        target: Where to write rules. One of: claude_md, settings_json,
+            skill, cursor, copilot, windsurf, continue_dev.
         target_path: Optional custom path for the target file.
 
     Returns:
