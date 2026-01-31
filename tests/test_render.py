@@ -51,7 +51,7 @@ class TestClaudeMdRenderer:
         content = claude_md.read_text()
         assert "# Existing content" in content
         assert "## Learned Rules" in content
-        assert "1 rules" in result
+        assert "1 new rules" in result
 
     def test_creates_new_file_if_missing(self, tmp_path):
         """Should create CLAUDE.md if it doesn't exist."""
@@ -136,7 +136,7 @@ class TestClaudeMdRenderer:
         # First render - use unique marker that survives _to_imperative transform
         skill = make_skill(id="arch-dedup123", rule="dedup marker xyz")
         result1 = renderer.render([skill])
-        assert "1 rules" in result1
+        assert "1 new rules" in result1
 
         content_after_first = claude_md.read_text()
         # Rule is transformed but marker should survive
@@ -166,8 +166,8 @@ class TestClaudeMdRenderer:
         skill_b = make_skill(id="arch-b", rule="marker bbb unique")
         result = renderer.render([skill_a, skill_b])
 
-        assert "1 rules" in result  # Only B should be added
-        assert "1 already promoted" in result
+        assert "1 new rules" in result  # Only B should be added
+        assert "1 already tracked" in result
 
         content = claude_md.read_text()
         assert content.count("marker aaa unique") == 1

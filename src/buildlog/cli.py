@@ -128,7 +128,132 @@ def init(no_claude_md: bool, defaults: bool):
                 click.echo("Added Build Journal section to CLAUDE.md")
 
     click.echo("\n✓ buildlog initialized!")
-    click.echo("\nNext: buildlog new my-feature")
+    click.echo()
+    click.echo("How it works:")
+    click.echo("  1. Write entries     buildlog new my-feature (or --quick)")
+    click.echo("  2. Extract rules     buildlog skills")
+    click.echo("  3. Promote to agent  buildlog promote <id> --target cursor")
+    click.echo("  4. Measure learning  buildlog overview")
+    click.echo()
+    click.echo(
+        "Targets: claude_md, cursor, copilot, windsurf, continue_dev, settings_json, skill"
+    )
+    click.echo()
+    click.echo("Start now: buildlog new my-first-task --quick")
+
+
+@main.command()
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def overview(output_json: bool):
+    """Show the full state of your buildlog at a glance.
+
+    Entries, skills, promoted rules, experiments — everything in one view.
+
+    Examples:
+
+        buildlog overview
+        buildlog overview --json
+    """
+    import json as json_module
+
+    buildlog_dir = Path("buildlog")
+
+    if not buildlog_dir.exists():
+        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
+        raise SystemExit(1)
+
+    # Count entries
+    entries = sorted(buildlog_dir.glob("20??-??-??-*.md"))
+
+    # Try to get skills
+    try:
+        skill_set = generate_skills(buildlog_dir)
+        total_skills = skill_set.total_skills
+        by_confidence = {"high": 0, "medium": 0, "low": 0}
+        for cat_skills in skill_set.skills.values():
+            for s in cat_skills:
+                by_confidence[s.confidence] += 1
+    except Exception:
+        total_skills = 0
+        by_confidence = {"high": 0, "medium": 0, "low": 0}
+
+    # Promoted/rejected counts
+    promoted_path = buildlog_dir / ".buildlog" / "promoted.json"
+    rejected_path = buildlog_dir / ".buildlog" / "rejected.json"
+    promoted_count = 0
+    rejected_count = 0
+    if promoted_path.exists():
+        try:
+            data = json_module.loads(promoted_path.read_text())
+            promoted_count = len(data.get("skill_ids", []))
+        except (json_module.JSONDecodeError, OSError):
+            pass
+    if rejected_path.exists():
+        try:
+            data = json_module.loads(rejected_path.read_text())
+            rejected_count = len(data.get("skill_ids", []))
+        except (json_module.JSONDecodeError, OSError):
+            pass
+
+    # Active session?
+    active_session_path = buildlog_dir / ".buildlog" / "active_session.json"
+    active_session = None
+    if active_session_path.exists():
+        try:
+            active_session = json_module.loads(active_session_path.read_text())
+        except (json_module.JSONDecodeError, OSError):
+            pass
+
+    # Render targets with files
+    from buildlog.render import RENDERERS
+
+    result = {
+        "entries": len(entries),
+        "skills": {
+            "total": total_skills,
+            "by_confidence": by_confidence,
+            "promoted": promoted_count,
+            "rejected": rejected_count,
+            "pending": total_skills - promoted_count - rejected_count,
+        },
+        "active_session": active_session.get("id") if active_session else None,
+        "render_targets": list(RENDERERS.keys()),
+    }
+
+    if output_json:
+        click.echo(json_module.dumps(result, indent=2))
+    else:
+        click.echo("buildlog overview")
+        click.echo("=" * 40)
+        click.echo(f"  Entries:     {len(entries)}")
+        click.echo(f"  Skills:      {total_skills}")
+        if total_skills > 0:
+            conf_parts = [f"{k}={v}" for k, v in by_confidence.items() if v > 0]
+            click.echo(f"    confidence: {', '.join(conf_parts)}")
+        click.echo(f"  Promoted:    {promoted_count}")
+        click.echo(f"  Rejected:    {rejected_count}")
+        pending = total_skills - promoted_count - rejected_count
+        if pending > 0:
+            click.echo(f"  Pending:     {pending}")
+        if active_session:
+            click.echo(f"  Session:     {active_session.get('id', '?')} (active)")
+        click.echo()
+
+        if len(entries) == 0:
+            click.echo("Get started:")
+            click.echo("  buildlog new my-first-task        # Full template")
+            click.echo("  buildlog new my-first-task --quick # Short template")
+        elif total_skills == 0:
+            click.echo("Next steps:")
+            click.echo(
+                "  buildlog skills                    # Extract rules from entries"
+            )
+        elif promoted_count == 0:
+            click.echo("Next steps:")
+            click.echo("  buildlog status                    # See extracted skills")
+            click.echo("  buildlog promote <id> --target cursor  # Push to your agent")
+        else:
+            click.echo("Targets: " + ", ".join(RENDERERS.keys()))
 
 
 @main.command()
@@ -136,7 +261,12 @@ def init(no_claude_md: bool, defaults: bool):
 @click.option(
     "--date", "-d", "entry_date", default=None, help="Date for entry (YYYY-MM-DD)"
 )
-def new(slug: str, entry_date: str | None):
+@click.option(
+    "--quick",
+    is_flag=True,
+    help="Use the short template (good for small tasks)",
+)
+def new(slug: str, entry_date: str | None, quick: bool):
     """Create a new buildlog entry.
 
     SLUG is a short identifier for the entry (e.g., 'auth-api', 'bugfix-login').
@@ -144,10 +274,16 @@ def new(slug: str, entry_date: str | None):
     Examples:
 
         buildlog new auth-api
+        buildlog new bugfix-login --quick
         buildlog new runpod-deploy --date 2026-01-15
     """
     buildlog_dir = Path("buildlog")
-    template_file = buildlog_dir / "_TEMPLATE.md"
+    template_name = "_TEMPLATE_QUICK.md" if quick else "_TEMPLATE.md"
+    template_file = buildlog_dir / template_name
+
+    # Fall back to full template if quick template doesn't exist
+    if quick and not template_file.exists():
+        template_file = buildlog_dir / "_TEMPLATE.md"
 
     if not buildlog_dir.exists():
         click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
@@ -677,7 +813,17 @@ status_cmd.name = "status"
 @click.argument("skill_ids", nargs=-1, required=True)
 @click.option(
     "--target",
-    type=click.Choice(["claude_md", "settings_json", "skill"]),
+    type=click.Choice(
+        [
+            "claude_md",
+            "settings_json",
+            "skill",
+            "cursor",
+            "copilot",
+            "windsurf",
+            "continue_dev",
+        ]
+    ),
     default="claude_md",
     help="Where to write promoted rules",
 )
