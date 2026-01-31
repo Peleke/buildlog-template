@@ -263,7 +263,7 @@ def buildlog_rewards(
 # -----------------------------------------------------------------------------
 
 
-def buildlog_start_session(
+def buildlog_experiment_start(
     error_class: str | None = None,
     notes: str | None = None,
     select_k: int = 3,
@@ -303,7 +303,7 @@ def buildlog_start_session(
     return asdict(result)
 
 
-def buildlog_end_session(
+def buildlog_experiment_end(
     entry_file: str | None = None,
     notes: str | None = None,
     buildlog_dir: str = "buildlog",
@@ -370,7 +370,7 @@ def buildlog_log_mistake(
     return asdict(result)
 
 
-def buildlog_session_metrics(
+def buildlog_experiment_metrics(
     session_id: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:

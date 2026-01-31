@@ -364,7 +364,9 @@ Available tools:
 | `buildlog_diff` | Rules pending review |
 | `buildlog_learn_from_review` | Extract rules from code review |
 | `buildlog_log_reward` | Record reward signal (updates bandit) |
-| `buildlog_start_session` | Begin tracked session (bandit selects rules) |
+| `buildlog_experiment_start` | Begin tracked session (bandit selects rules) |
+| `buildlog_experiment_end` | End tracked session, calculate metrics |
+| `buildlog_experiment_metrics` | Per-session or aggregate experiment metrics |
 | `buildlog_log_mistake` | Record mistake (negative feedback to bandit) |
 | `buildlog_experiment_report` | Full experiment report |
 | `buildlog_bandit_status` | View Thompson Sampling bandit state |

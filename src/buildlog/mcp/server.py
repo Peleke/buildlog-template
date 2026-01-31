@@ -6,8 +6,10 @@ from mcp.server.fastmcp import FastMCP
 
 from buildlog.mcp.tools import (
     buildlog_diff,
-    buildlog_end_session,
+    buildlog_experiment_end,
+    buildlog_experiment_metrics,
     buildlog_experiment_report,
+    buildlog_experiment_start,
     buildlog_gauntlet_accept_risk,
     buildlog_gauntlet_issues,
     buildlog_learn_from_review,
@@ -16,8 +18,6 @@ from buildlog.mcp.tools import (
     buildlog_promote,
     buildlog_reject,
     buildlog_rewards,
-    buildlog_session_metrics,
-    buildlog_start_session,
     buildlog_status,
 )
 
@@ -33,10 +33,10 @@ mcp.tool()(buildlog_log_reward)
 mcp.tool()(buildlog_rewards)
 
 # Session tracking tools (experiment infrastructure)
-mcp.tool()(buildlog_start_session)
-mcp.tool()(buildlog_end_session)
+mcp.tool()(buildlog_experiment_start)
+mcp.tool()(buildlog_experiment_end)
 mcp.tool()(buildlog_log_mistake)
-mcp.tool()(buildlog_session_metrics)
+mcp.tool()(buildlog_experiment_metrics)
 mcp.tool()(buildlog_experiment_report)
 
 # Gauntlet loop tools
