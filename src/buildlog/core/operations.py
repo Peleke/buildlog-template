@@ -2227,7 +2227,7 @@ def gauntlet_accept_risk(
                 "--body",
                 body,
                 "--label",
-                severity,
+                safe_severity,
             ]
             if repo:
                 cmd.extend(["--repo", repo])
@@ -2378,11 +2378,42 @@ def record_gauntlet_run(buildlog_dir: Path, action: str) -> None:
     save_gauntlet_state(buildlog_dir, state)
 
 
+def _sanitize_filepath(filepath: str) -> str | None:
+    """Validate and normalize a filepath for dirty_files tracking.
+
+    Rejects path traversal, absolute paths, and overly long strings.
+    Returns normalized path or None if invalid.
+    """
+    if not filepath or not isinstance(filepath, str):
+        return None
+    # Reject overly long paths
+    if len(filepath) > 500:
+        return None
+    # Reject absolute paths
+    if filepath.startswith("/") or filepath.startswith("\\"):
+        return None
+    # Reject path traversal
+    normalized = str(Path(filepath))
+    if ".." in normalized.split("/") or ".." in normalized.split("\\"):
+        return None
+    return normalized
+
+
 def track_dirty_file(buildlog_dir: Path, filepath: str) -> None:
-    """Append a file to dirty_files list (no duplicates)."""
+    """Append a file to dirty_files list (no duplicates).
+
+    Validates the filepath before persisting. Rejects absolute paths,
+    path traversal, and overly long strings.
+    """
+    sanitized = _sanitize_filepath(filepath)
+    if sanitized is None:
+        return
     state = load_gauntlet_state(buildlog_dir)
-    if filepath not in state.dirty_files:
-        state.dirty_files.append(filepath)
+    # Bound dirty_files to prevent unbounded growth
+    if len(state.dirty_files) >= 500:
+        return
+    if sanitized not in state.dirty_files:
+        state.dirty_files.append(sanitized)
         save_gauntlet_state(buildlog_dir, state)
 
 

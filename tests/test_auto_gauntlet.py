@@ -11,6 +11,7 @@ from buildlog.cli import main
 from buildlog.core.operations import (
     GauntletState,
     _load_auto_gauntlet_config,
+    _sanitize_filepath,
     check_gauntlet_freshness,
     increment_gauntlet_staleness,
     load_gauntlet_state,
@@ -18,6 +19,7 @@ from buildlog.core.operations import (
     save_gauntlet_state,
     track_dirty_file,
 )
+from buildlog.mcp.tools import buildlog_gauntlet_check
 
 
 @pytest.fixture
@@ -340,3 +342,290 @@ def test_gauntlet_process_issues_resets_state(buildlog_dir):
     state = load_gauntlet_state(buildlog_dir)
     assert state.commits_since_gauntlet == 0
     assert state.dirty_files == []
+
+
+# -------------------------------------------------------------------------
+# Path validation tests
+# -------------------------------------------------------------------------
+
+
+def test_sanitize_filepath_rejects_absolute():
+    assert _sanitize_filepath("/etc/passwd") is None
+
+
+def test_sanitize_filepath_rejects_traversal():
+    assert _sanitize_filepath("../../etc/passwd") is None
+    assert _sanitize_filepath("foo/../../../bar") is None
+
+
+def test_sanitize_filepath_rejects_long_paths():
+    assert _sanitize_filepath("a" * 501) is None
+
+
+def test_sanitize_filepath_rejects_empty():
+    assert _sanitize_filepath("") is None
+    assert _sanitize_filepath(None) is None
+
+
+def test_sanitize_filepath_accepts_valid():
+    assert _sanitize_filepath("src/main.py") is not None
+    assert _sanitize_filepath("tests/test_foo.py") is not None
+
+
+def test_track_dirty_file_rejects_traversal(buildlog_dir):
+    track_dirty_file(buildlog_dir, "../../etc/passwd")
+    state = load_gauntlet_state(buildlog_dir)
+    assert state.dirty_files == []
+
+
+def test_track_dirty_file_bounds_list(buildlog_dir):
+    """dirty_files list is bounded at 500."""
+    state = GauntletState(dirty_files=[f"file{i}.py" for i in range(500)])
+    save_gauntlet_state(buildlog_dir, state)
+    track_dirty_file(buildlog_dir, "one_more.py")
+    state = load_gauntlet_state(buildlog_dir)
+    assert len(state.dirty_files) == 500
+    assert "one_more.py" not in state.dirty_files
+
+
+# -------------------------------------------------------------------------
+# Edge case tests
+# -------------------------------------------------------------------------
+
+
+def test_load_gauntlet_state_malformed_json(buildlog_dir):
+    path = buildlog_dir / ".buildlog" / "gauntlet_state.json"
+    path.write_text("{invalid json!!")
+    state = load_gauntlet_state(buildlog_dir)
+    assert state.commits_since_gauntlet == 0
+
+
+def test_load_config_malformed_json(buildlog_dir):
+    path = buildlog_dir / ".buildlog" / "config.json"
+    path.write_text("{bad json")
+    config = _load_auto_gauntlet_config(buildlog_dir)
+    assert config == {}
+
+
+def test_check_freshness_no_config_uses_default_threshold(buildlog_dir):
+    """Without config, default threshold of 3 is used."""
+    state = GauntletState(commits_since_gauntlet=3)
+    save_gauntlet_state(buildlog_dir, state)
+    result = check_gauntlet_freshness(buildlog_dir)
+    assert result["stale"] is True
+
+
+def test_check_freshness_no_config_below_default(buildlog_dir):
+    state = GauntletState(commits_since_gauntlet=2)
+    save_gauntlet_state(buildlog_dir, state)
+    result = check_gauntlet_freshness(buildlog_dir)
+    assert result["stale"] is False
+
+
+# -------------------------------------------------------------------------
+# CLI: track-file and track-edit
+# -------------------------------------------------------------------------
+
+
+def test_gauntlet_track_file_cli(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    buildlog_dir = tmp_path / "buildlog"
+    buildlog_dir.mkdir()
+    (buildlog_dir / ".buildlog").mkdir()
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["gauntlet", "track-file", "src/foo.py"])
+    assert result.exit_code == 0
+
+    state = load_gauntlet_state(buildlog_dir)
+    assert "src/foo.py" in state.dirty_files
+
+
+def test_gauntlet_track_file_rejects_bad_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    buildlog_dir = tmp_path / "buildlog"
+    buildlog_dir.mkdir()
+    (buildlog_dir / ".buildlog").mkdir()
+
+    runner = CliRunner()
+    runner.invoke(main, ["gauntlet", "track-file", "/etc/passwd"])
+    state = load_gauntlet_state(buildlog_dir)
+    assert state.dirty_files == []
+
+
+def test_gauntlet_track_edit_cli(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    buildlog_dir = tmp_path / "buildlog"
+    buildlog_dir.mkdir()
+    (buildlog_dir / ".buildlog").mkdir()
+
+    stdin_data = json.dumps({"tool_input": {"file_path": "src/bar.py"}})
+    runner = CliRunner()
+    result = runner.invoke(main, ["gauntlet", "track-edit"], input=stdin_data)
+    assert result.exit_code == 0
+
+    state = load_gauntlet_state(buildlog_dir)
+    assert "src/bar.py" in state.dirty_files
+
+
+def test_gauntlet_track_edit_bad_json(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    buildlog_dir = tmp_path / "buildlog"
+    buildlog_dir.mkdir()
+    (buildlog_dir / ".buildlog").mkdir()
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["gauntlet", "track-edit"], input="not json")
+    assert result.exit_code == 0
+
+    state = load_gauntlet_state(buildlog_dir)
+    assert state.dirty_files == []
+
+
+def test_gauntlet_track_edit_no_file_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    buildlog_dir = tmp_path / "buildlog"
+    buildlog_dir.mkdir()
+    (buildlog_dir / ".buildlog").mkdir()
+
+    stdin_data = json.dumps({"tool_input": {"other_key": "value"}})
+    runner = CliRunner()
+    runner.invoke(main, ["gauntlet", "track-edit"], input=stdin_data)
+
+    state = load_gauntlet_state(buildlog_dir)
+    assert state.dirty_files == []
+
+
+# -------------------------------------------------------------------------
+# CLI: gauntlet check --event
+# -------------------------------------------------------------------------
+
+
+def test_gauntlet_check_event_flag(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    buildlog_dir = tmp_path / "buildlog"
+    buildlog_dir.mkdir()
+    (buildlog_dir / ".buildlog").mkdir()
+
+    config = {"auto_gauntlet": {"commit_gate": {"max_staleness_commits": 3}}}
+    (buildlog_dir / ".buildlog" / "config.json").write_text(json.dumps(config))
+    state = GauntletState(commits_since_gauntlet=1)
+    save_gauntlet_state(buildlog_dir, state)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["gauntlet", "check", "--json", "--event", "stop"])
+    data = json.loads(result.output)
+    assert data["event"] == "stop"
+    assert data["stale"] is False
+
+
+# -------------------------------------------------------------------------
+# MCP tool test
+# -------------------------------------------------------------------------
+
+
+def test_buildlog_gauntlet_check_mcp(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    buildlog_dir = tmp_path / "buildlog"
+    buildlog_dir.mkdir()
+    (buildlog_dir / ".buildlog").mkdir()
+
+    config = {"auto_gauntlet": {"commit_gate": {"max_staleness_commits": 3}}}
+    (buildlog_dir / ".buildlog" / "config.json").write_text(json.dumps(config))
+    state = GauntletState(commits_since_gauntlet=5)
+    save_gauntlet_state(buildlog_dir, state)
+
+    result = buildlog_gauntlet_check(buildlog_dir=str(buildlog_dir))
+    assert result["stale"] is True
+    assert result["commits_since_gauntlet"] == 5
+
+
+def test_buildlog_gauntlet_check_mcp_fresh(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    buildlog_dir = tmp_path / "buildlog"
+    buildlog_dir.mkdir()
+    (buildlog_dir / ".buildlog").mkdir()
+
+    result = buildlog_gauntlet_check(buildlog_dir=str(buildlog_dir))
+    assert result["stale"] is False
+
+
+# -------------------------------------------------------------------------
+# gauntlet_process_issues categorization test
+# -------------------------------------------------------------------------
+
+
+def test_gauntlet_process_issues_categorizes(buildlog_dir):
+    issues = [
+        {
+            "severity": "critical",
+            "category": "security",
+            "description": "SQL injection",
+            "rule_learned": "Parameterize queries",
+        },
+        {
+            "severity": "major",
+            "category": "testing",
+            "description": "No tests",
+            "rule_learned": "Write tests",
+        },
+        {
+            "severity": "minor",
+            "category": "workflow",
+            "description": "Style",
+            "rule_learned": "Follow style guide",
+        },
+        {
+            "severity": "nitpick",
+            "category": "workflow",
+            "description": "Naming",
+            "rule_learned": "Use clear names",
+        },
+    ]
+
+    from buildlog.core.operations import gauntlet_process_issues
+
+    with patch("buildlog.core.operations._subprocess") as mock_sub:
+        mock_sub.run.return_value.returncode = 0
+        mock_sub.run.return_value.stdout = "abc1234\n"
+        mock_sub.TimeoutExpired = TimeoutError
+        result = gauntlet_process_issues(buildlog_dir, issues, iteration=2)
+
+    assert result.action == "fix_criticals"
+    assert len(result.criticals) == 1
+    assert len(result.majors) == 1
+    assert len(result.minors) == 2  # minor + nitpick
+    assert result.iteration == 2
+
+
+def test_gauntlet_process_issues_checkpoint_majors(buildlog_dir):
+    issues = [
+        {
+            "severity": "major",
+            "category": "testing",
+            "description": "No tests",
+            "rule_learned": "Write tests",
+        },
+    ]
+
+    from buildlog.core.operations import gauntlet_process_issues
+
+    with patch("buildlog.core.operations._subprocess") as mock_sub:
+        mock_sub.run.return_value.returncode = 0
+        mock_sub.run.return_value.stdout = "abc\n"
+        mock_sub.TimeoutExpired = TimeoutError
+        result = gauntlet_process_issues(buildlog_dir, issues, iteration=3)
+
+    assert result.action == "checkpoint_majors"
+
+
+def test_gauntlet_process_issues_clean(buildlog_dir):
+    from buildlog.core.operations import gauntlet_process_issues
+
+    with patch("buildlog.core.operations._subprocess") as mock_sub:
+        mock_sub.run.return_value.returncode = 0
+        mock_sub.run.return_value.stdout = "abc\n"
+        mock_sub.TimeoutExpired = TimeoutError
+        result = gauntlet_process_issues(buildlog_dir, [], iteration=4)
+
+    assert result.action == "clean"
