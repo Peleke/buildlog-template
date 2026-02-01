@@ -1,0 +1,443 @@
+{
+  "learnings": {
+    "secu-f2cfa8fbf3": {
+      "id": "secu-f2cfa8fbf3",
+      "rule": "Redact secrets from object repr to prevent accidental exposure in logs and tracebacks",
+      "category": "security",
+      "severity": "critical",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-a477019a13": {
+      "id": "secu-a477019a13",
+      "rule": "Override __repr__ on dataclasses that hold secrets to redact sensitive fields",
+      "category": "security",
+      "severity": "critical",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-1d0f66c753": {
+      "id": "secu-1d0f66c753",
+      "rule": "Rate-limit all outbound API calls to prevent abuse and cost overruns",
+      "category": "security",
+      "severity": "critical",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-94aa6ae8d7": {
+      "id": "secu-94aa6ae8d7",
+      "rule": "Always use timezone-aware UTC timestamps in audit and security event logs",
+      "category": "security",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-7e18232050": {
+      "id": "secu-7e18232050",
+      "rule": "Always set timeouts on subprocess and network calls",
+      "category": "security",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-b0b9b21006": {
+      "id": "secu-b0b9b21006",
+      "rule": "Mutable global registries should be frozen or access-controlled after initialization",
+      "category": "security",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-6eb06e4344": {
+      "id": "secu-6eb06e4344",
+      "rule": "Validate and allowlist URLs at system boundaries",
+      "category": "security",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-a230a80e7c": {
+      "id": "test-a230a80e7c",
+      "rule": "Use property-based testing for code with mathematical invariants",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 2,
+      "contradiction_count": 0
+    },
+    "test-19b6462507": {
+      "id": "test-19b6462507",
+      "rule": "Assert roundtrip properties for serialization code",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 2,
+      "contradiction_count": 0
+    },
+    "test-1c4c021c8c": {
+      "id": "test-1c4c021c8c",
+      "rule": "Test schema contracts at integration boundaries",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 2,
+      "contradiction_count": 0
+    },
+    "test-2a8e54b289": {
+      "id": "test-2a8e54b289",
+      "rule": "Test LLM output parsing with malformed, truncated, and adversarial inputs",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-8c83f1769c": {
+      "id": "test-8c83f1769c",
+      "rule": "Maintain LLM evaluation datasets with golden inputs/outputs for regression detection",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-825404b59a": {
+      "id": "secu-825404b59a",
+      "rule": "Sanitize logged content to prevent sensitive data leakage",
+      "category": "security",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-fde6d436f6": {
+      "id": "test-fde6d436f6",
+      "rule": "Assert on parsed structure not string containment for format-sensitive outputs",
+      "category": "testing",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-685ba8cd7e": {
+      "id": "test-685ba8cd7e",
+      "rule": "Share test factories via conftest fixtures to prevent duplication",
+      "category": "testing",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-0c41e5919c": {
+      "id": "test-0c41e5919c",
+      "rule": "Avoid testing through implementation details of external tools",
+      "category": "testing",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-5809c7eb14": {
+      "id": "test-5809c7eb14",
+      "rule": "Test permutation invariance for order-independent operations",
+      "category": "testing",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 2,
+      "contradiction_count": 0
+    },
+    "test-facad358e8": {
+      "id": "test-facad358e8",
+      "rule": "Structure tests with clear Arrange-Act-Assert separation",
+      "category": "testing",
+      "severity": "nitpick",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-cf91da5a3e": {
+      "id": "secu-cf91da5a3e",
+      "rule": "Extract security-critical sanitization into module-level testable functions",
+      "category": "security",
+      "severity": "nitpick",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:02.594426+00:00",
+      "last_reinforced": "2026-02-01T00:54:02.594426+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-c9a6113da5": {
+      "id": "secu-c9a6113da5",
+      "rule": "Use MappingProxyType for read-only global registries",
+      "category": "security",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:21.698814+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-80375f4b88": {
+      "id": "test-80375f4b88",
+      "rule": "Every fix needs a regression test",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:21.698814+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-8d7438904a": {
+      "id": "test-8d7438904a",
+      "rule": "Test LLM output parsing with adversarial inputs",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:21.698814+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-32ba050968": {
+      "id": "test-32ba050968",
+      "rule": "Maintain LLM eval datasets with golden inputs/outputs",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:21.698814+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-3ca99fa40b": {
+      "id": "secu-3ca99fa40b",
+      "rule": "Sanitize logged content to prevent data leakage",
+      "category": "security",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:21.698814+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-a93a427404": {
+      "id": "test-a93a427404",
+      "rule": "Assert on parsed structure for format-sensitive outputs",
+      "category": "testing",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:21.698814+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-5351a940e2": {
+      "id": "test-5351a940e2",
+      "rule": "Share test factories via conftest fixtures",
+      "category": "testing",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-2",
+      "first_seen": "2026-02-01T00:54:21.698814+00:00",
+      "last_reinforced": "2026-02-01T00:54:21.698814+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-ef1f0621cf": {
+      "id": "test-ef1f0621cf",
+      "rule": "Use property-based testing for mathematical invariants",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-3",
+      "first_seen": "2026-02-01T01:02:17.886696+00:00",
+      "last_reinforced": "2026-02-01T01:02:17.886696+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-c678293b5a": {
+      "id": "test-c678293b5a",
+      "rule": "Assert roundtrip properties for serialization",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-3",
+      "first_seen": "2026-02-01T01:02:17.886696+00:00",
+      "last_reinforced": "2026-02-01T01:02:17.886696+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-0ae69eb5b5": {
+      "id": "test-0ae69eb5b5",
+      "rule": "Test schema contracts at boundaries",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-3",
+      "first_seen": "2026-02-01T01:02:17.886696+00:00",
+      "last_reinforced": "2026-02-01T01:02:17.886696+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-4898b2ad67": {
+      "id": "test-4898b2ad67",
+      "rule": "Maintain LLM eval datasets",
+      "category": "testing",
+      "severity": "major",
+      "source": "review:gauntlet:iteration-3",
+      "first_seen": "2026-02-01T01:02:17.886696+00:00",
+      "last_reinforced": "2026-02-01T01:02:17.886696+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "secu-81b167a750": {
+      "id": "secu-81b167a750",
+      "rule": "Sanitize logged content",
+      "category": "security",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-3",
+      "first_seen": "2026-02-01T01:02:17.886696+00:00",
+      "last_reinforced": "2026-02-01T01:02:17.886696+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-abe7a65fca": {
+      "id": "test-abe7a65fca",
+      "rule": "Assert on parsed structure",
+      "category": "testing",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-3",
+      "first_seen": "2026-02-01T01:02:17.886696+00:00",
+      "last_reinforced": "2026-02-01T01:02:17.886696+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-e14695120f": {
+      "id": "test-e14695120f",
+      "rule": "Share test factories via conftest",
+      "category": "testing",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-3",
+      "first_seen": "2026-02-01T01:02:17.886696+00:00",
+      "last_reinforced": "2026-02-01T01:02:17.886696+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    },
+    "test-e2856eb5aa": {
+      "id": "test-e2856eb5aa",
+      "rule": "Test permutation invariance",
+      "category": "testing",
+      "severity": "minor",
+      "source": "review:gauntlet:iteration-3",
+      "first_seen": "2026-02-01T01:02:17.886696+00:00",
+      "last_reinforced": "2026-02-01T01:02:17.886696+00:00",
+      "reinforcement_count": 1,
+      "contradiction_count": 0
+    }
+  },
+  "review_history": [
+    {
+      "timestamp": "2026-02-01T00:54:02.594426+00:00",
+      "source": "review:gauntlet:iteration-2",
+      "issues_count": 19,
+      "new_learning_ids": [
+        "secu-f2cfa8fbf3",
+        "secu-a477019a13",
+        "secu-1d0f66c753",
+        "secu-94aa6ae8d7",
+        "secu-7e18232050",
+        "secu-b0b9b21006",
+        "secu-6eb06e4344",
+        "test-a230a80e7c",
+        "test-19b6462507",
+        "test-1c4c021c8c",
+        "test-2a8e54b289",
+        "test-8c83f1769c",
+        "secu-825404b59a",
+        "test-fde6d436f6",
+        "test-685ba8cd7e",
+        "test-0c41e5919c",
+        "test-5809c7eb14",
+        "test-facad358e8",
+        "secu-cf91da5a3e"
+      ],
+      "reinforced_learning_ids": []
+    },
+    {
+      "timestamp": "2026-02-01T00:54:21.698814+00:00",
+      "source": "review:gauntlet:iteration-2",
+      "issues_count": 11,
+      "new_learning_ids": [
+        "secu-c9a6113da5",
+        "test-80375f4b88",
+        "test-8d7438904a",
+        "test-32ba050968",
+        "secu-3ca99fa40b",
+        "test-a93a427404",
+        "test-5351a940e2"
+      ],
+      "reinforced_learning_ids": [
+        "test-a230a80e7c",
+        "test-19b6462507",
+        "test-1c4c021c8c",
+        "test-5809c7eb14"
+      ]
+    },
+    {
+      "timestamp": "2026-02-01T01:02:17.886696+00:00",
+      "source": "review:gauntlet:iteration-3",
+      "issues_count": 8,
+      "new_learning_ids": [
+        "test-ef1f0621cf",
+        "test-c678293b5a",
+        "test-0ae69eb5b5",
+        "test-4898b2ad67",
+        "secu-81b167a750",
+        "test-abe7a65fca",
+        "test-e14695120f",
+        "test-e2856eb5aa"
+      ],
+      "reinforced_learning_ids": []
+    }
+  ]
+}

@@ -653,7 +653,7 @@ def reject(
         rejected = {"rejected_at": {}, "skill_ids": []}
 
     # Add new rejections
-    now = datetime.now().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     newly_rejected: list[str] = []
     for skill_id in skill_ids:
         if skill_id not in rejected["skill_ids"]:
@@ -2035,6 +2035,18 @@ def gauntlet_process_issues(
     )
 
 
+def _sanitize_for_gh(text: str, max_len: int = 256) -> str:
+    """Sanitize text for GitHub issue fields.
+
+    Defense-in-depth: we use list args (not shell=True) for subprocess,
+    but sanitize anyway to prevent injection via gh's argument parsing.
+    """
+    sanitized = text.replace("\n", " ").replace("\r", " ")
+    if len(sanitized) > max_len:
+        sanitized = sanitized[: max_len - 3] + "..."
+    return sanitized.strip()
+
+
 def gauntlet_accept_risk(
     remaining_issues: list[dict],
     create_github_issues: bool = False,
@@ -2061,17 +2073,6 @@ def gauntlet_accept_risk(
             rule = issue.get("rule_learned", issue.get("description", "Unknown"))
             description = issue.get("description", "")
             location = issue.get("location", "")
-
-            # Sanitize inputs for GitHub issue creation
-            # Note: We use list args (not shell=True), so this is defense-in-depth
-            def _sanitize_for_gh(text: str, max_len: int = 256) -> str:
-                """Sanitize text for GitHub issue fields."""
-                # Remove/replace problematic characters
-                sanitized = text.replace("\n", " ").replace("\r", " ")
-                # Truncate to max length
-                if len(sanitized) > max_len:
-                    sanitized = sanitized[: max_len - 3] + "..."
-                return sanitized.strip()
 
             safe_severity = _sanitize_for_gh(str(severity), 20)
             safe_rule = _sanitize_for_gh(str(rule), 200)
@@ -2116,7 +2117,9 @@ def gauntlet_accept_risk(
                 cmd.extend(["--repo", repo])
 
             try:
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, check=True, timeout=30
+                )
                 # gh issue create outputs the URL
                 url = result.stdout.strip()
                 if url:
@@ -2124,6 +2127,9 @@ def gauntlet_accept_risk(
             except subprocess.CalledProcessError as e:
                 # Don't fail entirely, just note the error
                 error = f"Failed to create some GitHub issues: {e.stderr}"
+            except subprocess.TimeoutExpired:
+                error = "GitHub issue creation timed out (30s limit)."
+                break
             except FileNotFoundError:
                 error = "gh CLI not found. Install GitHub CLI to create issues."
                 break
