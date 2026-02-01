@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess as _subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,7 @@ __all__ = [
     # Gauntlet loop
     "GauntletLoopResult",
     "GauntletAcceptRiskResult",
+    "AcceptedRisk",
     "status",
     "promote",
     "reject",
@@ -57,6 +59,14 @@ __all__ = [
     # Gauntlet loop operations
     "gauntlet_process_issues",
     "gauntlet_accept_risk",
+    # Auto-gauntlet state management
+    "GauntletState",
+    "load_gauntlet_state",
+    "save_gauntlet_state",
+    "increment_gauntlet_staleness",
+    "record_gauntlet_run",
+    "track_dirty_file",
+    "check_gauntlet_freshness",
 ]
 
 
@@ -2024,6 +2034,9 @@ def gauntlet_process_issues(
         action = "clean"
         message = f"Iteration {iteration}: All clear! No issues found."
 
+    # Record gauntlet run state
+    record_gauntlet_run(buildlog_dir, action)
+
     return GauntletLoopResult(
         action=action,
         criticals=criticals,
@@ -2033,6 +2046,95 @@ def gauntlet_process_issues(
         learnings_persisted=learnings_persisted,
         message=message,
     )
+
+
+@dataclass
+class AcceptedRisk:
+    """A single accepted risk record persisted locally.
+
+    Attributes:
+        id: Unique identifier (e.g., "risk-20260131-143022-123456").
+        timestamp: UTC ISO timestamp.
+        issue: Original issue dict from the gauntlet review.
+        session_id: Optional session ID if running within an experiment.
+        iteration: Optional gauntlet loop iteration number.
+        target: Optional review target path.
+        github_issue_url: URL of created GitHub issue, if any.
+    """
+
+    id: str
+    timestamp: str
+    issue: dict
+    session_id: str | None = None
+    iteration: int | None = None
+    target: str | None = None
+    github_issue_url: str | None = None
+
+    def to_dict(self) -> dict:
+        """Convert to serializable dictionary."""
+        result: dict = {
+            "id": self.id,
+            "timestamp": self.timestamp,
+            "issue": self.issue,
+        }
+        if self.session_id is not None:
+            result["session_id"] = self.session_id
+        if self.iteration is not None:
+            result["iteration"] = self.iteration
+        if self.target is not None:
+            result["target"] = self.target
+        if self.github_issue_url is not None:
+            result["github_issue_url"] = self.github_issue_url
+        return result
+
+
+def _get_accepted_risk_path(buildlog_dir: Path) -> Path:
+    """Get path to accepted_risk.jsonl file."""
+    return buildlog_dir / ".buildlog" / "accepted_risk.jsonl"
+
+
+def _persist_accepted_risk(
+    buildlog_dir: Path,
+    issue: dict,
+    *,
+    session_id: str | None = None,
+    iteration: int | None = None,
+    target: str | None = None,
+    github_issue_url: str | None = None,
+) -> AcceptedRisk:
+    """Persist a single accepted risk to local JSONL.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        issue: The issue dict being accepted.
+        session_id: Optional session ID.
+        iteration: Optional iteration number.
+        target: Optional review target.
+        github_issue_url: Optional GitHub issue URL.
+
+    Returns:
+        The persisted AcceptedRisk record.
+    """
+    now = datetime.now(timezone.utc)
+    risk_id = f"risk-{now.strftime('%Y%m%d-%H%M%S')}-{now.microsecond:06d}"
+
+    record = AcceptedRisk(
+        id=risk_id,
+        timestamp=now.isoformat(),
+        issue=issue,
+        session_id=session_id,
+        iteration=iteration,
+        target=target,
+        github_issue_url=github_issue_url,
+    )
+
+    risk_path = _get_accepted_risk_path(buildlog_dir)
+    risk_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(risk_path, "a") as f:
+        f.write(json.dumps(record.to_dict()) + "\n")
+
+    return record
 
 
 def _sanitize_for_gh(text: str, max_len: int = 256) -> str:
@@ -2051,18 +2153,32 @@ def gauntlet_accept_risk(
     remaining_issues: list[dict],
     create_github_issues: bool = False,
     repo: str | None = None,
+    buildlog_dir: Path | None = None,
+    session_id: str | None = None,
+    iteration: int | None = None,
+    target: str | None = None,
 ) -> GauntletAcceptRiskResult:
-    """Accept risk for remaining issues, optionally creating GitHub issues.
+    """Accept risk for remaining issues, persisting locally and optionally creating GitHub issues.
+
+    Local persistence to `.buildlog/accepted_risk.jsonl` is the source of truth.
+    GitHub issues are a nice-to-have sync layer.
 
     Args:
         remaining_issues: Issues being accepted as risk.
         create_github_issues: Whether to create GitHub issues for tracking.
         repo: Repository for GitHub issues (uses current repo if None).
+        buildlog_dir: Path to buildlog directory (default: Path("buildlog")).
+        session_id: Optional session ID for context.
+        iteration: Optional gauntlet loop iteration number.
+        target: Optional review target path.
 
     Returns:
         GauntletAcceptRiskResult with created issue info.
     """
     import subprocess
+
+    if buildlog_dir is None:
+        buildlog_dir = Path("buildlog")
 
     github_urls: list[str] = []
     error: str | None = None
@@ -2134,6 +2250,18 @@ def gauntlet_accept_risk(
                 error = "gh CLI not found. Install GitHub CLI to create issues."
                 break
 
+    # ALWAYS persist locally — this is the source of truth
+    for i, issue in enumerate(remaining_issues):
+        github_url = github_urls[i] if i < len(github_urls) else None
+        _persist_accepted_risk(
+            buildlog_dir,
+            issue,
+            session_id=session_id,
+            iteration=iteration,
+            target=target,
+            github_issue_url=github_url,
+        )
+
     return GauntletAcceptRiskResult(
         accepted_issues=len(remaining_issues),
         github_issues_created=len(github_urls),
@@ -2146,3 +2274,155 @@ def gauntlet_accept_risk(
         ),
         error=error,
     )
+
+
+# =============================================================================
+# Auto-Gauntlet State Management
+# =============================================================================
+
+
+@dataclass
+class GauntletState:
+    """Mutable operational state for auto-gauntlet tracking.
+
+    Reset on each gauntlet run. Tracks staleness between runs.
+    """
+
+    last_run_timestamp: str | None = None
+    last_run_commit: str | None = None
+    commits_since_gauntlet: int = 0
+    dirty_files: list[str] = field(default_factory=list)
+    last_result_action: str | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "last_run_timestamp": self.last_run_timestamp,
+            "last_run_commit": self.last_run_commit,
+            "commits_since_gauntlet": self.commits_since_gauntlet,
+            "dirty_files": self.dirty_files,
+            "last_result_action": self.last_result_action,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "GauntletState":
+        return cls(
+            last_run_timestamp=data.get("last_run_timestamp"),
+            last_run_commit=data.get("last_run_commit"),
+            commits_since_gauntlet=data.get("commits_since_gauntlet", 0),
+            dirty_files=data.get("dirty_files", []),
+            last_result_action=data.get("last_result_action"),
+        )
+
+
+def _get_gauntlet_state_path(buildlog_dir: Path) -> Path:
+    """Get path to gauntlet_state.json file."""
+    return buildlog_dir / ".buildlog" / "gauntlet_state.json"
+
+
+def _get_auto_gauntlet_config_path(buildlog_dir: Path) -> Path:
+    """Get path to auto-gauntlet config file."""
+    return buildlog_dir / ".buildlog" / "config.json"
+
+
+def load_gauntlet_state(buildlog_dir: Path) -> GauntletState:
+    """Load gauntlet state, returning default if missing."""
+    path = _get_gauntlet_state_path(buildlog_dir)
+    if not path.exists():
+        return GauntletState()
+    try:
+        data = json.loads(path.read_text())
+        return GauntletState.from_dict(data)
+    except (json.JSONDecodeError, OSError):
+        return GauntletState()
+
+
+def save_gauntlet_state(buildlog_dir: Path, state: GauntletState) -> None:
+    """Save gauntlet state to disk."""
+    path = _get_gauntlet_state_path(buildlog_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state.to_dict(), indent=2))
+
+
+def increment_gauntlet_staleness(buildlog_dir: Path) -> None:
+    """Bump commits_since_gauntlet counter."""
+    state = load_gauntlet_state(buildlog_dir)
+    state.commits_since_gauntlet += 1
+    save_gauntlet_state(buildlog_dir, state)
+
+
+def record_gauntlet_run(buildlog_dir: Path, action: str) -> None:
+    """Reset state on gauntlet completion."""
+    now = datetime.now(timezone.utc)
+
+    # Try to get current commit hash
+    commit_hash = None
+    try:
+        result = _subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            commit_hash = result.stdout.strip()
+    except (_subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    state = GauntletState(
+        last_run_timestamp=now.isoformat(),
+        last_run_commit=commit_hash,
+        commits_since_gauntlet=0,
+        dirty_files=[],
+        last_result_action=action,
+    )
+    save_gauntlet_state(buildlog_dir, state)
+
+
+def track_dirty_file(buildlog_dir: Path, filepath: str) -> None:
+    """Append a file to dirty_files list (no duplicates)."""
+    state = load_gauntlet_state(buildlog_dir)
+    if filepath not in state.dirty_files:
+        state.dirty_files.append(filepath)
+        save_gauntlet_state(buildlog_dir, state)
+
+
+def _load_auto_gauntlet_config(buildlog_dir: Path) -> dict:
+    """Load auto-gauntlet config. Returns empty dict on missing/error (fail open)."""
+    path = _get_auto_gauntlet_config_path(buildlog_dir)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        return data.get("auto_gauntlet", {})
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def check_gauntlet_freshness(buildlog_dir: Path) -> dict:
+    """Check if the gauntlet is stale.
+
+    Returns:
+        Dict with stale, commits_since_gauntlet, dirty_files_count,
+        last_run, recommendation.
+    """
+    config = _load_auto_gauntlet_config(buildlog_dir)
+    state = load_gauntlet_state(buildlog_dir)
+
+    max_staleness = config.get("commit_gate", {}).get("max_staleness_commits", 3)
+    stale = state.commits_since_gauntlet >= max_staleness
+
+    recommendation = ""
+    if stale:
+        recommendation = (
+            f"Gauntlet is stale: {state.commits_since_gauntlet} commits since last run "
+            f"(threshold: {max_staleness}). Run 'buildlog gauntlet loop' to refresh."
+        )
+
+    return {
+        "stale": stale,
+        "commits_since_gauntlet": state.commits_since_gauntlet,
+        "dirty_files_count": len(state.dirty_files),
+        "dirty_files": state.dirty_files,
+        "last_run": state.last_run_timestamp,
+        "recommendation": recommendation,
+    }
