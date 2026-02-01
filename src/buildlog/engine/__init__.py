@@ -33,6 +33,18 @@ from buildlog.engine.experiments import (
     session_metrics,
     start_session,
 )
+from buildlog.engine.metered import (
+    DEFAULT_PRICING,
+    MeteredBackend,
+    ModelPricing,
+    TokenUsage,
+)
+from buildlog.engine.statistics import (
+    bootstrap_ci,
+    cohens_h,
+    fisher_exact_test,
+    permutation_test,
+)
 from buildlog.engine.types import Mistake, RewardEvent, Session, Skill
 
 __all__ = [
@@ -58,4 +70,14 @@ __all__ = [
     "Session",
     "Mistake",
     "RewardEvent",
+    # Metered
+    "MeteredBackend",
+    "TokenUsage",
+    "ModelPricing",
+    "DEFAULT_PRICING",
+    # Statistics
+    "fisher_exact_test",
+    "permutation_test",
+    "bootstrap_ci",
+    "cohens_h",
 ]
