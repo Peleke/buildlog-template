@@ -32,3 +32,81 @@ This makes the buildlog entry a living document that grows with the commit histo
 - Always define interfaces before implementations — the `RuleExtractor` ABC made adding `LLMExtractor` straightforward without touching existing extractors.
 - When bridging two modules (LLM and seed engine), use adapter pattern with `TYPE_CHECKING` imports to avoid circular dependencies.
 - Include both mock-based and real-backend smoke tests for LLM integrations. Mock tests verify logic; smoke tests verify the integration actually works end-to-end.
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —
+
+
+
+### `` —

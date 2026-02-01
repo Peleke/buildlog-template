@@ -37,6 +37,13 @@ def git_repo(tmp_path: Path, monkeypatch):
     subprocess.run(
         ["git", "add", "hello.py"], cwd=tmp_path, capture_output=True, check=True
     )
+    # Switch to a feature branch to avoid branch protection
+    subprocess.run(
+        ["git", "checkout", "-b", "feat/test"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
     return tmp_path
 
 
