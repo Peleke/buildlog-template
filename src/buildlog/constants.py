@@ -48,19 +48,34 @@ After every significant commit or feature completion:
 4. `buildlog_experiment_metrics()` — per-session or aggregate stats
 5. `buildlog_experiment_report()` — comprehensive report
 
-### Tool Reference
+### Tool Reference (29 tools)
+
+**Commit & Entries:**
+- `buildlog_commit(message, git_args, slug, no_entry)` — git commit with auto buildlog entry
+- `buildlog_entry_new(slug, entry_date, quick)` — create entry
+- `buildlog_entry_list()` — list all entries
+- `buildlog_overview()` — project state at a glance
 
 **Skill Management:**
 - `buildlog_status(min_confidence="low")` — extracted skills
 - `buildlog_promote(skill_ids, target="claude_md")` — promote to agent rules
 - `buildlog_reject(skill_ids)` — reject false positives
 - `buildlog_diff()` — pending skills
+- `buildlog_distill(since, category)` — extract patterns from entries
+- `buildlog_skills(since, min_frequency)` — generate skill set from entries
+- `buildlog_stats(since, detailed)` — buildlog statistics and insights
 
-**Review & Learning:**
-- `buildlog_learn_from_review(issues, source)` — persist review learnings
+**Gauntlet Review:**
+- `buildlog_gauntlet_prompt(target, personas)` — generate review prompt with rules
+- `buildlog_gauntlet_loop(target, personas, max_iterations, stop_at, auto_gh_issues)` — full loop config
 - `buildlog_gauntlet_rules(persona, format)` — load reviewer rules
 - `buildlog_gauntlet_issues(issues, iteration)` — process findings
 - `buildlog_gauntlet_accept_risk(remaining_issues)` — accept risk
+- `buildlog_gauntlet_list_personas()` — list available reviewer personas
+- `buildlog_gauntlet_generate(source_text, persona, dry_run)` — generate rules from source text
+
+**Review Learning:**
+- `buildlog_learn_from_review(issues, source)` — persist review learnings
 
 **Reward & Bandit:**
 - `buildlog_log_reward(outcome, rules_active)` — log feedback
@@ -74,17 +89,17 @@ After every significant commit or feature completion:
 - `buildlog_experiment_metrics(session_id)` — metrics
 - `buildlog_experiment_report()` — full report
 
-**Entries & Overview:**
-- `buildlog_overview()` — project state at a glance
-- `buildlog_entry_new(slug, entry_date, quick)` — create entry
-- `buildlog_entry_list()` — list all entries
+**Project Setup:**
+- `buildlog_init(no_mcp, no_claude_md)` — initialize buildlog in project
+- `buildlog_update()` — update buildlog template to latest
 
 ### When to Use Each Tool
 
 - **At session start**: `buildlog_overview()` for context
 - **During active dev**: `buildlog_entry_new()` to document work
-- **After commits**: `buildlog_gauntlet_rules()` + review + `buildlog_gauntlet_issues()`
+- **After commits**: `buildlog_commit()` or `buildlog_gauntlet_prompt()` + review + `buildlog_gauntlet_issues()`
 - **After review approval**: `buildlog_log_reward(outcome="accepted")`
+- **For learning**: `buildlog_distill()`, `buildlog_skills()`, `buildlog_stats()`
 - **For skill promotion**: `buildlog_status()` -> `buildlog_diff()` -> `buildlog_promote()`
 - **To accept risk**: `buildlog_gauntlet_accept_risk()`
 - **For experiments**: `buildlog_experiment_start()` -> work -> `buildlog_experiment_end()`
