@@ -50,12 +50,13 @@ def main():
 
 @main.command()
 @click.option("--no-claude-md", is_flag=True, help="Don't update CLAUDE.md")
+@click.option("--no-mcp", is_flag=True, help="Don't register MCP server")
 @click.option(
     "--defaults",
     is_flag=True,
     help="Use default values for all prompts (non-interactive)",
 )
-def init(no_claude_md: bool, defaults: bool):
+def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
     """Initialize buildlog in the current directory.
 
     Sets up the buildlog/ directory with templates and optionally
@@ -114,18 +115,30 @@ def init(no_claude_md: bool, defaults: bool):
         claude_md = Path("CLAUDE.md")
         if claude_md.exists():
             content = claude_md.read_text()
-            if "## Build Journal" not in content:
-                section = (
-                    "\n## Build Journal\n\n"
-                    "After completing significant work (features, debugging sessions, "
-                    "deployments,\n"
-                    "2+ hour focused sessions), write a build journal entry.\n\n"
-                    "**Location:** `buildlog/YYYY-MM-DD-{slug}.md`\n"
-                    "**Template:** `buildlog/_TEMPLATE.md`\n"
-                )
+            if (
+                "## buildlog Integration" not in content
+                and "## Build Journal" not in content
+            ):
+                try:
+                    from buildlog.constants import CLAUDE_MD_BUILDLOG_SECTION
+
+                    section = CLAUDE_MD_BUILDLOG_SECTION
+                except ImportError:
+                    section = (
+                        "\n## Build Journal\n\n"
+                        "After completing significant work (features, debugging "
+                        "sessions, deployments,\n"
+                        "2+ hour focused sessions), write a build journal entry.\n\n"
+                        "**Location:** `buildlog/YYYY-MM-DD-{slug}.md`\n"
+                        "**Template:** `buildlog/_TEMPLATE.md`\n"
+                    )
                 with open(claude_md, "a") as f:
                     f.write(section)
-                click.echo("Added Build Journal section to CLAUDE.md")
+                click.echo("Added buildlog Integration section to CLAUDE.md")
+
+    # Register MCP server unless opted out
+    if not no_mcp:
+        _init_mcp()
 
     click.echo("\n✓ buildlog initialized!")
     click.echo()
@@ -140,6 +153,94 @@ def init(no_claude_md: bool, defaults: bool):
     )
     click.echo()
     click.echo("Start now: buildlog new my-first-task --quick")
+
+
+def _init_mcp() -> None:
+    """Register buildlog as an MCP server in .claude/settings.json."""
+    import json as json_module
+
+    settings_path = Path(".claude") / "settings.json"
+
+    try:
+        if settings_path.exists():
+            try:
+                data = json_module.loads(settings_path.read_text())
+            except json_module.JSONDecodeError:
+                click.echo(
+                    "Warning: .claude/settings.json is malformed, skipping MCP registration",
+                    err=True,
+                )
+                return
+        else:
+            data = {}
+
+        if "mcpServers" not in data:
+            data["mcpServers"] = {}
+
+        if "buildlog" in data["mcpServers"]:
+            click.echo("buildlog MCP server already registered")
+            return
+
+        data["mcpServers"]["buildlog"] = {"command": "buildlog-mcp", "args": []}
+
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(json_module.dumps(data, indent=2) + "\n")
+        click.echo("Registered buildlog MCP server in .claude/settings.json")
+    except Exception as e:
+        click.echo(f"Warning: could not register MCP server: {e}", err=True)
+
+
+@main.command("init-mcp")
+def init_mcp():
+    """Register buildlog as an MCP server for Claude Code.
+
+    Creates or updates .claude/settings.json with the buildlog MCP
+    server configuration. Idempotent — safe to run multiple times.
+
+    Examples:
+
+        buildlog init-mcp
+    """
+    _init_mcp()
+
+
+@main.command("mcp-test")
+def mcp_test():
+    """Verify the MCP server starts and all tools are registered.
+
+    Checks that the buildlog-mcp server can be imported and lists
+    all registered tools. Exits 0 if all 19 tools are found, 1 otherwise.
+
+    Examples:
+
+        buildlog mcp-test
+    """
+    try:
+        from buildlog.mcp.server import mcp as mcp_server
+    except ImportError:
+        click.echo("MCP not installed. Run: pip install buildlog", err=True)
+        raise SystemExit(1)
+
+    try:
+        # FastMCP stores tools internally
+        tools = mcp_server._tool_manager._tools
+        tool_names = sorted(tools.keys())
+    except AttributeError:
+        # Fallback: try to count via the public API pattern
+        click.echo("Warning: could not inspect tools via internal API", err=True)
+        tool_names = []
+
+    expected = 19
+    click.echo(f"buildlog MCP server: {len(tool_names)} tools registered")
+    for name in tool_names:
+        click.echo(f"  {name}")
+
+    if len(tool_names) >= expected:
+        click.echo(f"\nAll {expected} tools registered.")
+        raise SystemExit(0)
+    else:
+        click.echo(f"\nExpected {expected} tools, found {len(tool_names)}.", err=True)
+        raise SystemExit(1)
 
 
 @main.command()
