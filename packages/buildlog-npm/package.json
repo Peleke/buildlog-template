@@ -1,0 +1,33 @@
+{
+  "name": "buildlog",
+  "version": "0.7.0",
+  "description": "Engineering notebook for AI-assisted development. Capture your work as publishable content.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Peleke/buildlog-template.git",
+    "directory": "packages/buildlog-npm"
+  },
+  "homepage": "https://github.com/Peleke/buildlog-template",
+  "keywords": [
+    "buildlog",
+    "ai",
+    "development",
+    "engineering-notebook",
+    "claude",
+    "cursor",
+    "copilot",
+    "agent-rules"
+  ],
+  "bin": {
+    "buildlog": "bin/buildlog.mjs"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ]
+}
