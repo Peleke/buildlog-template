@@ -7,6 +7,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-02-01
+
+### Added
+- **Bragi persona**: LLM prose pattern detection with 9 rules (em-dash abuse, tricolons, performative honesty, rhythmic closers, etc.)
+- **Bragi Claude Code skill**: interactive markdown review with 3 ranked rewrite suggestions per finding
+- **Auto-gauntlet**: hybrid commit gate with Claude Code hooks
+- **Thompson Sampling bandit**: rule selection via contextual bandits with Beta posteriors
+- **Metered LLM backend**: token usage and cost tracking, pure Python statistics
+- **npm wrapper**: `npx @peleke.s/buildlog` for JS/TS projects
+- npm publish job in release workflow
+
+### Changed
+- README de-LLM-ified: removed all em dashes and LLM prose patterns (dogfooded via bragi)
+- Package scope changed to `@peleke.s/buildlog` on npm
+
 ## [0.8.0] - 2026-01-31
 
 ### Added

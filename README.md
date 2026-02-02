@@ -88,7 +88,7 @@ buildlog experiment report
 - **Review gauntlet:** automated quality gate with curated reviewer personas. Runs on commits (via Claude Code hooks or CI) and files GitHub issues for findings, categorized by severity.
 - **LLM-backed extraction:** when regex isn't enough, the seed engine can use OpenAI, Anthropic, or Ollama to extract patterns from code and logs. Metered backend tracks token usage and cost.
 - **MCP server:** buildlog exposes itself as an MCP server so agents can query seeds, skills, and build history programmatically during sessions.
-- **npm wrapper:** `npx @peleke/buildlog` for JS/TS projects. Thin shim that finds and invokes the Python CLI.
+- **npm wrapper:** `npx @peleke.s/buildlog` for JS/TS projects. Thin shim that finds and invokes the Python CLI.
 
 ## Current Limits
 

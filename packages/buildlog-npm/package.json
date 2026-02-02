@@ -1,5 +1,8 @@
 {
-  "name": "buildlog",
+  "name": "@peleke.s/buildlog",
+  "publishConfig": {
+    "access": "public"
+  },
   "version": "0.7.0",
   "description": "Engineering notebook for AI-assisted development. Capture your work as publishable content.",
   "license": "MIT",
