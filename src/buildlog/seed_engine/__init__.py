@@ -33,6 +33,7 @@ from buildlog.seed_engine.categorizers import (
 )
 from buildlog.seed_engine.extractors import ManualExtractor, RuleExtractor
 from buildlog.seed_engine.generators import SeedGenerator
+from buildlog.seed_engine.llm_extractor import LLMExtractor
 from buildlog.seed_engine.models import (
     CandidateRule,
     CategorizedRule,
@@ -59,6 +60,7 @@ __all__ = [
     # Extractors
     "RuleExtractor",
     "ManualExtractor",
+    "LLMExtractor",
     # Categorizers
     "Categorizer",
     "TagBasedCategorizer",

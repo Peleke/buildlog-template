@@ -28,8 +28,10 @@ __all__ = [
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
@@ -83,6 +85,14 @@ class LLMConfig:
     model: str | None = None  # None = auto-detect or provider default
     base_url: str | None = None  # Override endpoint
     api_key: str | None = None  # From config or env var
+
+    def __repr__(self) -> str:
+        """Redact api_key to prevent accidental exposure in logs/tracebacks."""
+        key_display = "***" if self.api_key else "None"
+        return (
+            f"LLMConfig(provider={self.provider!r}, model={self.model!r}, "
+            f"base_url={self.base_url!r}, api_key={key_display})"
+        )
 
     @classmethod
     def from_buildlog_config(cls, buildlog_dir: Path) -> LLMConfig | None:
@@ -225,6 +235,28 @@ def _parse_json_response(text: str) -> list | dict:
     return json.loads(text)
 
 
+# --- Rate limiting ---
+
+# Minimum seconds between API calls (per-backend instance).
+_MIN_CALL_INTERVAL = 0.5
+
+
+class _RateLimiter:
+    """Simple per-instance rate limiter to prevent API abuse."""
+
+    def __init__(self, min_interval: float = _MIN_CALL_INTERVAL):
+        self._min_interval = min_interval
+        self._last_call: float = 0.0
+
+    def wait(self) -> None:
+        """Block until min_interval has elapsed since last call."""
+        now = time.monotonic()
+        elapsed = now - self._last_call
+        if elapsed < self._min_interval:
+            time.sleep(self._min_interval - elapsed)
+        self._last_call = time.monotonic()
+
+
 # --- Implementations ---
 
 
@@ -235,6 +267,7 @@ class OllamaBackend:
         self._model = model
         self._base_url = base_url
         self._resolved_model: str | None = None
+        self._rate_limiter = _RateLimiter()
 
     def _get_model(self) -> str:
         """Resolve model name, auto-detecting largest if not specified."""
@@ -269,6 +302,7 @@ class OllamaBackend:
 
     def _chat(self, prompt: str) -> str:
         """Send a prompt to Ollama and return the response text."""
+        self._rate_limiter.wait()
         import ollama as ollama_lib
 
         kwargs = {
@@ -334,6 +368,11 @@ class AnthropicBackend:
         self._model = model or "claude-haiku-4-20250514"
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         self._client = None
+        self._rate_limiter = _RateLimiter()
+
+    def __repr__(self) -> str:
+        """Redact API key from repr to prevent exposure in logs/tracebacks."""
+        return f"AnthropicBackend(model={self._model!r}, api_key=***)"
 
     def _get_client(self):
         """Lazy-load the Anthropic client."""
@@ -351,6 +390,7 @@ class AnthropicBackend:
 
     def _chat(self, prompt: str) -> str:
         """Send a prompt to Claude and return the response text."""
+        self._rate_limiter.wait()
         client = self._get_client()
         response = client.messages.create(
             model=self._model,
@@ -402,15 +442,22 @@ class AnthropicBackend:
 
 # --- Registry ---
 
-PROVIDERS: dict[str, type] = {
+_PROVIDERS: dict[str, type] = {
     "ollama": OllamaBackend,
     "anthropic": AnthropicBackend,
 }
+# Public read-only view. Use register_provider() to add entries.
+PROVIDERS: MappingProxyType[str, type] = MappingProxyType(_PROVIDERS)
 
 
 def register_provider(name: str, cls: type) -> None:
-    """Register a new LLM provider backend."""
-    PROVIDERS[name] = cls
+    """Register a new LLM provider backend.
+
+    This is the only sanctioned way to mutate the provider registry.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Provider name must be a non-empty string")
+    _PROVIDERS[name] = cls
 
 
 def get_llm_backend(
@@ -439,7 +486,7 @@ def get_llm_backend(
         logger.info("No LLM provider available, using regex fallback")
         return None
 
-    provider_cls = PROVIDERS.get(config.provider)
+    provider_cls = _PROVIDERS.get(config.provider)
     if provider_cls is None:
         logger.warning("Unknown LLM provider: %s", config.provider)
         return None

@@ -7,6 +7,16 @@ import pytest
 from buildlog.skills import ConfidenceLevel, Skill
 
 
+def pytest_addoption(parser):
+    """Register custom CLI flags for optional test suites."""
+    parser.addoption(
+        "--run-ollama",
+        action="store_true",
+        default=False,
+        help="Run smoke tests against a local Ollama instance",
+    )
+
+
 @pytest.fixture
 def make_skill():
     """Factory fixture for creating test skills.

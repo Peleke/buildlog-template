@@ -298,11 +298,11 @@ def new(slug: str, entry_date: str | None, quick: bool):
     # Determine date
     if entry_date:
         try:
-            # Validate date format
-            year, month, day = entry_date.split("-")
-            date_str = f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
+            # Validate date format AND range (month 1-12, day 1-31)
+            parsed = datetime.strptime(entry_date, "%Y-%m-%d").date()
+            date_str = parsed.isoformat()
         except ValueError:
-            click.echo("Invalid date format. Use YYYY-MM-DD.", err=True)
+            click.echo("Invalid date. Use YYYY-MM-DD with valid values.", err=True)
             raise SystemExit(1)
     else:
         date_str = date.today().isoformat()
@@ -329,6 +329,161 @@ def new(slug: str, entry_date: str | None, quick: bool):
 
     click.echo(f"✓ Created {entry_path}")
     click.echo(f"\nOpen it: $EDITOR {entry_path}")
+
+
+@main.command(
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True}
+)
+@click.option(
+    "--slug",
+    "-s",
+    default=None,
+    help="Entry slug (default: derived from branch name)",
+)
+@click.option(
+    "--entry",
+    "-e",
+    type=click.Path(),
+    default=None,
+    help="Explicit entry file to append to",
+)
+@click.option(
+    "--no-entry",
+    is_flag=True,
+    help="Skip buildlog entry update (just run git commit)",
+)
+@click.pass_context
+def commit(ctx, slug: str | None, entry: str | None, no_entry: bool):
+    """Commit code and update the buildlog entry in one step.
+
+    Wraps `git commit` and appends commit context to today's buildlog
+    entry. If no entry exists for today, creates one automatically.
+
+    All unknown options/arguments are passed through to git commit.
+
+    Examples:
+
+        buildlog commit -m "feat: add LLM extractor"
+        buildlog commit --slug llm-extractor -m "feat: add LLM extractor"
+        buildlog commit --no-entry -m "chore: formatting"
+    """
+    buildlog_dir = Path("buildlog")
+
+    # Build git commit command — extra args are passed through from Click context
+    git_cmd = ["git", "commit", *ctx.args]
+
+    # Run git commit first
+    result = subprocess.run(git_cmd, capture_output=True, text=True)
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
+
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
+
+    if no_entry or not buildlog_dir.exists():
+        return
+
+    # Get commit info from what we just committed
+    try:
+        commit_hash = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        commit_msg = subprocess.run(
+            ["git", "log", "-1", "--format=%s"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        # diff-tree needs special handling for root commit
+        diff_result = subprocess.run(
+            ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        if diff_result.returncode == 0 and diff_result.stdout.strip():
+            files_changed = diff_result.stdout.strip()
+        else:
+            # Root commit fallback
+            files_changed = subprocess.run(
+                ["git", "diff", "--name-only", "--cached", "HEAD~1"],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            if not files_changed:
+                # Truly initial commit — list all tracked files
+                files_changed = subprocess.run(
+                    ["git", "ls-tree", "--name-only", "-r", "HEAD"],
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+    except subprocess.CalledProcessError:
+        click.echo("Warning: could not read commit info", err=True)
+        return
+
+    # Resolve entry file
+    today = date.today().isoformat()
+    entry_path = _resolve_entry_path(buildlog_dir, today, slug, entry)
+
+    # Append commit block
+    commit_block = f"\n### `{commit_hash}` — {commit_msg}\n\n"
+    if files_changed:
+        file_list = files_changed.split("\n")
+        commit_block += "Files:\n"
+        for f in file_list[:20]:  # cap at 20 to avoid noise
+            commit_block += f"- `{f}`\n"
+        if len(file_list) > 20:
+            commit_block += f"- ...and {len(file_list) - 20} more\n"
+    commit_block += "\n"
+
+    # Ensure commits section exists, append to it
+    if entry_path.exists():
+        content = entry_path.read_text()
+        if "## Commits" not in content:
+            content = content.rstrip() + "\n\n## Commits\n"
+        content += commit_block
+    else:
+        # Auto-create minimal entry
+        content = f"# {today}\n\n## Commits\n{commit_block}"
+
+    entry_path.write_text(content)
+    click.echo(f"buildlog: updated {entry_path}")
+
+
+def _resolve_entry_path(
+    buildlog_dir: Path, today: str, slug: str | None, explicit: str | None
+) -> Path:
+    """Find or create the entry path for today."""
+    if explicit:
+        return Path(explicit)
+
+    # Check for existing entry with today's date
+    existing = list(buildlog_dir.glob(f"{today}-*.md"))
+    if existing:
+        return existing[0]
+
+    # Derive slug from branch name if not provided
+    if slug is None:
+        try:
+            branch = subprocess.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            # Clean branch name into slug
+            slug = branch.split("/")[-1]  # strip prefix like feat/
+            slug = slug.lower().replace("_", "-")
+            slug = "".join(c for c in slug if c.isalnum() or c == "-")
+        except subprocess.CalledProcessError:
+            slug = "session"
+
+    if not slug:
+        slug = "session"
+
+    return buildlog_dir / f"{today}-{slug}.md"
 
 
 @main.command("list")
@@ -1654,6 +1809,69 @@ def gauntlet_learn(issues_file: str, source: str | None, output_json: bool):
         click.echo(f"  New learnings: {result.new_learnings}")
         click.echo(f"  Reinforced: {result.reinforced_learnings}")
         click.echo(f"  Total processed: {result.total_issues_processed}")
+
+
+@gauntlet.command("generate")
+@click.argument("source_text", type=click.Path(exists=True))
+@click.option("--persona", "-p", required=True, help="Persona name for the seed file")
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(),
+    default=".buildlog/seeds",
+    help="Output directory for seed YAML",
+)
+@click.option("--dry-run", is_flag=True, help="Preview without writing")
+def gauntlet_generate(source_text: str, persona: str, output_dir: str, dry_run: bool):
+    """Generate seed rules from source text using LLM extraction.
+
+    Runs the seed engine pipeline with LLMExtractor to produce
+    a YAML seed file from arbitrary source content.
+
+    Examples:
+
+        buildlog gauntlet generate docs/security.md --persona security_karen
+        buildlog gauntlet generate notes.txt -p test_terrorist --dry-run
+    """
+    import json as json_module
+
+    from buildlog.llm import get_llm_backend
+    from buildlog.seed_engine import Pipeline, Source, SourceType
+
+    backend = get_llm_backend()
+    if backend is None:
+        click.echo(
+            "No LLM backend available. Install ollama or set ANTHROPIC_API_KEY.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    content = Path(source_text).read_text()
+    source = Source(
+        name=Path(source_text).stem,
+        url=f"file://{Path(source_text).resolve()}",
+        source_type=SourceType.REFERENCE_DOC,
+        domain=persona.split("_")[0] if "_" in persona else "general",
+        description=content,
+    )
+
+    pipeline = Pipeline.with_llm(
+        persona=persona,
+        backend=backend,
+        source_content={source.url: content},
+    )
+
+    if dry_run:
+        preview = pipeline.dry_run([source])
+        click.echo(json_module.dumps(preview, indent=2))
+        return
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    result = pipeline.run([source], output_dir=out)
+    click.echo(f"Generated {result.rule_count} rules for {persona}")
+    if result.output_path:
+        click.echo(f"Seed file: {result.output_path}")
 
 
 @gauntlet.command("loop")

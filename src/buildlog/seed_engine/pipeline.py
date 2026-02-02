@@ -12,12 +12,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from buildlog.seed_engine.categorizers import Categorizer, TagBasedCategorizer
 from buildlog.seed_engine.extractors import ManualExtractor, RuleExtractor
 from buildlog.seed_engine.generators import SeedGenerator
 from buildlog.seed_engine.models import CandidateRule, CategorizedRule, Source
+
+if TYPE_CHECKING:
+    from buildlog.llm import LLMBackend
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +177,7 @@ class Pipeline:
         Returns:
             List of validation issues (empty if valid).
         """
+        allowed_schemes = {"https", "http", "file"}
         issues = []
         for i, source in enumerate(sources):
             prefix = f"Source {i + 1} ({source.name})"
@@ -181,9 +185,49 @@ class Pipeline:
                 issues.append(f"{prefix}: Missing name")
             if not source.url.strip():
                 issues.append(f"{prefix}: Missing URL")
+            else:
+                # Validate URL scheme
+                scheme = (
+                    source.url.split("://")[0].lower() if "://" in source.url else ""
+                )
+                if scheme not in allowed_schemes:
+                    issues.append(
+                        f"{prefix}: URL scheme '{scheme}' not in allowlist {allowed_schemes}"
+                    )
             if not source.domain.strip():
                 issues.append(f"{prefix}: Missing domain")
         return issues
+
+    @classmethod
+    def with_llm(
+        cls,
+        persona: str,
+        backend: LLMBackend,
+        source_content: dict[str, str] | None = None,
+        default_category: str = "general",
+        version: int = 1,
+    ) -> Pipeline:
+        """Convenience constructor wiring LLMExtractor + TagBasedCategorizer.
+
+        Args:
+            persona: Persona name for the seed file.
+            backend: Any LLMBackend implementation.
+            source_content: Optional pre-fetched content map.
+            default_category: Fallback category for uncategorized rules.
+            version: Seed file version.
+
+        Returns:
+            Pipeline configured with LLMExtractor.
+        """
+        from buildlog.seed_engine.llm_extractor import LLMExtractor
+
+        return cls(
+            persona=persona,
+            default_category=default_category,
+            version=version,
+            extractor=LLMExtractor(backend, source_content),
+            categorizer=TagBasedCategorizer(default_category=default_category),
+        )
 
     def dry_run(self, sources: list[Source]) -> dict[str, Any]:
         """Run pipeline without writing, returning preview.

@@ -7,6 +7,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-01-31
+
+### Added
+- **LLM Extractor**: `LLMExtractor` wires `LLMBackend.extract_rules()` into the seed engine as a `RuleExtractor` implementation
+- **`Pipeline.with_llm()`**: Convenience constructor for LLM-powered seed generation
+- **`buildlog commit`**: Wraps `git commit` and appends commit context to today's buildlog entry automatically
+- **`buildlog gauntlet generate`**: Generate seed rules from source text using LLM extraction
+- **Ollama smoke tests**: Real LLM integration tests (skipped in CI, runnable locally with `--run-ollama`)
+- E2E tests for full extract → seed → learn → persist loop
+
+### Fixed
+- Date validation in `buildlog new` now rejects invalid dates (e.g., month=99) using `datetime.strptime`
+- `pytest_addoption` moved from test file to `conftest.py` (proper pytest hook location)
+- Ollama availability check deferred to runtime instead of import time (faster test collection)
+- Removed private attribute access in `LLMExtractor` metadata
+
 ## [0.7.0] - 2026-01-22
 
 ### Added
