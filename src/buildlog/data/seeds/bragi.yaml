@@ -1,0 +1,61 @@
+# Bragi - LLM Prose Pattern Detection (named for the skald of the Aesir)
+# Detect and flag synthetic-sounding prose patterns common in LLM-generated text
+# These patterns aren't inherently wrong, but their overuse signals machine authorship
+
+persona: bragi
+version: 1
+
+rules:
+  - rule: "Em-dash usage"
+    category: prose
+    context: "Anywhere: headlines, parentheticals, contrasts, asides"
+    antipattern: "Any use of em dashes (—). Includes 'Not X — Y' pivots, parenthetical asides, and dramatic pauses."
+    rationale: "LLMs deploy em dashes constantly and poorly. Ban them outright. Use colons, semicolons, commas, parentheses, or separate sentences instead."
+
+  - rule: "Dismissive 'with' framing"
+    category: prose
+    context: "Feature descriptions, project summaries, demo introductions"
+    antipattern: "'A demo with persistence', 'a prototype with authentication' — reducing a significant feature to a prepositional afterthought"
+    rationale: "Makes complex work sound trivially assembled. Signals the author hasn't weighed the feature's actual cost."
+
+  - rule: "Tricolon and five-item enumerations"
+    category: prose
+    context: "Value propositions, team descriptions, capability lists"
+    antipattern: "'They execute, improvise, and forget' or 'fast, reliable, scalable, secure, and observable' — rhythmic clause lists"
+    rationale: "LLMs default to tricolons and pentalogies for rhetorical rhythm. Real technical writing itemizes what matters, not what sounds balanced."
+
+  - rule: "Performative honesty"
+    category: prose
+    context: "Status updates, retrospectives, project assessments"
+    antipattern: "'Being honest about where things are:', 'To be frank:', 'The truth is:' — flagging your own candor"
+    rationale: "If you have to announce you're being honest, the surrounding text is performing. Just state the thing."
+
+  - rule: "Self-referential pivot"
+    category: prose
+    context: "Comparative sections, differentiation arguments"
+    antipattern: "'This is where X diverges from...', 'This is where things get interesting' — narrating the structure of your own argument"
+    rationale: "Meta-commentary about your own text is a crutch. Make the point; don't announce you're about to make it."
+
+  - rule: "Punchy fragment marketing copy"
+    category: prose
+    context: "Taglines, hero sections, feature callouts"
+    antipattern: "'One knowledge base, every agent surface.' — sentence fragments styled as advertising slogans"
+    rationale: "Technical docs aren't ad copy. Fragment slogans trade precision for vibes."
+
+  - rule: "Colon-into-bold-statement"
+    category: prose
+    context: "Section transitions, key takeaways, framing statements"
+    antipattern: "'The question it answers: **How do you...**' — colon followed by a bolded rhetorical question or declaration"
+    rationale: "This is a formatting crutch that substitutes typographic emphasis for actual argumentative weight."
+
+  - rule: "Rhythmic parallel construction closers"
+    category: prose
+    context: "Paragraph endings, section closers, conclusions"
+    antipattern: "'decisions tied to outcomes, updated by evidence, grounded in practice' — parallel participial phrases as closers"
+    rationale: "These read as sermon cadences. They sound authoritative but say little. End with a concrete claim instead."
+
+  - rule: "Hedging with 'not' lists"
+    category: prose
+    context: "Definitions, scope statements, positioning"
+    antipattern: "'This is not X. Not Y. Not Z.' — defining something entirely by what it isn't, in staccato negation"
+    rationale: "Negative definition is evasive. Say what the thing is. Reserve negation for genuine disambiguation."
