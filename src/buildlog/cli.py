@@ -110,6 +110,11 @@ def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
         click.echo("Failed to initialize buildlog.", err=True)
         raise SystemExit(1)
 
+    # Ensure .buildlog/ directory exists (copier skips dot-prefixed paths)
+    dot_buildlog = buildlog_dir / ".buildlog"
+    dot_buildlog.mkdir(exist_ok=True)
+    (dot_buildlog / "seeds").mkdir(exist_ok=True)
+
     # Update CLAUDE.md if it exists and user didn't opt out
     if not no_claude_md:
         claude_md = Path("CLAUDE.md")
