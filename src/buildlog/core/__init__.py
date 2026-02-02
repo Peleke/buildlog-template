@@ -1,14 +1,18 @@
 """Core operations for buildlog skill management."""
 
 from buildlog.core.operations import (
+    CreateEntryResult,
     DiffResult,
     EndSessionResult,
     GauntletAcceptRiskResult,
     GauntletLoopResult,
+    GauntletRulesResult,
     LearnFromReviewResult,
+    ListEntriesResult,
     LogMistakeResult,
     LogRewardResult,
     Mistake,
+    OverviewResult,
     PromoteResult,
     RejectResult,
     ReviewIssue,
@@ -19,6 +23,7 @@ from buildlog.core.operations import (
     SessionMetrics,
     StartSessionResult,
     StatusResult,
+    create_entry,
     diff,
     end_session,
     find_skills_by_ids,
@@ -26,9 +31,12 @@ from buildlog.core.operations import (
     gauntlet_process_issues,
     get_bandit_status,
     get_experiment_report,
+    get_gauntlet_rules,
+    get_overview,
     get_rewards,
     get_session_metrics,
     learn_from_review,
+    list_entries,
     log_mistake,
     log_reward,
     promote,
@@ -58,6 +66,11 @@ __all__ = [
     # Gauntlet loop
     "GauntletLoopResult",
     "GauntletAcceptRiskResult",
+    # Entry & overview
+    "GauntletRulesResult",
+    "OverviewResult",
+    "CreateEntryResult",
+    "ListEntriesResult",
     "status",
     "promote",
     "reject",
@@ -76,4 +89,9 @@ __all__ = [
     # Gauntlet loop operations
     "gauntlet_process_issues",
     "gauntlet_accept_risk",
+    # Entry & overview operations
+    "get_gauntlet_rules",
+    "get_overview",
+    "create_entry",
+    "list_entries",
 ]

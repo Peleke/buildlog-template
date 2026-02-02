@@ -57,6 +57,15 @@ __all__ = [
     # Gauntlet loop operations
     "gauntlet_process_issues",
     "gauntlet_accept_risk",
+    # Entry & overview operations
+    "GauntletRulesResult",
+    "OverviewResult",
+    "CreateEntryResult",
+    "ListEntriesResult",
+    "get_gauntlet_rules",
+    "get_overview",
+    "create_entry",
+    "list_entries",
 ]
 
 
@@ -2145,4 +2154,357 @@ def gauntlet_accept_risk(
             else f"Accepted {len(remaining_issues)} issues as risk."
         ),
         error=error,
+    )
+
+
+# =============================================================================
+# Entry & Overview Operations
+# =============================================================================
+
+
+@dataclass
+class GauntletRulesResult:
+    """Result of loading gauntlet reviewer rules."""
+
+    formatted: str
+    format: str
+    total_rules: int
+    personas: list[str]
+    error: str | None = None
+
+
+@dataclass
+class OverviewResult:
+    """Result of getting buildlog overview."""
+
+    entries: int
+    skills: dict
+    active_session: str | None
+    render_targets: list[str]
+
+
+@dataclass
+class CreateEntryResult:
+    """Result of creating a new entry."""
+
+    entry_path: str
+    entry_name: str
+    date_str: str
+    template_used: str
+    message: str
+    error: str | None = None
+
+
+@dataclass
+class ListEntriesResult:
+    """Result of listing entries."""
+
+    entries: list[dict]
+    count: int
+    message: str | None = None
+
+
+def get_gauntlet_rules(
+    persona: str | None = None,
+    format: str = "json",
+) -> GauntletRulesResult:
+    """Load gauntlet reviewer rules.
+
+    Args:
+        persona: Filter to a specific persona, or None for all.
+        format: Output format (json, yaml, markdown).
+
+    Returns:
+        GauntletRulesResult with formatted rules.
+    """
+    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+
+    seeds_dir = get_default_seeds_dir()
+    if seeds_dir is None:
+        return GauntletRulesResult(
+            formatted="",
+            format=format,
+            total_rules=0,
+            personas=[],
+            error="No seed files found. Check your buildlog installation.",
+        )
+
+    seeds = load_all_seeds(seeds_dir)
+    if not seeds:
+        return GauntletRulesResult(
+            formatted="",
+            format=format,
+            total_rules=0,
+            personas=[],
+            error="No seed files found in seeds directory.",
+        )
+
+    # Filter by persona
+    if persona is not None:
+        if persona not in seeds:
+            available = ", ".join(seeds.keys())
+            return GauntletRulesResult(
+                formatted="",
+                format=format,
+                total_rules=0,
+                personas=[],
+                error=f"Unknown persona: {persona}. Available: {available}",
+            )
+        seeds = {persona: seeds[persona]}
+
+    # Build data structure
+    data: dict = {}
+    total_rules = 0
+    for name, sf in seeds.items():
+        data[name] = {
+            "version": sf.version,
+            "rules": [
+                {
+                    "rule": r.rule,
+                    "category": r.category,
+                    "context": r.context,
+                    "antipattern": r.antipattern,
+                    "rationale": r.rationale,
+                    "tags": r.tags,
+                }
+                for r in sf.rules
+            ],
+        }
+        total_rules += len(sf.rules)
+
+    # Format output
+    if format == "json":
+        formatted = json.dumps(data, indent=2)
+    elif format == "yaml":
+        import yaml
+
+        formatted = yaml.dump(data, default_flow_style=False, sort_keys=False)
+    elif format == "markdown":
+        lines = ["# Review Gauntlet Rules\n"]
+        for name, sf in seeds.items():
+            lines.append(f"## {name.replace('_', ' ').title()}\n")
+            lines.append(f"*{len(sf.rules)} rules, v{sf.version}*\n")
+            for i, r in enumerate(sf.rules, 1):
+                lines.append(f"### {i}. {r.rule}\n")
+                lines.append(f"**Category**: {r.category}  ")
+                if r.context:
+                    lines.append(f"**When**: {r.context}\n")
+                if r.antipattern:
+                    lines.append(f"**Antipattern**: {r.antipattern}\n")
+                if r.rationale:
+                    lines.append(f"**Why**: {r.rationale}\n")
+                lines.append("")
+        formatted = "\n".join(lines)
+    else:
+        formatted = json.dumps(data, indent=2)
+
+    return GauntletRulesResult(
+        formatted=formatted,
+        format=format,
+        total_rules=total_rules,
+        personas=list(seeds.keys()),
+    )
+
+
+def get_overview(
+    buildlog_dir: Path,
+) -> OverviewResult:
+    """Get project buildlog state at a glance.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+
+    Returns:
+        OverviewResult with entries, skills, session, and targets.
+    """
+    from buildlog.render import RENDERERS
+
+    # Count entries
+    entries = sorted(buildlog_dir.glob("20??-??-??-*.md"))
+
+    # Skills
+    try:
+        skill_set = generate_skills(buildlog_dir)
+        total_skills = skill_set.total_skills
+        by_confidence: dict[str, int] = {"high": 0, "medium": 0, "low": 0}
+        for cat_skills in skill_set.skills.values():
+            for s in cat_skills:
+                by_confidence[s.confidence] += 1
+    except Exception:
+        total_skills = 0
+        by_confidence = {"high": 0, "medium": 0, "low": 0}
+
+    # Promoted/rejected
+    promoted_path = _get_promoted_path(buildlog_dir)
+    rejected_path = _get_rejected_path(buildlog_dir)
+    promoted_count = len(_load_json_set(promoted_path, "skill_ids"))
+    rejected_count = len(_load_json_set(rejected_path, "skill_ids"))
+
+    # Active session
+    active_session_path = _get_active_session_path(buildlog_dir)
+    active_session = None
+    if active_session_path.exists():
+        try:
+            session_data = json.loads(active_session_path.read_text())
+            active_session = session_data.get("id")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    return OverviewResult(
+        entries=len(entries),
+        skills={
+            "total": total_skills,
+            "by_confidence": by_confidence,
+            "promoted": promoted_count,
+            "rejected": rejected_count,
+            "pending": total_skills - promoted_count - rejected_count,
+        },
+        active_session=active_session,
+        render_targets=list(RENDERERS.keys()),
+    )
+
+
+def create_entry(
+    buildlog_dir: Path,
+    slug: str,
+    entry_date: str | None = None,
+    quick: bool = False,
+) -> CreateEntryResult:
+    """Create a new buildlog journal entry.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        slug: Short identifier for the entry.
+        entry_date: Date in YYYY-MM-DD format, or None for today.
+        quick: Use short template if True.
+
+    Returns:
+        CreateEntryResult with path and metadata.
+    """
+    import shutil
+    from datetime import date as date_cls
+    from datetime import datetime as dt_cls
+
+    if not buildlog_dir.exists():
+        return CreateEntryResult(
+            entry_path="",
+            entry_name="",
+            date_str="",
+            template_used="",
+            message="",
+            error=f"No buildlog directory found at {buildlog_dir}",
+        )
+
+    # Template selection
+    template_name = "_TEMPLATE_QUICK.md" if quick else "_TEMPLATE.md"
+    template_file = buildlog_dir / template_name
+    if quick and not template_file.exists():
+        template_file = buildlog_dir / "_TEMPLATE.md"
+        template_name = "_TEMPLATE.md"
+
+    if not template_file.exists():
+        return CreateEntryResult(
+            entry_path="",
+            entry_name="",
+            date_str="",
+            template_used="",
+            message="",
+            error=f"No {template_name} found in {buildlog_dir}",
+        )
+
+    # Date
+    if entry_date:
+        try:
+            parsed = dt_cls.strptime(entry_date, "%Y-%m-%d").date()
+            date_str = parsed.isoformat()
+        except ValueError:
+            return CreateEntryResult(
+                entry_path="",
+                entry_name="",
+                date_str="",
+                template_used="",
+                message="",
+                error=f"Invalid date: {entry_date}. Use YYYY-MM-DD.",
+            )
+    else:
+        date_str = date_cls.today().isoformat()
+
+    # Sanitize slug
+    safe_slug = slug.lower().replace(" ", "-").replace("_", "-")
+    safe_slug = "".join(c for c in safe_slug if c.isalnum() or c == "-")
+
+    # Create entry
+    entry_name = f"{date_str}-{safe_slug}.md"
+    entry_path = buildlog_dir / entry_name
+
+    if entry_path.exists():
+        return CreateEntryResult(
+            entry_path=str(entry_path),
+            entry_name=entry_name,
+            date_str=date_str,
+            template_used=template_name,
+            message="",
+            error=f"Entry already exists: {entry_path}",
+        )
+
+    shutil.copy(template_file, entry_path)
+
+    # Replace date placeholder
+    content = entry_path.read_text()
+    content = content.replace("[YYYY-MM-DD]", date_str)
+    entry_path.write_text(content)
+
+    return CreateEntryResult(
+        entry_path=str(entry_path),
+        entry_name=entry_name,
+        date_str=date_str,
+        template_used=template_name,
+        message=f"Created {entry_path}",
+    )
+
+
+def list_entries(
+    buildlog_dir: Path,
+) -> ListEntriesResult:
+    """List all buildlog journal entries, most recent first.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+
+    Returns:
+        ListEntriesResult with entry list.
+    """
+    if not buildlog_dir.exists():
+        return ListEntriesResult(
+            entries=[],
+            count=0,
+            message=f"No buildlog directory found at {buildlog_dir}",
+        )
+
+    entry_paths = sorted(
+        buildlog_dir.glob("20??-??-??-*.md"),
+        reverse=True,
+    )
+
+    entries: list[dict] = []
+    for ep in entry_paths:
+        try:
+            first_line = ep.read_text().split("\n")[0]
+            title = (
+                first_line.replace("# Build Journal: ", "").replace("# ", "").strip()
+            )
+            if title == "[TITLE]":
+                title = "(untitled)"
+        except Exception:
+            title = "(unreadable)"
+        entries.append({"name": ep.name, "title": title})
+
+    message = None
+    if not entries:
+        message = "No entries yet. Create one with: buildlog new my-feature"
+
+    return ListEntriesResult(
+        entries=entries,
+        count=len(entries),
+        message=message,
     )
