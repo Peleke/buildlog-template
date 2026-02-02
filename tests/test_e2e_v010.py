@@ -94,7 +94,7 @@ class TestE2EMCPServer19Tools:
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 19
+        assert len(tools) == 29
 
         # Each should have a name and description
         for tool in tools:
