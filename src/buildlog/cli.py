@@ -1432,6 +1432,7 @@ PERSONAS = {
     "security_karen": "OWASP Top 10 security review",
     "test_terrorist": "Comprehensive testing coverage audit",
     "ruthless_reviewer": "Code quality and functional principles",
+    "bragi": "Detect and flag LLM-ish prose patterns in markdown",
 }
 
 
