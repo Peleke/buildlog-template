@@ -235,7 +235,7 @@ def mcp_test():
         click.echo("Warning: could not inspect tools via internal API", err=True)
         tool_names = []
 
-    expected = 19
+    expected = 29
     click.echo(f"buildlog MCP server: {len(tool_names)} tools registered")
     for name in tool_names:
         click.echo(f"  {name}")
