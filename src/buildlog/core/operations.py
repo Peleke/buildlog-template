@@ -66,6 +66,20 @@ __all__ = [
     "get_overview",
     "create_entry",
     "list_entries",
+    # P0: Gauntlet loop
+    "CommitResult",
+    "GauntletPromptResult",
+    "GauntletLoopConfigResult",
+    "commit",
+    "generate_gauntlet_prompt",
+    "gauntlet_loop_config",
+    # P2: Nice-to-have
+    "GauntletGenerateResult",
+    "InitResult",
+    "UpdateResult",
+    "gauntlet_generate",
+    "init_buildlog",
+    "update_buildlog",
 ]
 
 
@@ -2507,4 +2521,798 @@ def list_entries(
         entries=entries,
         count=len(entries),
         message=message,
+    )
+
+
+# =============================================================================
+# P0: Gauntlet loop operations
+# =============================================================================
+
+
+@dataclass
+class CommitResult:
+    """Result of a commit operation."""
+
+    commit_hash: str
+    commit_message: str
+    files_changed: list[str]
+    entry_path: str | None
+    entry_updated: bool
+    message: str
+    error: str | None = None
+
+
+@dataclass
+class GauntletPromptResult:
+    """Result of generating a gauntlet review prompt."""
+
+    prompt: str
+    target: str
+    personas: list[str]
+    total_rules: int
+    message: str
+    error: str | None = None
+
+
+@dataclass
+class GauntletLoopConfigResult:
+    """Configuration and instructions for running the gauntlet loop."""
+
+    target: str
+    personas: list[str]
+    max_iterations: int
+    stop_at: str
+    auto_gh_issues: bool
+    rules_by_persona: dict[str, list[dict]]
+    instructions: list[str]
+    issue_format: dict[str, str]
+    prompt: str
+    message: str
+    error: str | None = None
+
+
+def _resolve_entry_path_core(
+    buildlog_dir: Path,
+    today: str,
+    slug: str | None,
+    explicit: str | None,
+    cwd: str | None = None,
+) -> Path:
+    """Find or create the entry path for today."""
+    import subprocess
+
+    if explicit:
+        return Path(explicit)
+
+    existing = list(buildlog_dir.glob(f"{today}-*.md"))
+    if existing:
+        return existing[0]
+
+    if slug is None:
+        try:
+            run_kwargs: dict = {"cwd": cwd} if cwd else {}
+            branch = subprocess.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True,
+                text=True,
+                check=True,
+                **run_kwargs,
+            ).stdout.strip()
+            slug = branch.split("/")[-1].lower().replace("_", "-")
+            slug = "".join(c for c in slug if c.isalnum() or c == "-")
+        except subprocess.CalledProcessError:
+            slug = "session"
+
+    if not slug:
+        slug = "session"
+
+    return buildlog_dir / f"{today}-{slug}.md"
+
+
+def commit(
+    buildlog_dir: Path,
+    git_args: list[str],
+    slug: str | None = None,
+    entry: str | None = None,
+    no_entry: bool = False,
+    cwd: str | None = None,
+) -> CommitResult:
+    """Run git commit and append commit block to today's buildlog entry.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        git_args: Arguments to pass to git commit (e.g., ["-m", "feat: thing"]).
+        slug: Entry slug (default: derived from branch name).
+        entry: Explicit entry file path to append to.
+        no_entry: Skip buildlog entry update.
+        cwd: Working directory for git commands.
+
+    Returns:
+        CommitResult with commit info and entry update status.
+    """
+    import subprocess
+    from datetime import date
+
+    run_kwargs: dict = {"cwd": cwd} if cwd else {}
+
+    git_cmd = ["git", "commit", *git_args]
+    result = subprocess.run(git_cmd, capture_output=True, text=True, **run_kwargs)
+
+    if result.returncode != 0:
+        return CommitResult(
+            commit_hash="",
+            commit_message="",
+            files_changed=[],
+            entry_path=None,
+            entry_updated=False,
+            message="",
+            error=f"git commit failed: {result.stderr.strip()}",
+        )
+
+    try:
+        commit_hash = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            **run_kwargs,
+        ).stdout.strip()
+        commit_msg = subprocess.run(
+            ["git", "log", "-1", "--format=%s"],
+            capture_output=True,
+            text=True,
+            check=True,
+            **run_kwargs,
+        ).stdout.strip()
+        diff_result = subprocess.run(
+            ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+            capture_output=True,
+            text=True,
+            **run_kwargs,
+        )
+        if diff_result.returncode == 0 and diff_result.stdout.strip():
+            files_changed = diff_result.stdout.strip().split("\n")
+        else:
+            # Root commit fallback
+            ls_result = subprocess.run(
+                ["git", "ls-tree", "--name-only", "-r", "HEAD"],
+                capture_output=True,
+                text=True,
+                **run_kwargs,
+            )
+            if ls_result.returncode == 0 and ls_result.stdout.strip():
+                files_changed = ls_result.stdout.strip().split("\n")
+            else:
+                files_changed = []
+    except subprocess.CalledProcessError:
+        return CommitResult(
+            commit_hash="",
+            commit_message="",
+            files_changed=[],
+            entry_path=None,
+            entry_updated=False,
+            message="",
+            error="git commit succeeded but could not read commit info",
+        )
+
+    entry_path_str = None
+    entry_updated = False
+
+    if not no_entry and buildlog_dir.exists():
+        today_str = date.today().isoformat()
+        resolved = _resolve_entry_path_core(buildlog_dir, today_str, slug, entry, cwd)
+
+        commit_block = f"\n### `{commit_hash}` — {commit_msg}\n\n"
+        if files_changed:
+            commit_block += "Files:\n"
+            for f in files_changed[:20]:
+                commit_block += f"- `{f}`\n"
+            if len(files_changed) > 20:
+                commit_block += f"- ...and {len(files_changed) - 20} more\n"
+        commit_block += "\n"
+
+        if resolved.exists():
+            content = resolved.read_text()
+            if "## Commits" not in content:
+                content = content.rstrip() + "\n\n## Commits\n"
+            content += commit_block
+        else:
+            content = f"# {today_str}\n\n## Commits\n{commit_block}"
+
+        resolved.write_text(content)
+        entry_path_str = str(resolved)
+        entry_updated = True
+
+    return CommitResult(
+        commit_hash=commit_hash,
+        commit_message=commit_msg,
+        files_changed=files_changed,
+        entry_path=entry_path_str,
+        entry_updated=entry_updated,
+        message=f"Committed {commit_hash}: {commit_msg}",
+    )
+
+
+def generate_gauntlet_prompt(
+    target: str,
+    personas: list[str] | None = None,
+) -> GauntletPromptResult:
+    """Generate a review prompt combining gauntlet rules with target info.
+
+    Args:
+        target: Path to target code (file or directory).
+        personas: List of persona names to include, or None for all.
+
+    Returns:
+        GauntletPromptResult with the formatted prompt.
+    """
+    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+
+    seeds_dir = get_default_seeds_dir()
+    if seeds_dir is None:
+        return GauntletPromptResult(
+            prompt="",
+            target=target,
+            personas=[],
+            total_rules=0,
+            message="",
+            error="No seed files found. Check your buildlog installation.",
+        )
+
+    seeds = load_all_seeds(seeds_dir)
+    if not seeds:
+        return GauntletPromptResult(
+            prompt="",
+            target=target,
+            personas=[],
+            total_rules=0,
+            message="",
+            error="No seed files found in seeds directory.",
+        )
+
+    if personas:
+        filtered = {k: v for k, v in seeds.items() if k in personas}
+        if not filtered:
+            available = ", ".join(seeds.keys())
+            return GauntletPromptResult(
+                prompt="",
+                target=target,
+                personas=[],
+                total_rules=0,
+                message="",
+                error=(
+                    f"No matching personas: {', '.join(personas)}."
+                    f" Available: {available}"
+                ),
+            )
+        seeds = filtered
+
+    lines = [
+        "# Review Gauntlet Prompt\n",
+        "You are running the Review Gauntlet." " Apply these rules ruthlessly.\n",
+        "## Target\n",
+        f"Review: `{target}`\n",
+        "## Reviewers and Rules\n",
+    ]
+
+    total_rules = 0
+    for name, sf in seeds.items():
+        persona_name = name.replace("_", " ").title()
+        lines.append(f"### {persona_name}\n")
+        for r in sf.rules:
+            lines.append(f"- **{r.rule}**")
+            if r.antipattern:
+                lines.append(f"  - Antipattern: {r.antipattern}")
+        lines.append("")
+        total_rules += len(sf.rules)
+
+    lines.extend(
+        [
+            "## Output Format\n",
+            "For each issue found, output:\n",
+            "```json",
+            "{",
+            '  "reviewer": "<persona>",',
+            '  "severity": "critical|major|minor|nitpick",',
+            '  "category": "<category>",',
+            '  "location": "<file:line>",',
+            '  "description": "<what is wrong>",',
+            '  "rule_learned": "<generalizable rule>"',
+            "}",
+            "```\n",
+            "## Instructions\n",
+            "1. Read the target code thoroughly",
+            "2. Apply each rule from each reviewer",
+            "3. Report ALL violations found",
+            "4. Be ruthless - this is the gauntlet",
+            "",
+        ]
+    )
+
+    formatted = "\n".join(lines)
+
+    return GauntletPromptResult(
+        prompt=formatted,
+        target=target,
+        personas=list(seeds.keys()),
+        total_rules=total_rules,
+        message=(
+            f"Generated prompt with {total_rules} rules" f" from {len(seeds)} personas"
+        ),
+    )
+
+
+def gauntlet_loop_config(
+    target: str,
+    personas: list[str] | None = None,
+    max_iterations: int = 10,
+    stop_at: str = "minors",
+    auto_gh_issues: bool = False,
+) -> GauntletLoopConfigResult:
+    """Generate gauntlet loop configuration for an agent.
+
+    Args:
+        target: Path to target code.
+        personas: Persona names to include, or None for all.
+        max_iterations: Max loop iterations (default: 10).
+        stop_at: Severity level to stop at (criticals/majors/minors).
+        auto_gh_issues: Create GitHub issues for accepted risk items.
+
+    Returns:
+        GauntletLoopConfigResult with full loop configuration.
+    """
+    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+
+    seeds_dir = get_default_seeds_dir()
+    _empty = GauntletLoopConfigResult(
+        target=target,
+        personas=[],
+        max_iterations=max_iterations,
+        stop_at=stop_at,
+        auto_gh_issues=auto_gh_issues,
+        rules_by_persona={},
+        instructions=[],
+        issue_format={},
+        prompt="",
+        message="",
+    )
+
+    if seeds_dir is None:
+        _empty.error = "No seed files found. Check your buildlog installation."
+        return _empty
+
+    seeds = load_all_seeds(seeds_dir)
+    if not seeds:
+        _empty.error = "No seed files found in seeds directory."
+        return _empty
+
+    if personas:
+        filtered = {k: v for k, v in seeds.items() if k in personas}
+        if not filtered:
+            available = ", ".join(seeds.keys())
+            _empty.error = f"No matching personas. Available: {available}"
+            return _empty
+        seeds = filtered
+
+    rules_by_persona: dict[str, list[dict]] = {}
+    for name, sf in seeds.items():
+        rules_by_persona[name] = [
+            {
+                "rule": r.rule,
+                "antipattern": r.antipattern,
+                "category": r.category,
+            }
+            for r in sf.rules
+        ]
+
+    prompt_result = generate_gauntlet_prompt(target=target, personas=list(seeds.keys()))
+    prompt = prompt_result.prompt if not prompt_result.error else ""
+
+    instructions = [
+        "1. Review the target code using the rules from each persona",
+        "2. Report all violations as JSON issues with: severity,"
+        " category, description, rule_learned, location",
+        "3. Call `buildlog_gauntlet_issues` with the issues list"
+        " to determine next action",
+        "4. If action='fix_criticals': Fix critical+major issues,"
+        " then re-run gauntlet",
+        "5. If action='checkpoint_majors': Ask user whether to"
+        " continue fixing majors",
+        "6. If action='checkpoint_minors': Ask user whether to"
+        " accept risk or continue",
+        "7. If user accepts risk and auto_gh_issues: Call"
+        " `buildlog_gauntlet_accept_risk` with remaining issues",
+        "8. Repeat until action='clean' or max_iterations reached",
+    ]
+
+    issue_format = {
+        "severity": "critical|major|minor|nitpick",
+        "category": "security|testing|architectural|workflow|...",
+        "description": "Concrete description of what's wrong",
+        "rule_learned": "Generalizable rule for the future",
+        "location": "file:line (optional)",
+    }
+
+    return GauntletLoopConfigResult(
+        target=target,
+        personas=list(seeds.keys()),
+        max_iterations=max_iterations,
+        stop_at=stop_at,
+        auto_gh_issues=auto_gh_issues,
+        rules_by_persona=rules_by_persona,
+        instructions=instructions,
+        issue_format=issue_format,
+        prompt=prompt,
+        message=(
+            f"Gauntlet loop ready: {len(seeds)} personas,"
+            f" max {max_iterations} iterations"
+        ),
+    )
+
+
+# =============================================================================
+# P2: Nice-to-have operations
+# =============================================================================
+
+
+@dataclass
+class GauntletGenerateResult:
+    """Result of generating seed rules from source text."""
+
+    persona: str
+    rule_count: int
+    source_count: int
+    output_path: str | None
+    preview: dict | None
+    message: str
+    error: str | None = None
+
+
+@dataclass
+class InitResult:
+    """Result of initializing buildlog in a project."""
+
+    initialized: bool
+    buildlog_dir: str
+    claude_md_updated: bool
+    mcp_registered: bool
+    message: str
+    error: str | None = None
+
+
+@dataclass
+class UpdateResult:
+    """Result of updating buildlog templates."""
+
+    updated: bool
+    message: str
+    error: str | None = None
+
+
+def gauntlet_generate(
+    source_text: str,
+    persona: str,
+    output_dir: Path | None = None,
+    dry_run: bool = False,
+) -> GauntletGenerateResult:
+    """Generate seed rules from source text using LLM extraction.
+
+    Args:
+        source_text: The text content to extract rules from.
+        persona: Persona name for the seed file.
+        output_dir: Output directory for seed YAML.
+        dry_run: Preview without writing to disk.
+
+    Returns:
+        GauntletGenerateResult with generation info.
+    """
+    if not source_text.strip():
+        return GauntletGenerateResult(
+            persona=persona,
+            rule_count=0,
+            source_count=0,
+            output_path=None,
+            preview=None,
+            message="",
+            error="Empty source text provided.",
+        )
+
+    try:
+        from buildlog.seed_engine import Pipeline
+    except ImportError:
+        return GauntletGenerateResult(
+            persona=persona,
+            rule_count=0,
+            source_count=0,
+            output_path=None,
+            preview=None,
+            message="",
+            error="Seed engine not available. Check installation.",
+        )
+
+    if output_dir is None:
+        output_dir = Path("buildlog/.buildlog/seeds")
+
+    # Get LLM backend
+    try:
+        from buildlog.llm import get_llm_backend
+
+        backend = get_llm_backend()
+    except Exception:
+        backend = None
+
+    if backend is None:
+        return GauntletGenerateResult(
+            persona=persona,
+            rule_count=0,
+            source_count=1,
+            output_path=None,
+            preview=None,
+            message="",
+            error=(
+                "No LLM backend available. Set ANTHROPIC_API_KEY" " or install Ollama."
+            ),
+        )
+
+    source_content = {"inline": source_text}
+
+    try:
+        from buildlog.seed_engine.models import Source, SourceType
+
+        sources = [
+            Source(
+                name="inline",
+                url="mcp://inline",
+                source_type=SourceType.REFERENCE_DOC,
+                domain="general",
+            )
+        ]
+    except ImportError:
+        return GauntletGenerateResult(
+            persona=persona,
+            rule_count=0,
+            source_count=1,
+            output_path=None,
+            preview=None,
+            message="",
+            error="Seed engine models not available.",
+        )
+
+    try:
+        pipeline = Pipeline.with_llm(
+            persona=persona,
+            backend=backend,
+            source_content=source_content,
+        )
+    except Exception as e:
+        return GauntletGenerateResult(
+            persona=persona,
+            rule_count=0,
+            source_count=1,
+            output_path=None,
+            preview=None,
+            message="",
+            error=f"Failed to initialize pipeline: {e}",
+        )
+
+    try:
+        if dry_run:
+            preview = pipeline.dry_run(sources)
+            return GauntletGenerateResult(
+                persona=persona,
+                rule_count=preview.get("rule_count", 0),
+                source_count=1,
+                output_path=None,
+                preview=preview,
+                message="Dry run complete (no files written).",
+            )
+        else:
+            pipe_result = pipeline.run(sources, output_dir=output_dir)
+            output_path_str = str(output_dir / f"{persona}.yaml")
+            return GauntletGenerateResult(
+                persona=persona,
+                rule_count=pipe_result.rule_count,
+                source_count=1,
+                output_path=output_path_str,
+                preview=None,
+                message=f"Generated seed file: {output_path_str}",
+            )
+    except Exception as e:
+        return GauntletGenerateResult(
+            persona=persona,
+            rule_count=0,
+            source_count=1,
+            output_path=None,
+            preview=None,
+            message="",
+            error=f"Pipeline execution failed: {e}",
+        )
+
+
+def init_buildlog(
+    project_dir: Path,
+    defaults: bool = True,
+    no_claude_md: bool = False,
+    no_mcp: bool = False,
+) -> InitResult:
+    """Initialize buildlog in a project directory.
+
+    Args:
+        project_dir: Project root directory.
+        defaults: Use default values (non-interactive).
+        no_claude_md: Skip CLAUDE.md update.
+        no_mcp: Skip MCP server registration.
+
+    Returns:
+        InitResult with initialization status.
+    """
+    import subprocess
+    import sys
+
+    buildlog_dir = project_dir / "buildlog"
+    if buildlog_dir.exists():
+        return InitResult(
+            initialized=False,
+            buildlog_dir=str(buildlog_dir),
+            claude_md_updated=False,
+            mcp_registered=False,
+            message="",
+            error=f"buildlog/ already exists at {buildlog_dir}",
+        )
+
+    # Find template directory
+    template_src = None
+    # Check for local template
+    here = Path(__file__).resolve().parent.parent
+    local_template = here / "template"
+    if not local_template.exists():
+        local_template = here.parent / "template"
+    if local_template.exists():
+        template_src = str(local_template)
+    else:
+        template_src = "gh:Peleke/buildlog-template"
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "copier",
+        "copy",
+        "--trust",
+    ]
+    if defaults:
+        cmd.append("--defaults")
+    cmd.extend([template_src, str(project_dir)])
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            return InitResult(
+                initialized=False,
+                buildlog_dir=str(buildlog_dir),
+                claude_md_updated=False,
+                mcp_registered=False,
+                message="",
+                error=f"copier failed: {result.stderr.strip()}",
+            )
+    except FileNotFoundError:
+        return InitResult(
+            initialized=False,
+            buildlog_dir=str(buildlog_dir),
+            claude_md_updated=False,
+            mcp_registered=False,
+            message="",
+            error="copier not found. Install with: pip install copier",
+        )
+    except subprocess.TimeoutExpired:
+        return InitResult(
+            initialized=False,
+            buildlog_dir=str(buildlog_dir),
+            claude_md_updated=False,
+            mcp_registered=False,
+            message="",
+            error="copier timed out after 60 seconds",
+        )
+
+    # Create .buildlog directories (copier skips dot-prefixed paths)
+    dot_buildlog = buildlog_dir / ".buildlog"
+    dot_buildlog.mkdir(exist_ok=True)
+    (dot_buildlog / "seeds").mkdir(exist_ok=True)
+
+    claude_md_updated = False
+    if not no_claude_md:
+        claude_md = project_dir / "CLAUDE.md"
+        if claude_md.exists():
+            try:
+                from buildlog.constants import CLAUDE_MD_BUILDLOG_SECTION
+
+                content = claude_md.read_text()
+                if "## buildlog Integration" not in content:
+                    content = content.rstrip() + "\n\n" + CLAUDE_MD_BUILDLOG_SECTION
+                    claude_md.write_text(content)
+                    claude_md_updated = True
+            except ImportError:
+                pass
+
+    mcp_registered = False
+    if not no_mcp:
+        try:
+            claude_dir = project_dir / ".claude"
+            claude_dir.mkdir(exist_ok=True)
+            settings_path = claude_dir / "settings.json"
+            settings: dict = {}
+            if settings_path.exists():
+                try:
+                    settings = json.loads(settings_path.read_text())
+                except json.JSONDecodeError:
+                    pass
+            if "mcpServers" not in settings:
+                settings["mcpServers"] = {}
+            if "buildlog" not in settings["mcpServers"]:
+                settings["mcpServers"]["buildlog"] = {
+                    "command": "buildlog-mcp",
+                    "args": [],
+                }
+                settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+            mcp_registered = True
+        except Exception:
+            pass
+
+    return InitResult(
+        initialized=True,
+        buildlog_dir=str(buildlog_dir),
+        claude_md_updated=claude_md_updated,
+        mcp_registered=mcp_registered,
+        message="buildlog initialized successfully.",
+    )
+
+
+def update_buildlog(
+    project_dir: Path,
+) -> UpdateResult:
+    """Update buildlog templates to the latest version.
+
+    Args:
+        project_dir: Project root directory.
+
+    Returns:
+        UpdateResult with update status.
+    """
+    import subprocess
+    import sys
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "copier", "update", "--trust"],
+            capture_output=True,
+            text=True,
+            cwd=str(project_dir),
+            timeout=120,
+        )
+        if result.returncode != 0:
+            return UpdateResult(
+                updated=False,
+                message="",
+                error=f"copier update failed: {result.stderr.strip()}",
+            )
+    except FileNotFoundError:
+        return UpdateResult(
+            updated=False,
+            message="",
+            error="copier not found. Install with: pip install copier",
+        )
+    except subprocess.TimeoutExpired:
+        return UpdateResult(
+            updated=False,
+            message="",
+            error="copier update timed out after 120 seconds",
+        )
+
+    return UpdateResult(
+        updated=True,
+        message="buildlog templates updated successfully.",
     )
