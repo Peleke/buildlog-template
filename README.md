@@ -28,7 +28,7 @@ Most AI agents do not learn. They execute without retaining context. You can bol
 
 Every AI-assisted work session produces a trajectory: goals, decisions, tool uses, corrections, outcomes. Almost all of this is discarded. The next session starts from scratch with the same blind spots.
 
-buildlog exists to close that gap. It captures structured trajectories from real work, extracts decision patterns, and uses statistical methods to select which patterns to surface in future sessions — then measures whether that selection actually reduced mistakes.
+buildlog exists to close that gap. It captures structured trajectories from real work, extracts decision patterns, and uses statistical methods to select which patterns to surface in future sessions, then measures whether that selection actually reduced mistakes.
 
 buildlog measures whether the system actually got better, and proves it.
 
@@ -47,7 +47,7 @@ buildlog commit -m "feat: add auth"
 
 ### 2. Extract decision patterns as seeds
 
-The seed engine watches your development patterns and extracts **seeds** — atomic observations about what works. A seed might be "always define interfaces before implementations" or "mock at the boundary, not the implementation." Each seed carries a category, a confidence score, and source provenance.
+The seed engine watches your development patterns and extracts **seeds**: atomic observations about what works. A seed might be "always define interfaces before implementations" or "mock at the boundary, not the implementation." Each seed carries a category, a confidence score, and source provenance.
 
 Extraction runs through a pipeline: `sources -> extractors -> categorizers -> generators`. Extractors range from regex-based (fast, cheap, brittle) to LLM-backed (accurate, expensive). The pipeline deduplicates semantically using embeddings.
 
@@ -55,7 +55,7 @@ Extraction runs through a pipeline: `sources -> extractors -> categorizers -> ge
 
 Seeds compete for inclusion in your agent's instruction set. The system treats each seed as an arm in a contextual bandit and uses **Thompson Sampling** to balance exploration (trying under-tested rules) against exploitation (surfacing rules with strong track records).
 
-Each seed maintains a Beta posterior updated by observed outcomes. Over time, the system converges on the rules that actually reduce mistakes in your specific codebase and workflow — not rules that sound good in the abstract.
+Each seed maintains a Beta posterior updated by observed outcomes. Over time, the system converges on the rules that actually reduce mistakes in your specific codebase and workflow, not rules that sound good in the abstract.
 
 ### 4. Render to every agent format
 
@@ -74,7 +74,7 @@ buildlog skills   # render current policy to agent files
 
 ### 5. Close the loop with experiments
 
-Track whether the selected rules are working. Run experiments, measure Repeated Mistake Rate (RMR) across sessions, and get statistical evidence — not feelings — about what improved.
+Track whether the selected rules are working. Run experiments, measure Repeated Mistake Rate (RMR) across sessions, and get statistical evidence, not feelings, about what improved.
 
 ```bash
 buildlog experiment start

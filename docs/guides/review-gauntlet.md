@@ -12,6 +12,7 @@ buildlog gauntlet list
 |---------|-------|-------|
 | **Security Karen** | OWASP Top 10, auth, injection, secrets | 13 |
 | **Test Terrorist** | Coverage, property-based, metamorphic, contracts | 21 |
+| **Bragi** | LLM prose pattern detection in markdown (em dashes, tricolons, performative honesty, etc.) | 9 |
 | **Ruthless Reviewer** | Code quality, FP principles | Coming soon |
 
 Each rule includes:
@@ -52,7 +53,7 @@ The loop provides structured checkpoints:
 
 ## MCP tools for agent integration
 
-- `buildlog_gauntlet_issues` — Report findings, get next action
-- `buildlog_gauntlet_accept_risk` — Accept remaining issues (optionally create GitHub issues)
+- `buildlog_gauntlet_issues`: report findings, get next action
+- `buildlog_gauntlet_accept_risk`: accept remaining issues (optionally create GitHub issues)
 
-The gauntlet integrates with the learning loop — issues found become rules that accumulate confidence.
+The gauntlet integrates with the learning loop. Issues found become rules that accumulate confidence.
