@@ -17,7 +17,7 @@ usage() {
     echo "  1. Validate version format (semver)"
     echo "  2. Check you're on main branch"
     echo "  3. Check working directory is clean"
-    echo "  4. Update version in pyproject.toml"
+    echo "  4. Update version in pyproject.toml and package.json"
     echo "  5. Prompt you to update CHANGELOG.md"
     echo "  6. Commit, tag, and push"
     echo ""
@@ -86,6 +86,18 @@ update_version() {
         exit 1
     fi
     echo -e "${GREEN}Updated pyproject.toml${NC}"
+}
+
+# Update npm package version
+update_npm_version() {
+    local version=$1
+    local npm_pkg="packages/buildlog-npm/package.json"
+    if [[ -f "$npm_pkg" ]]; then
+        npm version "$version" --no-git-tag-version --prefix packages/buildlog-npm
+        echo -e "${GREEN}Updated $npm_pkg${NC}"
+    else
+        echo -e "${YELLOW}Warning: $npm_pkg not found, skipping npm version bump${NC}"
+    fi
 }
 
 # Check CHANGELOG has entry
@@ -171,6 +183,7 @@ main() {
 
     # Updates
     update_version "$version"
+    update_npm_version "$version"
     check_changelog "$version"
     update_changelog_links "$version"
 
@@ -190,7 +203,7 @@ main() {
     fi
 
     # Commit and tag
-    git add pyproject.toml CHANGELOG.md
+    git add pyproject.toml CHANGELOG.md packages/buildlog-npm/package.json
     git commit -m "release: v$version"
     git tag "v$version"
 
@@ -209,7 +222,8 @@ main() {
     echo "  1. Validate version matches tag"
     echo "  2. Run tests"
     echo "  3. Build and publish to PyPI"
-    echo "  4. Create GitHub release"
+    echo "  4. Publish npm package"
+    echo "  5. Create GitHub release"
     echo ""
     echo "Monitor progress:"
     echo "  https://github.com/Peleke/buildlog-template/actions"
