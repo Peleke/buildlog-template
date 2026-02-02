@@ -10,13 +10,17 @@ from pathlib import Path
 from typing import Literal
 
 from buildlog.core import (
+    create_entry,
     diff,
     end_session,
     get_bandit_status,
     get_experiment_report,
+    get_gauntlet_rules,
+    get_overview,
     get_rewards,
     get_session_metrics,
     learn_from_review,
+    list_entries,
     log_mistake,
     log_reward,
     promote,
@@ -56,7 +60,7 @@ def buildlog_promote(
     target: str = "claude_md",
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Promote skills to your agent's rules.
+    """Promote selected skills to your agent's rule files.
 
     Writes selected skills to agent-specific rule files.
 
@@ -97,7 +101,7 @@ def buildlog_reject(
 def buildlog_diff(
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Show skills that haven't been promoted or rejected yet.
+    """Show skills pending promotion or rejection.
 
     Useful for seeing what's new since your last review.
 
@@ -116,7 +120,7 @@ def buildlog_learn_from_review(
     source: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Capture learnings from code review feedback.
+    """Extract and persist learnings from code review feedback.
 
     Call this after a review loop completes to persist learnings.
     Each issue's rule_learned becomes a tracked learning that gains
@@ -164,7 +168,7 @@ def buildlog_log_reward(
     notes: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Log a reward signal for bandit learning.
+    """Log outcome feedback for bandit learning (accepted/revision/rejected).
 
     Call this after agent work to provide feedback on the outcome.
     This enables learning which rules are effective in which contexts.
@@ -269,7 +273,7 @@ def buildlog_experiment_start(
     select_k: int = 3,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Start a new experiment session with Thompson Sampling rule selection.
+    """Start a tracked session with Thompson Sampling rule selection.
 
     Begins tracking for a learning experiment. Uses Thompson Sampling
     to select which rules will be "active" for this session based on
@@ -308,7 +312,7 @@ def buildlog_experiment_end(
     notes: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """End the current experiment session.
+    """End the current session and calculate metrics.
 
     Finalizes the session and calculates metrics including:
     - Total mistakes logged
@@ -341,7 +345,7 @@ def buildlog_log_mistake(
     corrected_by_rule: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Log a mistake during the current session.
+    """Log a mistake during the current session for RMR tracking.
 
     Records the mistake and checks if it's a repeat of a prior mistake
     (from earlier sessions). This enables measuring repeated-mistake rates.
@@ -374,7 +378,7 @@ def buildlog_experiment_metrics(
     session_id: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Get metrics for a session or all sessions.
+    """Get per-session or aggregate mistake rates and rule changes.
 
     Returns mistake rates and rule changes for analysis.
 
@@ -400,7 +404,7 @@ def buildlog_experiment_metrics(
 def buildlog_experiment_report(
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Generate a comprehensive experiment report.
+    """Generate comprehensive report: summary, sessions, error classes.
 
     Returns summary statistics, per-session breakdown, and error class analysis.
 
@@ -424,7 +428,7 @@ def buildlog_bandit_status(
     context: str | None = None,
     top_k: int = 10,
 ) -> dict:
-    """Get Thompson Sampling bandit status and rule rankings.
+    """Get Thompson Sampling bandit state and rule rankings by context.
 
     Shows the bandit's learned beliefs about which rules are effective
     for each error class context. Higher mean = bandit believes rule
@@ -466,7 +470,7 @@ def buildlog_gauntlet_issues(
     source: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Process gauntlet review issues and determine next action.
+    """Process gauntlet issues and determine next action (fix/checkpoint/clean).
 
     Call this after running a gauntlet review. It categorizes issues by
     severity, persists learnings, and returns the appropriate next action.
@@ -525,7 +529,7 @@ def buildlog_gauntlet_accept_risk(
     create_github_issues: bool = False,
     repo: str | None = None,
 ) -> dict:
-    """Accept risk for remaining issues, optionally creating GitHub issues.
+    """Accept risk for remaining issues, optionally create GitHub issues.
 
     Call this when the user decides to accept remaining issues as risk
     (e.g., only minors remain and they want to move on).
@@ -557,4 +561,97 @@ def buildlog_gauntlet_accept_risk(
         create_github_issues=create_github_issues,
         repo=repo,
     )
+    return asdict(result)
+
+
+# -----------------------------------------------------------------------------
+# Entry & Overview MCP Tools
+# -----------------------------------------------------------------------------
+
+
+def buildlog_gauntlet_rules(
+    persona: str | None = None,
+    format: str = "json",
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Load gauntlet reviewer rules. Call before reviewing code to get rules.
+
+    Returns rules from curated reviewer personas (security_karen,
+    test_terrorist, bragi, etc.) in the requested format.
+
+    Args:
+        persona: Filter to a specific persona, or None for all
+        format: Output format (json, yaml, markdown)
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with formatted rules, total_rules, personas list
+    """
+    result = get_gauntlet_rules(persona=persona, format=format)
+    return asdict(result)
+
+
+def buildlog_overview(
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Get project buildlog state at a glance. Call at session start for context.
+
+    Returns entry count, skill summary, active session, and render targets.
+
+    Args:
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with entries, skills, active_session, render_targets
+    """
+    result = get_overview(Path(buildlog_dir))
+    return asdict(result)
+
+
+def buildlog_entry_new(
+    slug: str,
+    entry_date: str | None = None,
+    quick: bool = False,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Create a new buildlog journal entry for documenting work.
+
+    Creates a new dated entry from the template with slug sanitization.
+
+    Args:
+        slug: Short identifier (e.g., 'auth-api', 'bugfix-login')
+        entry_date: Date in YYYY-MM-DD format, or None for today
+        quick: Use short template if True
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with entry_path, entry_name, date_str, template_used, message
+
+    Example:
+        buildlog_entry_new(slug="auth-api")
+        buildlog_entry_new(slug="bugfix", entry_date="2026-01-15", quick=True)
+    """
+    result = create_entry(
+        Path(buildlog_dir),
+        slug=slug,
+        entry_date=entry_date,
+        quick=quick,
+    )
+    return asdict(result)
+
+
+def buildlog_entry_list(
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """List all buildlog journal entries, most recent first.
+
+    Returns entry names and titles extracted from first lines.
+
+    Args:
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with entries list [{name, title}], count, message
+    """
+    result = list_entries(Path(buildlog_dir))
     return asdict(result)

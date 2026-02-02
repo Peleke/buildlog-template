@@ -1,10 +1,24 @@
 """MCP server for buildlog integration."""
 
 from buildlog.mcp.tools import (
+    buildlog_bandit_status,
     buildlog_diff,
+    buildlog_entry_list,
+    buildlog_entry_new,
+    buildlog_experiment_end,
+    buildlog_experiment_metrics,
+    buildlog_experiment_report,
+    buildlog_experiment_start,
+    buildlog_gauntlet_accept_risk,
+    buildlog_gauntlet_issues,
+    buildlog_gauntlet_rules,
     buildlog_learn_from_review,
+    buildlog_log_mistake,
+    buildlog_log_reward,
+    buildlog_overview,
     buildlog_promote,
     buildlog_reject,
+    buildlog_rewards,
     buildlog_status,
 )
 
@@ -14,4 +28,18 @@ __all__ = [
     "buildlog_reject",
     "buildlog_diff",
     "buildlog_learn_from_review",
+    "buildlog_log_reward",
+    "buildlog_rewards",
+    "buildlog_experiment_start",
+    "buildlog_experiment_end",
+    "buildlog_log_mistake",
+    "buildlog_experiment_metrics",
+    "buildlog_experiment_report",
+    "buildlog_bandit_status",
+    "buildlog_gauntlet_issues",
+    "buildlog_gauntlet_accept_risk",
+    "buildlog_gauntlet_rules",
+    "buildlog_overview",
+    "buildlog_entry_new",
+    "buildlog_entry_list",
 ]

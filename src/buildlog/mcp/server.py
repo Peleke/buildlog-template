@@ -7,15 +7,19 @@ from mcp.server.fastmcp import FastMCP
 from buildlog.mcp.tools import (
     buildlog_bandit_status,
     buildlog_diff,
+    buildlog_entry_list,
+    buildlog_entry_new,
     buildlog_experiment_end,
     buildlog_experiment_metrics,
     buildlog_experiment_report,
     buildlog_experiment_start,
     buildlog_gauntlet_accept_risk,
     buildlog_gauntlet_issues,
+    buildlog_gauntlet_rules,
     buildlog_learn_from_review,
     buildlog_log_mistake,
     buildlog_log_reward,
+    buildlog_overview,
     buildlog_promote,
     buildlog_reject,
     buildlog_rewards,
@@ -46,6 +50,12 @@ mcp.tool()(buildlog_gauntlet_accept_risk)
 
 # Bandit tools
 mcp.tool()(buildlog_bandit_status)
+
+# Entry & overview tools
+mcp.tool()(buildlog_gauntlet_rules)
+mcp.tool()(buildlog_overview)
+mcp.tool()(buildlog_entry_new)
+mcp.tool()(buildlog_entry_list)
 
 
 def main() -> None:
