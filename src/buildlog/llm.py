@@ -16,6 +16,7 @@ from __future__ import annotations
 __all__ = [
     "ExtractedRule",
     "RuleScoring",
+    "LLMResponse",
     "LLMConfig",
     "LLMBackend",
     "OllamaBackend",
@@ -63,6 +64,18 @@ class ExtractedRule:
             self.scope = "global"
         if self.category not in VALID_CATEGORIES:
             self.category = "architectural"
+
+
+@dataclass
+class LLMResponse:
+    """Structured response from an LLM call with token usage metadata."""
+
+    text: str
+    input_tokens: int
+    output_tokens: int
+    model: str
+    cached_tokens: int = 0
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -174,6 +187,10 @@ class LLMBackend(Protocol):
 
     def score_rule(self, rule: str, context: str) -> RuleScoring:
         """Score a rule with severity/scope/applicability."""
+        ...
+
+    def call(self, prompt: str) -> LLMResponse:
+        """Send a prompt and return a structured response with token usage."""
         ...
 
 
@@ -316,6 +333,27 @@ class OllamaBackend:
             response = ollama_lib.chat(**kwargs)
         return response["message"]["content"]
 
+    def call(self, prompt: str) -> LLMResponse:
+        """Send a prompt and return a structured response with token usage."""
+        self._rate_limiter.wait()
+        import ollama as ollama_lib
+
+        kwargs = {
+            "model": self._get_model(),
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if self._base_url:
+            client = ollama_lib.Client(host=self._base_url)
+            response = client.chat(**kwargs)
+        else:
+            response = ollama_lib.chat(**kwargs)
+        return LLMResponse(
+            text=response["message"]["content"],
+            input_tokens=response.get("prompt_eval_count", 0),
+            output_tokens=response.get("eval_count", 0),
+            model=response.get("model", self._get_model()),
+        )
+
     def extract_rules(self, entry_text: str) -> list[ExtractedRule]:
         """Extract structured rules from buildlog entry text."""
         prompt = EXTRACT_RULES_PROMPT.format(text=entry_text)
@@ -398,6 +436,24 @@ class AnthropicBackend:
             messages=[{"role": "user", "content": prompt}],
         )
         return response.content[0].text
+
+    def call(self, prompt: str) -> LLMResponse:
+        """Send a prompt and return a structured response with token usage."""
+        self._rate_limiter.wait()
+        client = self._get_client()
+        response = client.messages.create(
+            model=self._model,
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        cached = getattr(response.usage, "cache_read_input_tokens", 0) or 0
+        return LLMResponse(
+            text=response.content[0].text,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            model=response.model,
+            cached_tokens=cached,
+        )
 
     def extract_rules(self, entry_text: str) -> list[ExtractedRule]:
         """Extract structured rules from buildlog entry text."""
