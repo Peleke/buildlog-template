@@ -26,7 +26,7 @@ def _(mo):
         r"""
     # On Learning What Works
 
-    **Time**: ~30-40 minutes | **Prerequisites**: Basic Python, curiosity about how learning happens, allergy to
+    **Time**: ~30-40 minutes | **Prerequisites**: Basic Python, curiosity about how learning happens
 
     ---
 
@@ -337,7 +337,6 @@ def _(mo):
     around—night one at A (6/10), night two at B (4/10), night three back to A... By the end
     of your trip, you've accumulated less total satisfaction than the oracle. The *gap* between
     what you got and what you *could have gotten*—that's **regret**.
-    > Invert the narrative, here. S
 
     You know this feeling. Three bites into a mediocre pasta, you realize you should have
     ordered the fish. That twinge? That's instant regret. Now imagine keeping a running tally
