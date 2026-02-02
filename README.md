@@ -102,15 +102,56 @@ This is v0.8, not the end state.
 
 The roadmap: contextual bandits (now) -> richer policy models -> longer-horizon RL -> multi-agent coordination. Each step builds on the same foundation: measuring whether rule changes actually reduce mistakes.
 
+## Installation
+
+### Global install (recommended)
+
+```bash
+uv tool install "buildlog[mcp]"   # or: pipx install "buildlog[mcp]"
+```
+
+This puts `buildlog` and `buildlog-mcp` on your PATH. Works from any directory. The `[mcp]` extra is required for the MCP server.
+
+### Per-project (virtual environment)
+
+```bash
+uv pip install "buildlog[mcp]"   # or: pip install "buildlog[mcp]"
+```
+
+Omit `[mcp]` if you only need the CLI.
+
+### For JS/TS projects
+
+```bash
+npx @peleke.s/buildlog init
+```
+
+### MCP server for Claude Code
+
+Add to `~/.claude/claude_code_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "buildlog": {
+      "command": "buildlog-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+This exposes buildlog tools (seeds, skills, experiments, gauntlet, bandit status) to any Claude Code session.
+
 ## Quick Start
 
 ```bash
-uv pip install buildlog   # or: pip install buildlog
-buildlog init
-buildlog new my-feature
+buildlog init              # scaffold a project (run in any repo)
+buildlog new my-feature    # start a session
+# ... work ...
 buildlog distill && buildlog skills
 buildlog experiment start
-# ... work ...
+# ... work across sessions ...
 buildlog experiment end
 buildlog experiment report
 ```

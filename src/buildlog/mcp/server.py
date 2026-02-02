@@ -5,6 +5,7 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 
 from buildlog.mcp.tools import (
+    buildlog_bandit_status,
     buildlog_diff,
     buildlog_experiment_end,
     buildlog_experiment_metrics,
@@ -42,6 +43,9 @@ mcp.tool()(buildlog_experiment_report)
 # Gauntlet loop tools
 mcp.tool()(buildlog_gauntlet_issues)
 mcp.tool()(buildlog_gauntlet_accept_risk)
+
+# Bandit tools
+mcp.tool()(buildlog_bandit_status)
 
 
 def main() -> None:
