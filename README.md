@@ -111,7 +111,7 @@ pip install buildlog          # MCP server included by default
 buildlog init --defaults      # scaffold project, register MCP, update CLAUDE.md
 ```
 
-That's it. Claude Code will now have access to all 19 buildlog tools.
+That's it. Claude Code will now have access to all 29 buildlog tools.
 
 ### Global install (recommended)
 
@@ -139,7 +139,7 @@ npx @peleke.s/buildlog init
 
 ```bash
 buildlog init-mcp          # register MCP in .claude/settings.json
-buildlog mcp-test          # verify all 19 tools are registered
+buildlog mcp-test          # verify all 29 tools are registered
 ```
 
 This exposes buildlog tools (seeds, skills, experiments, gauntlet, bandit status) to any Claude Code session.

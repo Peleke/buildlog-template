@@ -18,7 +18,7 @@ class TestCLAUDEMDConstant:
     """Tests for the CLAUDE.md constant."""
 
     def test_mentions_all_tools(self):
-        """All 19 tool names should appear in the constant."""
+        """All 29 tool names should appear in the constant."""
         tools = [
             "buildlog_status",
             "buildlog_promote",
@@ -39,6 +39,16 @@ class TestCLAUDEMDConstant:
             "buildlog_overview",
             "buildlog_entry_new",
             "buildlog_entry_list",
+            "buildlog_commit",
+            "buildlog_gauntlet_prompt",
+            "buildlog_gauntlet_loop",
+            "buildlog_distill",
+            "buildlog_skills",
+            "buildlog_stats",
+            "buildlog_gauntlet_list_personas",
+            "buildlog_gauntlet_generate",
+            "buildlog_init",
+            "buildlog_update",
         ]
         for tool in tools:
             assert tool in CLAUDE_MD_BUILDLOG_SECTION, f"Missing tool: {tool}"
@@ -57,7 +67,7 @@ class TestCLAUDEMDConstant:
     def test_has_tool_reference(self):
         """Should have tool reference sections."""
         assert "Skill Management" in CLAUDE_MD_BUILDLOG_SECTION
-        assert "Review & Learning" in CLAUDE_MD_BUILDLOG_SECTION
+        assert "Gauntlet Review" in CLAUDE_MD_BUILDLOG_SECTION
         assert "Reward & Bandit" in CLAUDE_MD_BUILDLOG_SECTION
 
 
@@ -85,12 +95,12 @@ class TestE2EEntryWorkflow:
         assert overview.entries == 1
 
 
-class TestE2EMCPServer19Tools:
-    """Verify the MCP server has all 19 tools."""
+class TestE2EMCPServer29Tools:
+    """Verify the MCP server has all 29 tools."""
 
     @pytest.mark.asyncio
-    async def test_server_has_19_tools(self):
-        """Server should list 19 tools, each callable."""
+    async def test_server_has_29_tools(self):
+        """Server should list 29 tools, each callable."""
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()

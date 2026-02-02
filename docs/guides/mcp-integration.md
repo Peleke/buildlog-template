@@ -19,7 +19,7 @@ buildlog init-mcp           # register MCP in .claude/settings.json
 ### Verify Installation
 
 ```bash
-buildlog mcp-test           # lists all 19 tools, exits 0 if correct
+buildlog mcp-test           # lists all 29 tools, exits 0 if correct
 ```
 
 ## Available tools
@@ -42,6 +42,16 @@ buildlog mcp-test           # lists all 19 tools, exits 0 if correct
 | `buildlog_gauntlet_issues` | Process gauntlet issues and determine next action |
 | `buildlog_gauntlet_accept_risk` | Accept risk for remaining issues |
 | `buildlog_gauntlet_rules` | Load gauntlet reviewer rules |
+| `buildlog_gauntlet_prompt` | Generate review prompt with persona rules |
+| `buildlog_gauntlet_loop` | Full gauntlet loop configuration |
+| `buildlog_gauntlet_list_personas` | List available reviewer personas |
+| `buildlog_gauntlet_generate` | Generate gauntlet rules from source text |
+| `buildlog_commit` | Git commit with auto buildlog entry update |
+| `buildlog_distill` | Extract patterns from buildlog entries |
+| `buildlog_skills` | Generate skill set from entries |
+| `buildlog_stats` | Buildlog statistics and insights |
+| `buildlog_init` | Initialize buildlog in a project |
+| `buildlog_update` | Update buildlog template to latest |
 | `buildlog_overview` | Get project buildlog state at a glance |
 | `buildlog_entry_new` | Create a new buildlog journal entry |
 | `buildlog_entry_list` | List all buildlog journal entries |
