@@ -104,21 +104,28 @@ The roadmap: contextual bandits (now) -> richer policy models -> longer-horizon 
 
 ## Installation
 
+### Quick start
+
+```bash
+pip install buildlog          # MCP server included by default
+buildlog init --defaults      # scaffold project, register MCP, update CLAUDE.md
+```
+
+That's it. Claude Code will now have access to all 19 buildlog tools.
+
 ### Global install (recommended)
 
 ```bash
-uv tool install "buildlog[mcp]"   # or: pipx install "buildlog[mcp]"
+uv tool install buildlog   # or: pipx install buildlog
 ```
 
-This puts `buildlog` and `buildlog-mcp` on your PATH. Works from any directory. The `[mcp]` extra is required for the MCP server.
+This puts `buildlog` and `buildlog-mcp` on your PATH. Works from any directory.
 
 ### Per-project (virtual environment)
 
 ```bash
-uv pip install "buildlog[mcp]"   # or: pip install "buildlog[mcp]"
+uv pip install buildlog    # or: pip install buildlog
 ```
-
-Omit `[mcp]` if you only need the CLI.
 
 ### For JS/TS projects
 
@@ -128,17 +135,11 @@ npx @peleke.s/buildlog init
 
 ### MCP server for Claude Code
 
-Add to `~/.claude/claude_code_config.json`:
+`buildlog init` auto-registers the MCP server. For existing projects:
 
-```json
-{
-  "mcpServers": {
-    "buildlog": {
-      "command": "buildlog-mcp",
-      "args": []
-    }
-  }
-}
+```bash
+buildlog init-mcp          # register MCP in .claude/settings.json
+buildlog mcp-test          # verify all 19 tools are registered
 ```
 
 This exposes buildlog tools (seeds, skills, experiments, gauntlet, bandit status) to any Claude Code session.
@@ -146,10 +147,10 @@ This exposes buildlog tools (seeds, skills, experiments, gauntlet, bandit status
 ## Quick Start
 
 ```bash
-buildlog init              # scaffold a project (run in any repo)
-buildlog new my-feature    # start a session
+buildlog init --defaults      # scaffold + MCP + CLAUDE.md
+buildlog new my-feature       # start a session
 # ... work ...
-buildlog distill && buildlog skills
+buildlog commit -m "feat: add auth"
 buildlog experiment start
 # ... work across sessions ...
 buildlog experiment end
