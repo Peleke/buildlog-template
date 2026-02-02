@@ -15,6 +15,47 @@ from buildlog.skills import format_skills, generate_skills
 from buildlog.stats import calculate_stats, format_dashboard, format_json
 
 
+def _get_current_git_branch() -> str | None:
+    """Get the current git branch name.
+
+    Returns None for detached HEAD or non-git directories.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        return result.stdout.strip() or None
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
+        return None
+
+
+def _is_protected_branch(branch: str) -> bool:
+    """Check if a branch is protected (main/master)."""
+    return branch.lower() in ("main", "master")
+
+
+def _slug_from_message(message: str) -> str:
+    """Derive a branch slug from a commit message."""
+    # Strip conventional commit prefix
+    msg = message
+    for prefix in ("feat:", "fix:", "chore:", "refactor:", "docs:", "test:", "ci:"):
+        if msg.lower().startswith(prefix):
+            msg = msg[len(prefix) :]
+            break
+    slug = msg.strip().lower().replace(" ", "-").replace("_", "-")
+    slug = "".join(c for c in slug if c.isalnum() or c == "-")
+    slug = slug.strip("-")[:50]
+    return slug or "feature"
+
+
 def get_template_dir() -> Path | None:
     """Get the template directory from package data.
 
@@ -55,7 +96,12 @@ def main():
     is_flag=True,
     help="Use default values for all prompts (non-interactive)",
 )
-def init(no_claude_md: bool, defaults: bool):
+@click.option(
+    "--install-hooks/--no-install-hooks",
+    default=True,
+    help="Install branch protection pre-commit hook (default: True)",
+)
+def init(no_claude_md: bool, defaults: bool, install_hooks: bool):
     """Initialize buildlog in the current directory.
 
     Sets up the buildlog/ directory with templates and optionally
@@ -126,6 +172,119 @@ def init(no_claude_md: bool, defaults: bool):
                 with open(claude_md, "a") as f:
                     f.write(section)
                 click.echo("Added Build Journal section to CLAUDE.md")
+
+    # Install pre-commit hook for branch protection
+    if install_hooks:
+        precommit_path = Path(".pre-commit-config.yaml")
+        if precommit_path.exists():
+            content = precommit_path.read_text()
+            if "no-commit-to-main" not in content:
+                hook_entry = (
+                    "\n  # Branch protection (added by buildlog init)\n"
+                    "  - repo: local\n"
+                    "    hooks:\n"
+                    "      - id: no-commit-to-main\n"
+                    "        name: prevent commits to main/master\n"
+                    "        entry: bash -c 'branch=$(git symbolic-ref --short HEAD 2>/dev/null); "
+                    '[ "$branch" = "main" ] || [ "$branch" = "master" ] && '
+                    'echo "ERROR: commit to $branch blocked. Use a feature branch." && exit 1; exit 0\'\n'
+                    "        language: system\n"
+                    "        always_run: true\n"
+                    "        pass_filenames: false\n"
+                )
+                with open(precommit_path, "a") as f:
+                    f.write(hook_entry)
+                click.echo("Added branch protection hook to .pre-commit-config.yaml")
+            else:
+                click.echo(
+                    "Branch protection hook already present in .pre-commit-config.yaml"
+                )
+        else:
+            click.echo(
+                "Tip: install pre-commit for automatic branch protection "
+                "(https://pre-commit.com)"
+            )
+
+    # Create auto-gauntlet config
+    config_path = buildlog_dir / ".buildlog" / "config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    if not config_path.exists():
+        import json as json_module
+
+        auto_gauntlet_config = {
+            "auto_gauntlet": {
+                "enabled": True,
+                "commit_gate": {
+                    "enabled": True,
+                    "mode": "staleness",
+                    "max_staleness_commits": 3,
+                    "fail_action": "warn",
+                },
+                "hooks": {
+                    "enabled": True,
+                    "track_dirty_files": True,
+                    "stop_event_check": True,
+                },
+            }
+        }
+        config_path.write_text(json_module.dumps(auto_gauntlet_config, indent=2))
+        click.echo("Created .buildlog/config.json with auto-gauntlet config")
+
+    # Install Claude Code hooks
+    import json as json_module
+
+    claude_settings_path = Path(".claude") / "settings.json"
+    claude_settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if claude_settings_path.exists():
+        try:
+            settings = json_module.loads(claude_settings_path.read_text())
+        except json_module.JSONDecodeError:
+            settings = {}
+    else:
+        settings = {}
+
+    hooks = settings.setdefault("hooks", {})
+    hooks_added = []
+
+    # Stop hook
+    stop_hook = {
+        "matcher": "",
+        "hooks": [
+            {
+                "type": "command",
+                "command": "buildlog gauntlet check --event stop --json",
+            }
+        ],
+    }
+    stop_hooks = hooks.setdefault("Stop", [])
+    if not any("buildlog gauntlet check" in str(h) for h in stop_hooks):
+        stop_hooks.append(stop_hook)
+        hooks_added.append("Stop: gauntlet freshness check")
+
+    # PostToolUse hook
+    post_hook = {
+        "matcher": "Write|Edit",
+        "hooks": [
+            {
+                "type": "command",
+                "command": "buildlog gauntlet track-edit",
+                "async": True,
+            }
+        ],
+    }
+    post_hooks = hooks.setdefault("PostToolUse", [])
+    if not any("buildlog gauntlet track-edit" in str(h) for h in post_hooks):
+        post_hooks.append(post_hook)
+        hooks_added.append("PostToolUse: track dirty files on Write/Edit")
+
+    claude_settings_path.write_text(json_module.dumps(settings, indent=2))
+    if hooks_added:
+        click.echo("Installed Claude Code hooks:")
+        for h in hooks_added:
+            click.echo(f"  - {h}")
+    else:
+        click.echo("Claude Code hooks already installed")
 
     click.echo("\n✓ buildlog initialized!")
     click.echo()
@@ -352,12 +511,33 @@ def new(slug: str, entry_date: str | None, quick: bool):
     is_flag=True,
     help="Skip buildlog entry update (just run git commit)",
 )
+@click.option(
+    "--force",
+    "-f",
+    "force_branch",
+    is_flag=True,
+    help="Override branch protection (allow commits to main/master)",
+)
+@click.option(
+    "--skip-gauntlet",
+    is_flag=True,
+    help="Skip the gauntlet staleness check",
+)
 @click.pass_context
-def commit(ctx, slug: str | None, entry: str | None, no_entry: bool):
+def commit(
+    ctx,
+    slug: str | None,
+    entry: str | None,
+    no_entry: bool,
+    force_branch: bool,
+    skip_gauntlet: bool,
+):
     """Commit code and update the buildlog entry in one step.
 
     Wraps `git commit` and appends commit context to today's buildlog
     entry. If no entry exists for today, creates one automatically.
+
+    Blocks commits to main/master unless --force is used.
 
     All unknown options/arguments are passed through to git commit.
 
@@ -366,8 +546,60 @@ def commit(ctx, slug: str | None, entry: str | None, no_entry: bool):
         buildlog commit -m "feat: add LLM extractor"
         buildlog commit --slug llm-extractor -m "feat: add LLM extractor"
         buildlog commit --no-entry -m "chore: formatting"
+        buildlog commit --force -m "hotfix: urgent patch on main"
     """
     buildlog_dir = Path("buildlog")
+
+    # Check branch protection
+    current_branch = _get_current_git_branch()
+    if current_branch and _is_protected_branch(current_branch) and not force_branch:
+        # Try to derive a branch name from -m argument
+        commit_msg = None
+        for i, arg in enumerate(ctx.args):
+            if arg == "-m" and i + 1 < len(ctx.args):
+                commit_msg = ctx.args[i + 1]
+                break
+
+        branch_slug = _slug_from_message(commit_msg) if commit_msg else "feature"
+        suggested_branch = f"feat/{branch_slug}"
+
+        if click.confirm(
+            f"You're on {current_branch}. Create branch '{suggested_branch}'?",
+            default=True,
+        ):
+            result = subprocess.run(
+                ["git", "checkout", "-b", suggested_branch],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                click.echo(f"Failed to create branch: {result.stderr}", err=True)
+                raise SystemExit(1)
+            click.echo(f"Switched to new branch '{suggested_branch}'")
+        else:
+            click.echo(
+                f"Commit blocked. Use --force to commit directly to {current_branch}, "
+                f"or create a branch manually.",
+                err=True,
+            )
+            raise SystemExit(1)
+
+    # Gauntlet staleness check (commit gate)
+    if not skip_gauntlet and buildlog_dir.exists():
+        from buildlog.core.operations import (
+            _load_auto_gauntlet_config,
+            check_gauntlet_freshness,
+        )
+
+        config = _load_auto_gauntlet_config(buildlog_dir)
+        if config.get("commit_gate", {}).get("enabled"):
+            freshness = check_gauntlet_freshness(buildlog_dir)
+            if freshness["stale"]:
+                if config["commit_gate"].get("fail_action") == "block":
+                    click.echo(f"BLOCKED: {freshness['recommendation']}", err=True)
+                    raise SystemExit(1)
+                else:
+                    click.echo(f"WARNING: {freshness['recommendation']}", err=True)
 
     # Build git commit command — extra args are passed through from Click context
     git_cmd = ["git", "commit", *ctx.args]
@@ -379,6 +611,12 @@ def commit(ctx, slug: str | None, entry: str | None, no_entry: bool):
 
     if result.returncode != 0:
         raise SystemExit(result.returncode)
+
+    # Increment gauntlet staleness after successful commit
+    if buildlog_dir.exists():
+        from buildlog.core.operations import increment_gauntlet_staleness
+
+        increment_gauntlet_staleness(buildlog_dir)
 
     if no_entry or not buildlog_dir.exists():
         return
@@ -1454,6 +1692,101 @@ def gauntlet():
         buildlog gauntlet prompt src/            # Generate review prompt
     """
     pass
+
+
+@gauntlet.command("check")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option(
+    "--event",
+    default=None,
+    help="Event context (e.g., 'stop' for Claude Code Stop hook)",
+)
+def gauntlet_check(output_json: bool, event: str | None):
+    """Check gauntlet freshness status.
+
+    Exit code 0 = fresh, 1 = stale.
+    Used by Claude Code hooks and CI.
+
+    Examples:
+
+        buildlog gauntlet check
+        buildlog gauntlet check --json
+        buildlog gauntlet check --event stop --json
+    """
+    import json as json_module
+
+    from buildlog.core import check_gauntlet_freshness
+
+    buildlog_dir = Path("buildlog")
+    freshness = check_gauntlet_freshness(buildlog_dir)
+
+    if output_json:
+        if event:
+            freshness["event"] = event
+        click.echo(json_module.dumps(freshness, indent=2))
+    else:
+        if freshness["stale"]:
+            click.echo(f"STALE: {freshness['recommendation']}")
+        else:
+            click.echo(
+                f"Fresh ({freshness['commits_since_gauntlet']} commits since last run)"
+            )
+        if freshness["dirty_files_count"] > 0:
+            click.echo(f"Dirty files: {freshness['dirty_files_count']}")
+
+    if freshness["stale"]:
+        raise SystemExit(1)
+
+
+@gauntlet.command("track-file")
+@click.argument("filepath")
+def gauntlet_track_file(filepath: str):
+    """Record a file as dirty in gauntlet state.
+
+    Used by Claude Code PostToolUse hooks to track edited files.
+
+    Examples:
+
+        buildlog gauntlet track-file src/main.py
+    """
+    from buildlog.core import track_dirty_file
+    from buildlog.core.operations import _load_auto_gauntlet_config
+
+    buildlog_dir = Path("buildlog")
+    config = _load_auto_gauntlet_config(buildlog_dir)
+    if not config.get("hooks", {}).get("track_dirty_files", True):
+        return
+    track_dirty_file(buildlog_dir, filepath)
+
+
+@gauntlet.command("track-edit")
+def gauntlet_track_edit():
+    """Record edited file from Claude Code hook stdin.
+
+    Reads tool_input JSON from stdin and extracts file_path.
+    Used by PostToolUse hook for Write/Edit events.
+
+    Examples:
+
+        echo '{"tool_input":{"file_path":"src/main.py"}}' | buildlog gauntlet track-edit
+    """
+    import json as json_module
+
+    from buildlog.core import track_dirty_file
+    from buildlog.core.operations import _load_auto_gauntlet_config
+
+    buildlog_dir = Path("buildlog")
+    config = _load_auto_gauntlet_config(buildlog_dir)
+    if not config.get("hooks", {}).get("track_dirty_files", True):
+        return
+
+    try:
+        data = json_module.loads(sys.stdin.read())
+        filepath = data.get("tool_input", {}).get("file_path", "")
+        if filepath:
+            track_dirty_file(buildlog_dir, filepath)
+    except (json_module.JSONDecodeError, OSError):
+        pass  # Fail silently — hook should not block agent
 
 
 @gauntlet.command("list")

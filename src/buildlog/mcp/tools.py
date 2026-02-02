@@ -524,16 +524,24 @@ def buildlog_gauntlet_accept_risk(
     remaining_issues: list[dict],
     create_github_issues: bool = False,
     repo: str | None = None,
+    buildlog_dir: str = "buildlog",
+    session_id: str | None = None,
+    iteration: int | None = None,
+    target: str | None = None,
 ) -> dict:
-    """Accept risk for remaining issues, optionally creating GitHub issues.
+    """Accept risk for remaining issues, persisting locally and optionally creating GitHub issues.
 
-    Call this when the user decides to accept remaining issues as risk
-    (e.g., only minors remain and they want to move on).
+    Local persistence to `.buildlog/accepted_risk.jsonl` is the source of truth.
+    GitHub issues are a nice-to-have sync layer.
 
     Args:
         remaining_issues: Issues being accepted as risk
         create_github_issues: Whether to create GitHub issues for tracking
         repo: Repository for GitHub issues (uses current repo if None)
+        buildlog_dir: Path to buildlog directory (default: "buildlog")
+        session_id: Optional session ID for context
+        iteration: Optional gauntlet loop iteration number
+        target: Optional review target path
 
     Returns:
         Dict with:
@@ -556,5 +564,34 @@ def buildlog_gauntlet_accept_risk(
         remaining_issues=remaining_issues,
         create_github_issues=create_github_issues,
         repo=repo,
+        buildlog_dir=Path(buildlog_dir),
+        session_id=session_id,
+        iteration=iteration,
+        target=target,
     )
     return asdict(result)
+
+
+def buildlog_gauntlet_check(
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Check gauntlet freshness. Returns stale status and recommendation.
+
+    Use this to determine if the gauntlet needs to be re-run based on
+    the number of commits since the last gauntlet run.
+
+    Args:
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with:
+            - stale: Whether the gauntlet is stale
+            - commits_since_gauntlet: Number of commits since last run
+            - dirty_files_count: Number of files edited since last run
+            - dirty_files: List of dirty file paths
+            - last_run: Timestamp of last gauntlet run
+            - recommendation: Human-readable recommendation if stale
+    """
+    from buildlog.core import check_gauntlet_freshness
+
+    return check_gauntlet_freshness(Path(buildlog_dir))
