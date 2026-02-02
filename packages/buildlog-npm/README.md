@@ -7,18 +7,18 @@ This is the npm wrapper for [buildlog](https://github.com/Peleke/buildlog-templa
 ## Quick start
 
 ```bash
-npx buildlog init
-npx buildlog new my-feature
-npx buildlog commit -m "feat: add auth"
-npx buildlog skills
-npx buildlog gauntlet loop src/
+npx @peleke.s/buildlog init
+npx @peleke.s/buildlog new my-feature
+npx @peleke.s/buildlog commit -m "feat: add auth"
+npx @peleke.s/buildlog skills
+npx @peleke.s/buildlog gauntlet loop src/
 ```
 
 ## Install
 
 ```bash
 # One-off (no install needed)
-npx buildlog init
+npx @peleke.s/buildlog init
 
 # Pin as dev dependency
 npm install -D buildlog
