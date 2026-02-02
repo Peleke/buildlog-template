@@ -10,7 +10,11 @@ import pytest
 
 from buildlog.mcp.tools import (
     buildlog_diff,
+    buildlog_entry_list,
+    buildlog_entry_new,
+    buildlog_gauntlet_rules,
     buildlog_learn_from_review,
+    buildlog_overview,
     buildlog_promote,
     buildlog_reject,
     buildlog_status,
@@ -373,3 +377,108 @@ class TestBuildlogLearnFromReview:
 
         assert result["error"] is not None
         assert "No issues provided" in result["error"]
+
+
+# =============================================================================
+# New MCP Tool Tests (v0.10.0)
+# =============================================================================
+
+
+class TestBuildlogGauntletRules:
+    """Tests for buildlog_gauntlet_rules MCP tool."""
+
+    def test_returns_dict(self):
+        """Should return a serializable dict."""
+        result = buildlog_gauntlet_rules()
+        assert isinstance(result, dict)
+        assert "formatted" in result
+        assert "total_rules" in result
+
+    def test_filters_persona(self):
+        """persona param should filter results."""
+        result = buildlog_gauntlet_rules(persona="security_karen")
+        if result["error"] is None:
+            assert result["personas"] == ["security_karen"]
+
+    def test_error_handling(self):
+        """Invalid persona should set error key."""
+        result = buildlog_gauntlet_rules(persona="nonexistent")
+        assert result["error"] is not None
+
+
+class TestBuildlogOverview:
+    """Tests for buildlog_overview MCP tool."""
+
+    def test_returns_dict(self):
+        """Should return a dict with expected keys."""
+        result = buildlog_overview(buildlog_dir=str(FIXTURES_DIR))
+        assert isinstance(result, dict)
+        assert "entries" in result
+        assert "skills" in result
+        assert "active_session" in result
+
+    def test_empty_project(self, tmp_path):
+        """Should work with fresh buildlog dir."""
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        (buildlog_dir / ".buildlog").mkdir()
+
+        result = buildlog_overview(buildlog_dir=str(buildlog_dir))
+        assert result["entries"] == 0
+
+
+class TestBuildlogEntryNew:
+    """Tests for buildlog_entry_new MCP tool."""
+
+    def _setup(self, tmp_path):
+        bd = tmp_path / "buildlog"
+        bd.mkdir()
+        (bd / ".buildlog").mkdir()
+        (bd / "_TEMPLATE.md").write_text("# [YYYY-MM-DD]\n")
+        return bd
+
+    def test_creates_file(self, tmp_path):
+        """File should exist after call."""
+        bd = self._setup(tmp_path)
+        result = buildlog_entry_new(slug="test", buildlog_dir=str(bd))
+        assert result["error"] is None
+        assert Path(result["entry_path"]).exists()
+
+    def test_returns_path(self, tmp_path):
+        """Dict should have entry_path key."""
+        bd = self._setup(tmp_path)
+        result = buildlog_entry_new(slug="test", buildlog_dir=str(bd))
+        assert "entry_path" in result
+
+    def test_duplicate_error(self, tmp_path):
+        """Error key should be set on duplicate."""
+        bd = self._setup(tmp_path)
+        buildlog_entry_new(slug="dup", entry_date="2026-01-01", buildlog_dir=str(bd))
+        result = buildlog_entry_new(
+            slug="dup", entry_date="2026-01-01", buildlog_dir=str(bd)
+        )
+        assert result["error"] is not None
+
+
+class TestBuildlogEntryList:
+    """Tests for buildlog_entry_list MCP tool."""
+
+    def test_returns_entries(self, tmp_path):
+        """Should return list of dicts with name, title."""
+        bd = tmp_path / "buildlog"
+        bd.mkdir()
+        (bd / "2026-01-01-test.md").write_text("# Test Entry\n")
+
+        result = buildlog_entry_list(buildlog_dir=str(bd))
+        assert result["count"] == 1
+        assert result["entries"][0]["name"] == "2026-01-01-test.md"
+        assert result["entries"][0]["title"] == "Test Entry"
+
+    def test_empty(self, tmp_path):
+        """Should return empty list and count=0."""
+        bd = tmp_path / "buildlog"
+        bd.mkdir()
+
+        result = buildlog_entry_list(buildlog_dir=str(bd))
+        assert result["count"] == 0
+        assert result["entries"] == []

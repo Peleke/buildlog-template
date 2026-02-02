@@ -77,3 +77,33 @@ async def test_tool_has_input_schema():
     for tool in tools:
         assert tool.inputSchema is not None, f"Tool {tool.name} missing input schema"
         assert "type" in tool.inputSchema, f"Tool {tool.name} schema missing type"
+
+
+# =============================================================================
+# v0.10.0: 19-tool verification
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_all_19_tools_registered():
+    """Server should have exactly 19 tools registered."""
+    from buildlog.mcp.server import mcp
+
+    tools = await mcp.list_tools()
+    assert (
+        len(tools) == 19
+    ), f"Expected 19 tools, got {len(tools)}: {[t.name for t in tools]}"
+
+
+@pytest.mark.asyncio
+async def test_new_tools_registered():
+    """The 4 new v0.10.0 tools should be registered."""
+    from buildlog.mcp.server import mcp
+
+    tools = await mcp.list_tools()
+    tool_names = [t.name for t in tools]
+
+    assert "buildlog_gauntlet_rules" in tool_names
+    assert "buildlog_overview" in tool_names
+    assert "buildlog_entry_new" in tool_names
+    assert "buildlog_entry_list" in tool_names
