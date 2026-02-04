@@ -37,4 +37,3 @@ buildlog experiment report
 - [Quick Start](getting-started/quick-start.md) — the full pipeline walkthrough
 - [Core Concepts](getting-started/concepts.md) — the problem, the claim, and the metric
 - [CLI Reference](guides/cli-reference.md) — every command documented
-- [Theory](theory/00-background.md) — the math behind Thompson Sampling

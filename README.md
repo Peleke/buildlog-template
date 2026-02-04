@@ -169,7 +169,6 @@ buildlog experiment report
 | [Experiments](https://peleke.github.io/buildlog-template/guides/experiments/) | Running and measuring experiments |
 | [Review Gauntlet](https://peleke.github.io/buildlog-template/guides/review-gauntlet/) | Reviewer personas and the gauntlet loop |
 | [Multi-Agent Setup](https://peleke.github.io/buildlog-template/guides/multi-agent/) | Render rules to any AI coding agent |
-| [Theory](https://peleke.github.io/buildlog-template/theory/00-background/) | The math behind Thompson Sampling |
 | [Philosophy](https://peleke.github.io/buildlog-template/philosophy/) | Principles and honest limitations |
 
 ## Contributing

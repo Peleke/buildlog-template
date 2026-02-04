@@ -1,6 +1,6 @@
 site_name: buildlog
 site_url: https://peleke.github.io/buildlog-template/
-site_description: The Only Agent Learning System You Can Prove Works
+site_description: Engineering insights that compound
 repo_url: https://github.com/Peleke/buildlog-template
 repo_name: Peleke/buildlog-template
 
@@ -68,15 +68,6 @@ nav:
     - Experiments: guides/experiments.md
     - Review Gauntlet: guides/review-gauntlet.md
     - Multi-Agent Setup: guides/multi-agent.md
-  - Theory:
-    - Background Concepts: theory/00-background.md
-    - Beta Distribution: theory/01-beta-distribution.md
-    - Bayesian Updates: theory/02-bayesian-updates.md
-    - Thompson Sampling: theory/03-thompson-sampling.md
-    - Contextual Bandits: theory/04-contextual-bandits.md
-    - Interactive Notebooks: theory/notebooks.md
-  - Notebooks:
-    - "On Learning What Works": notebooks/00-the-problem.md
   - Development:
     - Contributing: development/contributing.md
   - Philosophy: philosophy.md
