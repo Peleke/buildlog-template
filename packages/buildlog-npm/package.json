@@ -3,12 +3,12 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Engineering notebook for AI-assisted development. Capture your work as publishable content.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Peleke/buildlog-template.git",
+    "url": "git+https://github.com/Peleke/buildlog-template.git",
     "directory": "packages/buildlog-npm"
   },
   "homepage": "https://github.com/Peleke/buildlog-template",

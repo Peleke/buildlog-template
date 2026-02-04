@@ -6,20 +6,34 @@ from mcp.server.fastmcp import FastMCP
 
 from buildlog.mcp.tools import (
     buildlog_bandit_status,
+    buildlog_commit,
     buildlog_diff,
+    buildlog_distill,
+    buildlog_entry_list,
+    buildlog_entry_new,
     buildlog_experiment_end,
     buildlog_experiment_metrics,
     buildlog_experiment_report,
     buildlog_experiment_start,
     buildlog_gauntlet_accept_risk,
+    buildlog_gauntlet_generate,
     buildlog_gauntlet_issues,
+    buildlog_gauntlet_list_personas,
+    buildlog_gauntlet_loop,
+    buildlog_gauntlet_prompt,
+    buildlog_gauntlet_rules,
+    buildlog_init,
     buildlog_learn_from_review,
     buildlog_log_mistake,
     buildlog_log_reward,
+    buildlog_overview,
     buildlog_promote,
     buildlog_reject,
     buildlog_rewards,
+    buildlog_skills,
+    buildlog_stats,
     buildlog_status,
+    buildlog_update,
 )
 
 mcp = FastMCP("buildlog")
@@ -46,6 +60,28 @@ mcp.tool()(buildlog_gauntlet_accept_risk)
 
 # Bandit tools
 mcp.tool()(buildlog_bandit_status)
+
+# Entry & overview tools
+mcp.tool()(buildlog_gauntlet_rules)
+mcp.tool()(buildlog_overview)
+mcp.tool()(buildlog_entry_new)
+mcp.tool()(buildlog_entry_list)
+
+# P0: Gauntlet loop completion
+mcp.tool()(buildlog_commit)
+mcp.tool()(buildlog_gauntlet_prompt)
+mcp.tool()(buildlog_gauntlet_loop)
+
+# P1: Learning pipeline
+mcp.tool()(buildlog_distill)
+mcp.tool()(buildlog_skills)
+mcp.tool()(buildlog_stats)
+mcp.tool()(buildlog_gauntlet_list_personas)
+
+# P2: Nice-to-have
+mcp.tool()(buildlog_gauntlet_generate)
+mcp.tool()(buildlog_init)
+mcp.tool()(buildlog_update)
 
 
 def main() -> None:

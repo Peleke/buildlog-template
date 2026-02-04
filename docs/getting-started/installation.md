@@ -23,7 +23,7 @@
 
 | Extra | What it adds | Install |
 |-------|-------------|---------|
-| `mcp` | MCP server for Claude Code integration | `pip install buildlog[mcp]` |
+| `mcp` | MCP server (included by default since v0.10.0) | `pip install buildlog[mcp]` |
 | `embeddings` | Local sentence-transformers for semantic dedup | `pip install buildlog[embeddings]` |
 | `openai` | OpenAI embeddings for semantic dedup | `pip install buildlog[openai]` |
 | `engine` | Documents the engine namespace (no extra deps) | `pip install buildlog[engine]` |

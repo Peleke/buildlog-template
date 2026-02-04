@@ -7,6 +7,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- **Full MCP/CLI parity**: 10 new MCP tools bringing total from 19 to 29
+- P0 gauntlet loop: `buildlog_commit`, `buildlog_gauntlet_prompt`, `buildlog_gauntlet_loop`
+- P1 learning pipeline: `buildlog_distill`, `buildlog_skills`, `buildlog_stats`, `buildlog_gauntlet_list_personas`
+- P2 nice-to-have: `buildlog_gauntlet_generate`, `buildlog_init`, `buildlog_update`
+- 9 new core operations with result dataclasses
+- E2E user flow test suite (7 flows, ~20 tests)
+- 125+ new unit/integration tests (total: ~770)
+
+### Changed
+- CLAUDE.md constant references all 29 tools with workflow docs
+- Documentation updated: README, MCP guide, installation guide
+
+### Fixed
+- Stale "19 tools" references across docs and tests
+- Root commit file detection in `commit()` (ls-tree fallback)
+
 ## [0.9.0] - 2026-02-01
 
 ### Added

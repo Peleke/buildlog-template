@@ -10,19 +10,29 @@ from pathlib import Path
 from typing import Literal
 
 from buildlog.core import (
+    commit,
+    create_entry,
     diff,
     end_session,
+    gauntlet_generate,
+    gauntlet_loop_config,
+    generate_gauntlet_prompt,
     get_bandit_status,
     get_experiment_report,
+    get_gauntlet_rules,
+    get_overview,
     get_rewards,
     get_session_metrics,
+    init_buildlog,
     learn_from_review,
+    list_entries,
     log_mistake,
     log_reward,
     promote,
     reject,
     start_session,
     status,
+    update_buildlog,
 )
 
 
@@ -56,7 +66,7 @@ def buildlog_promote(
     target: str = "claude_md",
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Promote skills to your agent's rules.
+    """Promote selected skills to your agent's rule files.
 
     Writes selected skills to agent-specific rule files.
 
@@ -97,7 +107,7 @@ def buildlog_reject(
 def buildlog_diff(
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Show skills that haven't been promoted or rejected yet.
+    """Show skills pending promotion or rejection.
 
     Useful for seeing what's new since your last review.
 
@@ -116,7 +126,7 @@ def buildlog_learn_from_review(
     source: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Capture learnings from code review feedback.
+    """Extract and persist learnings from code review feedback.
 
     Call this after a review loop completes to persist learnings.
     Each issue's rule_learned becomes a tracked learning that gains
@@ -164,7 +174,7 @@ def buildlog_log_reward(
     notes: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Log a reward signal for bandit learning.
+    """Log outcome feedback for bandit learning (accepted/revision/rejected).
 
     Call this after agent work to provide feedback on the outcome.
     This enables learning which rules are effective in which contexts.
@@ -269,7 +279,7 @@ def buildlog_experiment_start(
     select_k: int = 3,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Start a new experiment session with Thompson Sampling rule selection.
+    """Start a tracked session with Thompson Sampling rule selection.
 
     Begins tracking for a learning experiment. Uses Thompson Sampling
     to select which rules will be "active" for this session based on
@@ -308,7 +318,7 @@ def buildlog_experiment_end(
     notes: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """End the current experiment session.
+    """End the current session and calculate metrics.
 
     Finalizes the session and calculates metrics including:
     - Total mistakes logged
@@ -341,7 +351,7 @@ def buildlog_log_mistake(
     corrected_by_rule: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Log a mistake during the current session.
+    """Log a mistake during the current session for RMR tracking.
 
     Records the mistake and checks if it's a repeat of a prior mistake
     (from earlier sessions). This enables measuring repeated-mistake rates.
@@ -374,7 +384,7 @@ def buildlog_experiment_metrics(
     session_id: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Get metrics for a session or all sessions.
+    """Get per-session or aggregate mistake rates and rule changes.
 
     Returns mistake rates and rule changes for analysis.
 
@@ -400,7 +410,7 @@ def buildlog_experiment_metrics(
 def buildlog_experiment_report(
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Generate a comprehensive experiment report.
+    """Generate comprehensive report: summary, sessions, error classes.
 
     Returns summary statistics, per-session breakdown, and error class analysis.
 
@@ -424,7 +434,7 @@ def buildlog_bandit_status(
     context: str | None = None,
     top_k: int = 10,
 ) -> dict:
-    """Get Thompson Sampling bandit status and rule rankings.
+    """Get Thompson Sampling bandit state and rule rankings by context.
 
     Shows the bandit's learned beliefs about which rules are effective
     for each error class context. Higher mean = bandit believes rule
@@ -466,7 +476,7 @@ def buildlog_gauntlet_issues(
     source: str | None = None,
     buildlog_dir: str = "buildlog",
 ) -> dict:
-    """Process gauntlet review issues and determine next action.
+    """Process gauntlet issues and determine next action (fix/checkpoint/clean).
 
     Call this after running a gauntlet review. It categorizes issues by
     severity, persists learnings, and returns the appropriate next action.
@@ -525,7 +535,7 @@ def buildlog_gauntlet_accept_risk(
     create_github_issues: bool = False,
     repo: str | None = None,
 ) -> dict:
-    """Accept risk for remaining issues, optionally creating GitHub issues.
+    """Accept risk for remaining issues, optionally create GitHub issues.
 
     Call this when the user decides to accept remaining issues as risk
     (e.g., only minors remain and they want to move on).
@@ -557,4 +567,508 @@ def buildlog_gauntlet_accept_risk(
         create_github_issues=create_github_issues,
         repo=repo,
     )
+    return asdict(result)
+
+
+# -----------------------------------------------------------------------------
+# Entry & Overview MCP Tools
+# -----------------------------------------------------------------------------
+
+
+def buildlog_gauntlet_rules(
+    persona: str | None = None,
+    format: str = "json",
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Load gauntlet reviewer rules. Call before reviewing code to get rules.
+
+    Returns rules from curated reviewer personas (security_karen,
+    test_terrorist, bragi, etc.) in the requested format.
+
+    Args:
+        persona: Filter to a specific persona, or None for all
+        format: Output format (json, yaml, markdown)
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with formatted rules, total_rules, personas list
+    """
+    result = get_gauntlet_rules(persona=persona, format=format)
+    return asdict(result)
+
+
+def buildlog_overview(
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Get project buildlog state at a glance. Call at session start for context.
+
+    Returns entry count, skill summary, active session, and render targets.
+
+    Args:
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with entries, skills, active_session, render_targets
+    """
+    result = get_overview(Path(buildlog_dir))
+    return asdict(result)
+
+
+def buildlog_entry_new(
+    slug: str,
+    entry_date: str | None = None,
+    quick: bool = False,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Create a new buildlog journal entry for documenting work.
+
+    Creates a new dated entry from the template with slug sanitization.
+
+    Args:
+        slug: Short identifier (e.g., 'auth-api', 'bugfix-login')
+        entry_date: Date in YYYY-MM-DD format, or None for today
+        quick: Use short template if True
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with entry_path, entry_name, date_str, template_used, message
+
+    Example:
+        buildlog_entry_new(slug="auth-api")
+        buildlog_entry_new(slug="bugfix", entry_date="2026-01-15", quick=True)
+    """
+    result = create_entry(
+        Path(buildlog_dir),
+        slug=slug,
+        entry_date=entry_date,
+        quick=quick,
+    )
+    return asdict(result)
+
+
+def buildlog_entry_list(
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """List all buildlog journal entries, most recent first.
+
+    Returns entry names and titles extracted from first lines.
+
+    Args:
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with entries list [{name, title}], count, message
+    """
+    result = list_entries(Path(buildlog_dir))
+    return asdict(result)
+
+
+# =============================================================================
+# P0: Gauntlet loop tools
+# =============================================================================
+
+
+def buildlog_commit(
+    message: str,
+    slug: str | None = None,
+    no_entry: bool = False,
+    extra_args: list[str] | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Commit code and append commit block to today's buildlog entry.
+
+    Wraps git commit and updates the buildlog journal. Call after making
+    changes to record progress.
+
+    Args:
+        message: Commit message (passed as -m to git)
+        slug: Entry slug (default: derived from branch name)
+        no_entry: Skip buildlog entry update (just git commit)
+        extra_args: Additional git commit args (e.g., ["--amend"])
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with commit_hash, commit_message, files_changed,
+        entry_path, entry_updated, message, error
+    """
+    git_args = ["-m", message]
+    if extra_args:
+        git_args.extend(extra_args)
+
+    result = commit(
+        Path(buildlog_dir),
+        git_args=git_args,
+        slug=slug,
+        no_entry=no_entry,
+    )
+    return asdict(result)
+
+
+def buildlog_gauntlet_prompt(
+    target: str,
+    personas: list[str] | None = None,
+) -> dict:
+    """Generate a gauntlet review prompt for target code.
+
+    Creates a prompt combining reviewer persona rules with a target path.
+    Use this to kick off a gauntlet review: read the prompt, review the
+    target code, then report issues via buildlog_gauntlet_issues.
+
+    Args:
+        target: Path to target code (file or directory, e.g., "src/")
+        personas: Persona names to include (default: all)
+
+    Returns:
+        Dict with prompt, target, personas, total_rules, message, error
+    """
+    result = generate_gauntlet_prompt(target=target, personas=personas)
+    return asdict(result)
+
+
+def buildlog_gauntlet_loop(
+    target: str,
+    personas: list[str] | None = None,
+    max_iterations: int = 10,
+    stop_at: str = "minors",
+    auto_gh_issues: bool = False,
+) -> dict:
+    """Start the gauntlet review loop: get config, rules, and instructions.
+
+    Returns everything needed to run the review-fix-repeat loop.
+    Workflow: call this -> review code -> buildlog_gauntlet_issues ->
+    follow action -> buildlog_commit -> repeat.
+
+    Args:
+        target: Path to target code (e.g., "src/", "src/api.py")
+        personas: Persona names (default: all)
+        max_iterations: Max review-fix iterations (default: 10)
+        stop_at: Stop after clearing: "criticals", "majors", or "minors"
+        auto_gh_issues: Create GitHub issues for accepted risk items
+
+    Returns:
+        Dict with target, personas, max_iterations, stop_at, rules_by_persona,
+        instructions, issue_format, prompt, message, error
+    """
+    result = gauntlet_loop_config(
+        target=target,
+        personas=personas,
+        max_iterations=max_iterations,
+        stop_at=stop_at,
+        auto_gh_issues=auto_gh_issues,
+    )
+    return asdict(result)
+
+
+# =============================================================================
+# P1: Learning pipeline tools
+# =============================================================================
+
+
+def buildlog_distill(
+    since: str | None = None,
+    category: str | None = None,
+    llm: bool = False,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Extract patterns from all buildlog entries.
+
+    Parses the Improvements section of each entry and aggregates
+    insights by category with statistics.
+
+    Args:
+        since: Only entries from this date onward (YYYY-MM-DD)
+        category: Filter to one category (architectural, workflow,
+                  tool_usage, domain_knowledge)
+        llm: Use LLM for richer extraction
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with extracted_at, entry_count, patterns, statistics
+    """
+    from datetime import date as date_cls
+
+    from buildlog.distill import distill_all
+
+    since_date = None
+    if since:
+        try:
+            since_date = date_cls.fromisoformat(since)
+        except ValueError:
+            return {
+                "extracted_at": "",
+                "entry_count": 0,
+                "patterns": {},
+                "statistics": {
+                    "total_patterns": 0,
+                    "by_category": {},
+                    "by_month": {},
+                },
+                "error": (f"Invalid date format: {since}. Use YYYY-MM-DD."),
+            }
+
+    valid_categories = (
+        "architectural",
+        "workflow",
+        "tool_usage",
+        "domain_knowledge",
+    )
+    if category and category not in valid_categories:
+        return {
+            "extracted_at": "",
+            "entry_count": 0,
+            "patterns": {},
+            "statistics": {
+                "total_patterns": 0,
+                "by_category": {},
+                "by_month": {},
+            },
+            "error": (
+                f"Invalid category: {category}."
+                f" Must be one of: {', '.join(valid_categories)}"
+            ),
+        }
+
+    dir_path = Path(buildlog_dir)
+    if not dir_path.exists():
+        return {
+            "extracted_at": "",
+            "entry_count": 0,
+            "patterns": {},
+            "statistics": {
+                "total_patterns": 0,
+                "by_category": {},
+                "by_month": {},
+            },
+            "error": f"No buildlog directory found at {buildlog_dir}",
+        }
+
+    result = distill_all(dir_path, since=since_date, category_filter=category, llm=llm)
+    return dict(result.to_dict())
+
+
+def buildlog_skills(
+    min_frequency: int = 1,
+    since: str | None = None,
+    llm: bool = False,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Generate agent-consumable skills from buildlog patterns.
+
+    Transforms distilled patterns into actionable rules with deduplication,
+    confidence scoring, and stable IDs. Foundation for promoting rules.
+
+    Args:
+        min_frequency: Only include skills seen at least N times
+        since: Only entries from this date onward (YYYY-MM-DD)
+        llm: Use LLM for extraction and scoring
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with generated_at, source_entries, total_skills, skills
+    """
+    from datetime import date as date_cls
+
+    from buildlog.skills import generate_skills as gen_skills
+
+    since_date = None
+    if since:
+        try:
+            since_date = date_cls.fromisoformat(since)
+        except ValueError:
+            return {
+                "generated_at": "",
+                "source_entries": 0,
+                "total_skills": 0,
+                "skills": {},
+                "error": (f"Invalid date format: {since}. Use YYYY-MM-DD."),
+            }
+
+    dir_path = Path(buildlog_dir)
+    if not dir_path.exists():
+        return {
+            "generated_at": "",
+            "source_entries": 0,
+            "total_skills": 0,
+            "skills": {},
+            "error": f"No buildlog directory found at {buildlog_dir}",
+        }
+
+    skill_set = gen_skills(
+        dir_path,
+        min_frequency=min_frequency,
+        since_date=since_date,
+        llm=llm,
+    )
+    return dict(skill_set.to_dict())
+
+
+def buildlog_stats(
+    since: str | None = None,
+    detailed: bool = False,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Show buildlog statistics and analytics.
+
+    Provides insights on entry counts, improvement coverage,
+    categories, streaks, and quality warnings.
+
+    Args:
+        since: Only entries from this date onward (YYYY-MM-DD)
+        detailed: Include top sources breakdown
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with entries, insights, top_sources, pipeline,
+        streak, warnings
+    """
+    from datetime import date as date_cls
+
+    from buildlog.stats import calculate_stats, stats_to_dict
+
+    since_date = None
+    if since:
+        try:
+            since_date = date_cls.fromisoformat(since)
+        except ValueError:
+            return {"error": (f"Invalid date format: {since}. Use YYYY-MM-DD.")}
+
+    dir_path = Path(buildlog_dir)
+    if not dir_path.exists():
+        return {"error": f"No buildlog directory found at {buildlog_dir}"}
+
+    stats_result = calculate_stats(dir_path, since_date=since_date)
+    result: dict = dict(stats_to_dict(stats_result))
+
+    if not detailed:
+        result["top_sources"] = []
+
+    return result
+
+
+def buildlog_gauntlet_list_personas(
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """List available gauntlet reviewer personas and rule counts.
+
+    Shows all reviewer personas from seed files. Use to discover
+    what review perspectives are available before running a gauntlet.
+
+    Args:
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with personas, total_rules, total_personas
+    """
+    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+
+    seeds_dir = get_default_seeds_dir()
+
+    if seeds_dir is None:
+        return {
+            "personas": {},
+            "total_rules": 0,
+            "total_personas": 0,
+            "error": ("No seed files found." " Check your buildlog installation."),
+        }
+
+    seeds = load_all_seeds(seeds_dir)
+
+    if not seeds:
+        return {
+            "personas": {},
+            "total_rules": 0,
+            "total_personas": 0,
+            "error": "No seed files found in seeds directory.",
+        }
+
+    personas_info = {
+        name: {
+            "rules_count": len(sf.rules),
+            "version": sf.version,
+        }
+        for name, sf in seeds.items()
+    }
+
+    return {
+        "personas": personas_info,
+        "total_rules": sum(len(sf.rules) for sf in seeds.values()),
+        "total_personas": len(seeds),
+    }
+
+
+# =============================================================================
+# P2: Nice-to-have tools
+# =============================================================================
+
+
+def buildlog_gauntlet_generate(
+    source_text: str,
+    persona: str,
+    output_dir: str | None = None,
+    dry_run: bool = False,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Generate seed rules from source text using LLM extraction.
+
+    Runs the seed engine pipeline to produce a YAML seed file
+    from arbitrary source content (docs, notes, standards).
+
+    Args:
+        source_text: The text content to extract rules from
+        persona: Persona name for the seed file
+        output_dir: Output dir for seed YAML (default: .buildlog/seeds)
+        dry_run: Preview without writing to disk
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with persona, rule_count, output_path, preview, message
+    """
+    out = Path(output_dir) if output_dir else Path(buildlog_dir) / ".buildlog" / "seeds"
+    result = gauntlet_generate(
+        source_text=source_text,
+        persona=persona,
+        output_dir=out,
+        dry_run=dry_run,
+    )
+    return asdict(result)
+
+
+def buildlog_init(
+    defaults: bool = True,
+    no_claude_md: bool = False,
+    no_mcp: bool = False,
+) -> dict:
+    """Initialize buildlog in the current project directory.
+
+    Sets up buildlog/ with templates, optionally updates CLAUDE.md,
+    and registers the MCP server. Always runs non-interactively.
+
+    Args:
+        defaults: Use default values (always True for MCP)
+        no_claude_md: Don't update CLAUDE.md
+        no_mcp: Don't register MCP server
+
+    Returns:
+        Dict with initialized, buildlog_dir, claude_md_updated,
+        mcp_registered, message, error
+    """
+    result = init_buildlog(
+        project_dir=Path("."),
+        defaults=True,
+        no_claude_md=no_claude_md,
+        no_mcp=no_mcp,
+    )
+    return asdict(result)
+
+
+def buildlog_update() -> dict:
+    """Update buildlog templates to the latest version.
+
+    Runs copier update to pull the latest template changes.
+    Requires buildlog to have been initialized first.
+
+    Returns:
+        Dict with updated, message, error
+    """
+    result = update_buildlog(project_dir=Path("."))
     return asdict(result)

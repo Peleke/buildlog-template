@@ -3,7 +3,11 @@
 
 from pathlib import Path
 
-CLAUDE_MD_SECTION = """
+try:
+    from buildlog.constants import CLAUDE_MD_BUILDLOG_SECTION
+except ImportError:
+    # Fallback for when buildlog isn't installed (e.g., copier from GitHub)
+    CLAUDE_MD_BUILDLOG_SECTION = """
 ## Build Journal
 
 After completing significant work (features, debugging sessions, deployments,
@@ -40,15 +44,16 @@ def main():
 
     content = claude_md.read_text()
 
-    if "## Build Journal" in content:
-        print("Build Journal section already exists in CLAUDE.md")
+    # Check for either old or new section marker
+    if "## buildlog Integration" in content or "## Build Journal" in content:
+        print("buildlog section already exists in CLAUDE.md")
         return
 
     # Append to end of file
     with open(claude_md, "a") as f:
-        f.write("\n" + CLAUDE_MD_SECTION)
+        f.write("\n" + CLAUDE_MD_BUILDLOG_SECTION)
 
-    print("Added Build Journal section to CLAUDE.md")
+    print("Added buildlog Integration section to CLAUDE.md")
 
 
 if __name__ == "__main__":
