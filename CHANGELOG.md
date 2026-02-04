@@ -7,6 +7,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-02-04
+
+### Changed
+- Documentation synced with v0.10.x changes
+- Fixed `~/.claude/settings.json` → `~/.claude.json` in docs
+- Added "Global Always-On Mode" section to installation guide
+- Added `-y`/`--yes` flag documentation throughout
+- Tightened hero copy in README and docs index
+
 ## [0.10.4] - 2026-02-04
 
 ### Added
