@@ -143,7 +143,7 @@ def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
 
     # Register MCP server unless opted out
     if not no_mcp:
-        _init_mcp()
+        _init_mcp(skip_confirm=defaults)
 
     click.echo("\n✓ buildlog initialized!")
     click.echo()
@@ -160,12 +160,17 @@ def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
     click.echo("Start now: buildlog new my-first-task --quick")
 
 
-def _init_mcp(settings_path: Path | None = None, global_mode: bool = False) -> None:
+def _init_mcp(
+    settings_path: Path | None = None,
+    global_mode: bool = False,
+    skip_confirm: bool = False,
+) -> None:
     """Register buildlog as an MCP server in settings.json.
 
     Args:
         settings_path: Path to settings.json. Defaults to .claude/settings.json
         global_mode: If True, also writes usage instructions to ~/.claude/CLAUDE.md
+        skip_confirm: If True, skip confirmation prompts (non-interactive mode)
     """
     import json as json_module
 
@@ -204,6 +209,13 @@ def _init_mcp(settings_path: Path | None = None, global_mode: bool = False) -> N
         if current_config == correct_config:
             click.echo(f"buildlog MCP server already registered in {location}")
         else:
+            # Prompt for confirmation before modifying disk
+            if not skip_confirm:
+                action = "Update" if current_config else "Create/modify"
+                if not click.confirm(f"{action} {location}?"):
+                    click.echo("Aborted.")
+                    return
+
             data["mcpServers"]["buildlog"] = correct_config
             if not global_mode:
                 settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -215,7 +227,7 @@ def _init_mcp(settings_path: Path | None = None, global_mode: bool = False) -> N
 
         # In global mode, also write/update ~/.claude/CLAUDE.md with usage instructions
         if global_mode:
-            _init_global_claude_md(Path.home() / ".claude")
+            _init_global_claude_md(Path.home() / ".claude", skip_confirm=skip_confirm)
             click.echo(
                 "Claude Code now has buildlog tools + instructions in all projects."
             )
@@ -224,11 +236,15 @@ def _init_mcp(settings_path: Path | None = None, global_mode: bool = False) -> N
         click.echo(f"Warning: could not register MCP server: {e}", err=True)
 
 
-def _init_global_claude_md(claude_dir: Path) -> None:
+def _init_global_claude_md(claude_dir: Path, skip_confirm: bool = False) -> None:
     """Write buildlog usage instructions to ~/.claude/CLAUDE.md.
 
     Creates or appends to the global CLAUDE.md so Claude knows how to use
     buildlog tools automatically in any project.
+
+    Args:
+        claude_dir: Path to ~/.claude directory
+        skip_confirm: If True, skip confirmation prompts (non-interactive mode)
     """
     from buildlog.constants import CLAUDE_MD_GLOBAL_SECTION
 
@@ -241,11 +257,25 @@ def _init_global_claude_md(claude_dir: Path) -> None:
             if "## buildlog" in content:
                 click.echo("buildlog instructions already in ~/.claude/CLAUDE.md")
                 return
+            # Prompt for confirmation before modifying disk
+            if not skip_confirm:
+                if not click.confirm(
+                    "Append buildlog instructions to ~/.claude/CLAUDE.md?"
+                ):
+                    click.echo("Skipped CLAUDE.md update.")
+                    return
             # Append to existing file
             with open(claude_md_path, "a") as f:
                 f.write(CLAUDE_MD_GLOBAL_SECTION)
             click.echo("Added buildlog instructions to ~/.claude/CLAUDE.md")
         else:
+            # Prompt for confirmation before creating new file
+            if not skip_confirm:
+                if not click.confirm(
+                    "Create ~/.claude/CLAUDE.md with buildlog instructions?"
+                ):
+                    click.echo("Skipped CLAUDE.md creation.")
+                    return
             # Create new file with header
             claude_dir.mkdir(parents=True, exist_ok=True)
             header = "# Global Claude Instructions\n\nThese instructions apply to all projects.\n"
@@ -262,7 +292,13 @@ def _init_global_claude_md(claude_dir: Path) -> None:
     is_flag=True,
     help="Register globally in ~/.claude.json (works in any project)",
 )
-def init_mcp(global_: bool):
+@click.option(
+    "-y",
+    "--yes",
+    is_flag=True,
+    help="Skip confirmation prompts (non-interactive mode)",
+)
+def init_mcp(global_: bool, yes: bool):
     """Register buildlog as an MCP server for Claude Code.
 
     Creates or updates .claude/settings.json with the buildlog MCP
@@ -275,12 +311,13 @@ def init_mcp(global_: bool):
 
         buildlog init-mcp              # local (current project)
         buildlog init-mcp --global     # global (all projects)
+        buildlog init-mcp --global -y  # global, skip prompts
     """
     if global_:
         settings_path = Path.home() / ".claude.json"
-        _init_mcp(settings_path=settings_path, global_mode=True)
+        _init_mcp(settings_path=settings_path, global_mode=True, skip_confirm=yes)
     else:
-        _init_mcp()
+        _init_mcp(skip_confirm=yes)
 
 
 @main.command("mcp-test")

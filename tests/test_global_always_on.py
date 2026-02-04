@@ -54,13 +54,13 @@ class TestInitMcpGlobal:
 
     def test_global_flag_creates_claude_json(self, runner, mock_home):
         """--global creates ~/.claude.json file."""
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert result.exit_code == 0
         assert (mock_home / ".claude.json").exists()
 
     def test_global_flag_writes_correct_path(self, runner, mock_home):
         """--global writes to ~/.claude.json, not local."""
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert result.exit_code == 0
 
         # Global file should exist
@@ -73,7 +73,7 @@ class TestInitMcpGlobal:
 
     def test_global_flag_correct_mcp_config(self, runner, mock_home):
         """--global writes correct buildlog MCP server config."""
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert result.exit_code == 0
 
         settings = json.loads((mock_home / ".claude.json").read_text())
@@ -91,7 +91,7 @@ class TestInitMcpGlobal:
         }
         (mock_home / ".claude.json").write_text(json.dumps(existing))
 
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert result.exit_code == 0
 
         settings = json.loads((mock_home / ".claude.json").read_text())
@@ -100,8 +100,8 @@ class TestInitMcpGlobal:
 
     def test_global_flag_idempotent(self, runner, mock_home):
         """Running --global twice doesn't duplicate entry."""
-        runner.invoke(main, ["init-mcp", "--global"])
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         assert result.exit_code == 0
         assert "already registered" in result.output
@@ -111,23 +111,23 @@ class TestInitMcpGlobal:
 
     def test_global_flag_shows_global_path_in_output(self, runner, mock_home):
         """--global output mentions ~/.claude.json."""
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert "~/.claude.json" in result.output
 
     def test_global_flag_shows_all_projects_message(self, runner, mock_home):
         """--global output mentions it works in all projects."""
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert "all projects" in result.output.lower()
 
     def test_local_mode_default(self, runner, isolated_fs):
         """Without --global, writes to local .claude/settings.json."""
-        result = runner.invoke(main, ["init-mcp"])
+        result = runner.invoke(main, ["init-mcp", "-y"])
         assert result.exit_code == 0
         assert Path(".claude/settings.json").exists()
 
     def test_local_mode_shows_local_path(self, runner, isolated_fs):
         """Local mode output mentions .claude/settings.json."""
-        result = runner.invoke(main, ["init-mcp"])
+        result = runner.invoke(main, ["init-mcp", "-y"])
         assert ".claude/settings.json" in result.output
         assert "~/.claude" not in result.output
 
@@ -135,9 +135,30 @@ class TestInitMcpGlobal:
         """--global handles malformed existing .claude.json gracefully."""
         (mock_home / ".claude.json").write_text("{ invalid json }")
 
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert result.exit_code == 0
         assert "malformed" in result.output.lower()
+
+    def test_interactive_prompts_for_confirmation(self, runner, mock_home):
+        """Without -y, prompts for confirmation."""
+        result = runner.invoke(main, ["init-mcp", "--global"], input="y\ny\n")
+        assert result.exit_code == 0
+        assert (mock_home / ".claude.json").exists()
+
+    def test_interactive_abort_on_no(self, runner, mock_home):
+        """User can abort by answering 'n' to confirmation."""
+        result = runner.invoke(main, ["init-mcp", "--global"], input="n\n")
+        assert result.exit_code == 0
+        assert "Aborted" in result.output
+        assert not (mock_home / ".claude.json").exists()
+
+    def test_yes_flag_skips_confirmation(self, runner, mock_home):
+        """-y flag skips confirmation prompts."""
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
+        assert result.exit_code == 0
+        # Should not contain any confirmation text
+        assert "?" not in result.output
+        assert (mock_home / ".claude.json").exists()
 
 
 # =============================================================================
@@ -150,7 +171,7 @@ class TestGlobalClaudeMd:
 
     def test_global_creates_claude_md(self, runner, mock_home):
         """--global creates ~/.claude/CLAUDE.md with instructions."""
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert result.exit_code == 0
 
         claude_md = mock_home / ".claude" / "CLAUDE.md"
@@ -158,7 +179,7 @@ class TestGlobalClaudeMd:
 
     def test_global_claude_md_has_buildlog_section(self, runner, mock_home):
         """--global CLAUDE.md contains buildlog section."""
-        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         claude_md = mock_home / ".claude" / "CLAUDE.md"
         content = claude_md.read_text()
@@ -166,7 +187,7 @@ class TestGlobalClaudeMd:
 
     def test_global_claude_md_has_always_on_header(self, runner, mock_home):
         """--global CLAUDE.md mentions 'Always On'."""
-        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         claude_md = mock_home / ".claude" / "CLAUDE.md"
         content = claude_md.read_text()
@@ -174,7 +195,7 @@ class TestGlobalClaudeMd:
 
     def test_global_claude_md_has_tool_instructions(self, runner, mock_home):
         """--global CLAUDE.md contains key tool instructions."""
-        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         claude_md = mock_home / ".claude" / "CLAUDE.md"
         content = claude_md.read_text()
@@ -186,7 +207,7 @@ class TestGlobalClaudeMd:
 
     def test_global_claude_md_has_core_loop(self, runner, mock_home):
         """--global CLAUDE.md contains the core loop workflow."""
-        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         claude_md = mock_home / ".claude" / "CLAUDE.md"
         content = claude_md.read_text()
@@ -197,7 +218,7 @@ class TestGlobalClaudeMd:
 
     def test_global_claude_md_mentions_downstream(self, runner, mock_home):
         """--global CLAUDE.md mentions downstream systems."""
-        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         claude_md = mock_home / ".claude" / "CLAUDE.md"
         content = claude_md.read_text()
@@ -210,7 +231,7 @@ class TestGlobalClaudeMd:
         existing_content = "# My Custom Instructions\n\nDo things my way.\n"
         (claude_dir / "CLAUDE.md").write_text(existing_content)
 
-        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         claude_md = claude_dir / "CLAUDE.md"
         content = claude_md.read_text()
@@ -222,8 +243,8 @@ class TestGlobalClaudeMd:
 
     def test_global_claude_md_idempotent(self, runner, mock_home):
         """Running --global twice doesn't duplicate buildlog section."""
-        runner.invoke(main, ["init-mcp", "--global"])
-        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         claude_md = mock_home / ".claude" / "CLAUDE.md"
         content = claude_md.read_text()
@@ -232,18 +253,18 @@ class TestGlobalClaudeMd:
 
     def test_global_claude_md_output_message(self, runner, mock_home):
         """--global shows message about CLAUDE.md creation."""
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert "CLAUDE.md" in result.output
 
     def test_global_claude_md_already_exists_message(self, runner, mock_home):
         """Running --global twice shows 'already in' message for CLAUDE.md."""
-        runner.invoke(main, ["init-mcp", "--global"])
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert "already" in result.output.lower()
 
     def test_global_creates_header_for_new_file(self, runner, mock_home):
         """New CLAUDE.md has a header explaining it's global instructions."""
-        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         claude_md = mock_home / ".claude" / "CLAUDE.md"
         content = claude_md.read_text()
@@ -252,7 +273,7 @@ class TestGlobalClaudeMd:
 
     def test_global_claude_md_has_outputs_section(self, runner, mock_home):
         """--global CLAUDE.md lists the output files for downstream consumption."""
-        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global", "-y"])
 
         claude_md = mock_home / ".claude" / "CLAUDE.md"
         content = claude_md.read_text()
@@ -604,7 +625,7 @@ class TestEdgeCases:
         os.chmod(mock_home / ".claude.json", 0o444)
 
         try:
-            result = runner.invoke(main, ["init-mcp", "--global"])
+            result = runner.invoke(main, ["init-mcp", "--global", "-y"])
             # Should handle error gracefully (either succeeds because already registered
             # or shows error message)
             assert (
@@ -636,7 +657,7 @@ class TestGlobalWorkflowIntegration:
     def test_full_global_setup_workflow(self, runner, mock_home, isolated_fs):
         """Test complete global setup workflow."""
         # Step 1: Register MCP globally
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert result.exit_code == 0
         assert (mock_home / ".claude.json").exists()
 
@@ -656,7 +677,7 @@ class TestGlobalWorkflowIntegration:
         assert Path("buildlog").exists()
 
         # Global MCP registration
-        result = runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert result.exit_code == 0
 
         # Both should exist
