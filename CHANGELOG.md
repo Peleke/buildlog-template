@@ -7,18 +7,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-02-03
+
 ### Added
 - **Full MCP/CLI parity**: 10 new MCP tools bringing total from 19 to 29
 - P0 gauntlet loop: `buildlog_commit`, `buildlog_gauntlet_prompt`, `buildlog_gauntlet_loop`
 - P1 learning pipeline: `buildlog_distill`, `buildlog_skills`, `buildlog_stats`, `buildlog_gauntlet_list_personas`
 - P2 nice-to-have: `buildlog_gauntlet_generate`, `buildlog_init`, `buildlog_update`
+- **Global always-on mode**: `buildlog init-mcp --global` registers MCP in `~/.claude/settings.json`
+- **Graceful fallbacks**: Commands return useful state instead of erroring when `buildlog/` missing
+- MCP is now a default dependency (no `[mcp]` extra needed)
+- `buildlog init --defaults` auto-registers MCP server
+- `buildlog mcp-test` verifies all 29 tools are registered
 - 9 new core operations with result dataclasses
 - E2E user flow test suite (7 flows, ~20 tests)
-- 125+ new unit/integration tests (total: ~770)
+- 180+ new unit/integration tests (total: ~830)
 
 ### Changed
 - CLAUDE.md constant references all 29 tools with workflow docs
 - Documentation updated: README, MCP guide, installation guide
+- Commands that required `buildlog/` now return empty/default state with `initialized: false`
 
 ### Fixed
 - Stale "19 tools" references across docs and tests
@@ -141,7 +149,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `buildlog_status`, `buildlog_promote`, `buildlog_reject`, `buildlog_diff`
 - **Embedding Backends**: Token-based, sentence-transformers, OpenAI
 
-[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Peleke/buildlog-template/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/Peleke/buildlog-template/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/Peleke/buildlog-template/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Peleke/buildlog-template/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/Peleke/buildlog-template/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Peleke/buildlog-template/compare/v0.5.0...v0.6.0
