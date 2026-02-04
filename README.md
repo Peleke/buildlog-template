@@ -24,13 +24,9 @@
 
 ## The Problem
 
-Most AI agents do not learn. They execute without retaining context. You can bolt on memory stores and tool routers, but if the system cannot demonstrably improve its decision-making over time, you have a persistent memory store, not a learning system.
+Every AI-assisted work session produces decisions, corrections, and outcomes. Almost all of it gets discarded. The next session starts from scratch with the same blind spots.
 
-Every AI-assisted work session produces a trajectory: goals, decisions, tool uses, corrections, outcomes. Almost all of this is discarded. The next session starts from scratch with the same blind spots.
-
-buildlog exists to close that gap. It captures structured trajectories from real work, extracts decision patterns, and uses statistical methods to select which patterns to surface in future sessions, then measures whether that selection actually reduced mistakes.
-
-buildlog measures whether the system actually got better, and proves it.
+buildlog captures structured trajectories from real work, extracts decision patterns, and uses Thompson Sampling to select which patterns to surface. Then it measures whether that selection actually reduced mistakes.
 
 ## How It Works
 

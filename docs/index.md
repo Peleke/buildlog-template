@@ -1,16 +1,12 @@
 # buildlog
 
-## The Only Agent Learning System You Can Prove Works
+## Engineering insights that compound
 
-**Falsifiable claims. Measurable outcomes. No vibes.**
+Capture what works. Measure whether it actually helped. Drop what didn't.
 
 ---
 
-Everyone's building "agent memory." Blog posts announce breakthroughs. Tweets show impressive demos. Products ship with "learning" in the tagline.
-
-Ask them one question: **How do you know it works?**
-
-buildlog gives you the infrastructure to answer that question with data — not vibes.
+buildlog extracts decision patterns from your AI-assisted work and uses Thompson Sampling to surface rules that reduce mistakes—then tracks whether they did. The feedback loop is statistical, not vibes-based.
 
 ## What buildlog does
 
