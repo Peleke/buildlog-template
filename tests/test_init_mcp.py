@@ -17,7 +17,7 @@ class TestInitMcp:
         """Should create .claude/settings.json from scratch."""
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        runner.invoke(main, ["init-mcp"])
+        runner.invoke(main, ["init-mcp", "-y"])
 
         settings = tmp_path / ".claude" / "settings.json"
         assert settings.exists()
@@ -38,7 +38,7 @@ class TestInitMcp:
         (claude_dir / "settings.json").write_text(json.dumps(existing))
 
         runner = CliRunner()
-        runner.invoke(main, ["init-mcp"])
+        runner.invoke(main, ["init-mcp", "-y"])
 
         data = json.loads((claude_dir / "settings.json").read_text())
         assert "buildlog" in data["mcpServers"]
@@ -49,8 +49,8 @@ class TestInitMcp:
         """Running twice should produce same result."""
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
-        runner.invoke(main, ["init-mcp"])
-        runner.invoke(main, ["init-mcp"])
+        runner.invoke(main, ["init-mcp", "-y"])
+        runner.invoke(main, ["init-mcp", "-y"])
 
         settings = tmp_path / ".claude" / "settings.json"
         data = json.loads(settings.read_text())
@@ -66,7 +66,7 @@ class TestInitMcp:
         (claude_dir / "settings.json").write_text("{invalid json")
 
         runner = CliRunner()
-        result = runner.invoke(main, ["init-mcp"])
+        result = runner.invoke(main, ["init-mcp", "-y"])
         assert "malformed" in result.output or "Warning" in result.output
 
     def test_preserves_non_mcp_keys(self, tmp_path, monkeypatch):
@@ -78,7 +78,7 @@ class TestInitMcp:
         (claude_dir / "settings.json").write_text(json.dumps(existing))
 
         runner = CliRunner()
-        runner.invoke(main, ["init-mcp"])
+        runner.invoke(main, ["init-mcp", "-y"])
 
         data = json.loads((claude_dir / "settings.json").read_text())
         assert data["apiKey"] == "secret"
