@@ -1,5 +1,44 @@
 """Shared constants for buildlog, including the CLAUDE.md integration section."""
 
+# Shorter version for global ~/.claude/CLAUDE.md - focused on "always on" usage
+CLAUDE_MD_GLOBAL_SECTION = """
+## buildlog (Always On)
+
+buildlog is your ambient data capture layer. It runs in ALL projects via MCP.
+Use these tools to track work, extract learnings, and feed downstream systems.
+
+### Core Loop (use after every significant commit)
+
+1. `buildlog_overview()` — check project state
+2. `buildlog_commit(message="...")` — git commit with auto entry logging
+3. `buildlog_gauntlet_rules()` + review + `buildlog_gauntlet_issues([...])` — run gauntlet
+4. `buildlog_log_reward(outcome="accepted")` — close the feedback loop
+
+### Key Tools
+
+| Tool | When to Use |
+|------|-------------|
+| `buildlog_overview()` | Start of session, check state |
+| `buildlog_commit(message)` | Wrap git commits with logging |
+| `buildlog_entry_new(slug)` | Create journal entry |
+| `buildlog_gauntlet_rules()` | Load reviewer personas |
+| `buildlog_gauntlet_issues(issues)` | Process review findings |
+| `buildlog_log_reward(outcome)` | Feedback after approval |
+| `buildlog_skills()` | Extract patterns from entries |
+| `buildlog_status()` | See extracted skills |
+| `buildlog_promote(skill_ids)` | Surface to agent rules |
+
+### Outputs (ambient capture for downstream)
+
+- Journal entries: `buildlog/*.md`
+- Reward signals: `buildlog/.buildlog/reward_events.jsonl`
+- Extracted skills: `buildlog/.buildlog/promoted.json`
+- Review learnings: `buildlog/.buildlog/review_learnings.json`
+
+This data feeds automated content generation, engineering logs, and learning systems.
+"""
+
+# Full version for per-project CLAUDE.md - comprehensive reference
 CLAUDE_MD_BUILDLOG_SECTION = """
 ## buildlog Integration
 

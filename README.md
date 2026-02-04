@@ -104,28 +104,34 @@ The roadmap: contextual bandits (now) -> richer policy models -> longer-horizon 
 
 ## Installation
 
-### Quick start
+### Always-On Mode (recommended)
+
+We run buildlog as an **ambient data capture layer** across all projects. One command, works everywhere:
+
+```bash
+pipx install buildlog         # or: uv tool install buildlog
+buildlog init-mcp --global    # registers MCP + writes instructions to ~/.claude/CLAUDE.md
+```
+
+That's it. Claude Code now has all 29 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
+
+The `--global` flag:
+- Registers the MCP server in `~/.claude/settings.json`
+- Creates `~/.claude/CLAUDE.md` with usage instructions so Claude proactively uses buildlog
+- Works immediately in any repo, even without a local `buildlog/` directory
+
+This is how we use buildlog ourselves: always on, capturing structured trajectories from every session, feeding downstream systems that generate engineering logs, courses, and content.
+
+### Per-project setup
+
+If you prefer explicit per-project control:
 
 ```bash
 pip install buildlog          # MCP server included by default
-buildlog init --defaults      # scaffold project, register MCP, update CLAUDE.md
+buildlog init --defaults      # scaffold buildlog/, register MCP, update CLAUDE.md
 ```
 
-That's it. Claude Code will now have access to all 29 buildlog tools.
-
-### Global install (recommended)
-
-```bash
-uv tool install buildlog   # or: pipx install buildlog
-```
-
-This puts `buildlog` and `buildlog-mcp` on your PATH. Works from any directory.
-
-### Per-project (virtual environment)
-
-```bash
-uv pip install buildlog    # or: pip install buildlog
-```
+This creates a `buildlog/` directory with templates and configures Claude Code for that specific project.
 
 ### For JS/TS projects
 
@@ -133,16 +139,12 @@ uv pip install buildlog    # or: pip install buildlog
 npx @peleke.s/buildlog init
 ```
 
-### MCP server for Claude Code
-
-`buildlog init` auto-registers the MCP server. For existing projects:
+### Verify installation
 
 ```bash
-buildlog init-mcp          # register MCP in .claude/settings.json
 buildlog mcp-test          # verify all 29 tools are registered
+buildlog overview          # check project state (works without init in global mode)
 ```
-
-This exposes buildlog tools (seeds, skills, experiments, gauntlet, bandit status) to any Claude Code session.
 
 ## Quick Start
 
