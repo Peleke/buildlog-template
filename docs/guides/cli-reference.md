@@ -4,13 +4,33 @@
 
 ```bash
 buildlog init                    # Initialize buildlog (--defaults for non-interactive)
+buildlog init-mcp                # Register MCP server only
 buildlog new <slug>              # Create entry
 buildlog list                    # List entries
 buildlog distill                 # Extract patterns
 buildlog skills                  # Generate rules
 buildlog stats                   # Usage statistics
 buildlog reward <outcome>        # Log reward signal
+buildlog overview                # Project state at a glance
 ```
+
+## MCP Registration
+
+```bash
+buildlog init-mcp                # Register MCP in .claude/settings.json (local)
+buildlog init-mcp --global       # Register in ~/.claude.json (global)
+buildlog init-mcp --global -y    # Global, skip confirmation prompts
+buildlog mcp-test                # Verify all 29 tools are registered
+```
+
+### Flags for `init-mcp`
+
+| Flag | Effect |
+|------|--------|
+| `--global` | Write to `~/.claude.json` instead of `.claude/settings.json` |
+| `-y`, `--yes` | Skip confirmation prompts (non-interactive mode) |
+
+The `--global` flag also creates `~/.claude/CLAUDE.md` with usage instructions.
 
 ## Skill Management
 
