@@ -23,7 +23,8 @@ class TestInitMcp:
         assert settings.exists()
         data = json.loads(settings.read_text())
         assert "buildlog" in data["mcpServers"]
-        assert data["mcpServers"]["buildlog"]["command"] == "buildlog-mcp"
+        # Command can be bare name or full path depending on environment
+        assert "buildlog-mcp" in data["mcpServers"]["buildlog"]["command"]
 
     def test_updates_existing_config(self, tmp_path, monkeypatch):
         """Should add buildlog to existing mcpServers, preserve others."""

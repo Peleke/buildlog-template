@@ -52,20 +52,19 @@ def mock_home(tmp_path):
 class TestInitMcpGlobal:
     """Tests for buildlog init-mcp --global command."""
 
-    def test_global_flag_creates_home_claude_dir(self, runner, mock_home):
-        """--global creates ~/.claude/ directory if missing."""
+    def test_global_flag_creates_claude_json(self, runner, mock_home):
+        """--global creates ~/.claude.json file."""
         result = runner.invoke(main, ["init-mcp", "--global"])
         assert result.exit_code == 0
-        assert (mock_home / ".claude").exists()
-        assert (mock_home / ".claude" / "settings.json").exists()
+        assert (mock_home / ".claude.json").exists()
 
     def test_global_flag_writes_correct_path(self, runner, mock_home):
-        """--global writes to ~/.claude/settings.json, not local."""
+        """--global writes to ~/.claude.json, not local."""
         result = runner.invoke(main, ["init-mcp", "--global"])
         assert result.exit_code == 0
 
         # Global file should exist
-        global_settings = mock_home / ".claude" / "settings.json"
+        global_settings = mock_home / ".claude.json"
         assert global_settings.exists()
 
         # Local file should NOT exist
@@ -77,26 +76,25 @@ class TestInitMcpGlobal:
         result = runner.invoke(main, ["init-mcp", "--global"])
         assert result.exit_code == 0
 
-        settings = json.loads((mock_home / ".claude" / "settings.json").read_text())
+        settings = json.loads((mock_home / ".claude.json").read_text())
         assert "mcpServers" in settings
         assert "buildlog" in settings["mcpServers"]
-        assert settings["mcpServers"]["buildlog"]["command"] == "buildlog-mcp"
+        # Command can be bare name or full path depending on environment
+        assert "buildlog-mcp" in settings["mcpServers"]["buildlog"]["command"]
         assert settings["mcpServers"]["buildlog"]["args"] == []
 
     def test_global_flag_preserves_existing_servers(self, runner, mock_home):
         """--global preserves existing MCP servers in config."""
         # Pre-populate with another server
-        claude_dir = mock_home / ".claude"
-        claude_dir.mkdir()
         existing = {
             "mcpServers": {"other-server": {"command": "other", "args": ["-x"]}}
         }
-        (claude_dir / "settings.json").write_text(json.dumps(existing))
+        (mock_home / ".claude.json").write_text(json.dumps(existing))
 
         result = runner.invoke(main, ["init-mcp", "--global"])
         assert result.exit_code == 0
 
-        settings = json.loads((claude_dir / "settings.json").read_text())
+        settings = json.loads((mock_home / ".claude.json").read_text())
         assert "other-server" in settings["mcpServers"]
         assert "buildlog" in settings["mcpServers"]
 
@@ -108,13 +106,13 @@ class TestInitMcpGlobal:
         assert result.exit_code == 0
         assert "already registered" in result.output
 
-        settings = json.loads((mock_home / ".claude" / "settings.json").read_text())
+        settings = json.loads((mock_home / ".claude.json").read_text())
         assert len(settings["mcpServers"]) == 1
 
     def test_global_flag_shows_global_path_in_output(self, runner, mock_home):
-        """--global output mentions ~/.claude/settings.json."""
+        """--global output mentions ~/.claude.json."""
         result = runner.invoke(main, ["init-mcp", "--global"])
-        assert "~/.claude/settings.json" in result.output
+        assert "~/.claude.json" in result.output
 
     def test_global_flag_shows_all_projects_message(self, runner, mock_home):
         """--global output mentions it works in all projects."""
@@ -134,10 +132,8 @@ class TestInitMcpGlobal:
         assert "~/.claude" not in result.output
 
     def test_global_handles_malformed_existing_json(self, runner, mock_home):
-        """--global handles malformed existing settings.json gracefully."""
-        claude_dir = mock_home / ".claude"
-        claude_dir.mkdir()
-        (claude_dir / "settings.json").write_text("{ invalid json }")
+        """--global handles malformed existing .claude.json gracefully."""
+        (mock_home / ".claude.json").write_text("{ invalid json }")
 
         result = runner.invoke(main, ["init-mcp", "--global"])
         assert result.exit_code == 0
@@ -603,18 +599,21 @@ class TestEdgeCases:
 
     def test_global_mcp_permission_denied(self, runner, mock_home):
         """--global handles permission denied gracefully."""
-        # Make home read-only
-        (mock_home / ".claude").mkdir()
-        os.chmod(mock_home / ".claude", 0o444)
+        # Create a read-only .claude.json file
+        (mock_home / ".claude.json").write_text('{"mcpServers": {}}')
+        os.chmod(mock_home / ".claude.json", 0o444)
 
         try:
             result = runner.invoke(main, ["init-mcp", "--global"])
-            # Should handle error gracefully
+            # Should handle error gracefully (either succeeds because already registered
+            # or shows error message)
             assert (
-                "could not register" in result.output.lower() or result.exit_code == 0
+                "could not register" in result.output.lower()
+                or "already registered" in result.output.lower()
+                or result.exit_code == 0
             )
         finally:
-            os.chmod(mock_home / ".claude", 0o755)
+            os.chmod(mock_home / ".claude.json", 0o755)
 
     def test_initialized_true_when_buildlog_exists(self, runner, isolated_fs):
         """overview --json has initialized: true when buildlog/ exists."""
@@ -639,7 +638,7 @@ class TestGlobalWorkflowIntegration:
         # Step 1: Register MCP globally
         result = runner.invoke(main, ["init-mcp", "--global"])
         assert result.exit_code == 0
-        assert (mock_home / ".claude" / "settings.json").exists()
+        assert (mock_home / ".claude.json").exists()
 
         # Step 2: Overview should work (shows uninitialized)
         result = runner.invoke(main, ["overview"])
@@ -662,7 +661,7 @@ class TestGlobalWorkflowIntegration:
 
         # Both should exist
         assert Path(".claude/settings.json").exists()
-        assert (mock_home / ".claude" / "settings.json").exists()
+        assert (mock_home / ".claude.json").exists()
 
     def test_json_output_consistency(self, runner, isolated_fs):
         """All fallback JSON outputs have consistent structure."""

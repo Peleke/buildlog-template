@@ -172,7 +172,7 @@ def _init_mcp(settings_path: Path | None = None, global_mode: bool = False) -> N
     if settings_path is None:
         settings_path = Path(".claude") / "settings.json"
 
-    location = "~/.claude/settings.json" if global_mode else ".claude/settings.json"
+    location = "~/.claude.json" if global_mode else ".claude/settings.json"
 
     try:
         if settings_path.exists():
@@ -190,19 +190,32 @@ def _init_mcp(settings_path: Path | None = None, global_mode: bool = False) -> N
         if "mcpServers" not in data:
             data["mcpServers"] = {}
 
-        mcp_already_registered = "buildlog" in data["mcpServers"]
-
-        if not mcp_already_registered:
-            data["mcpServers"]["buildlog"] = {"command": "buildlog-mcp", "args": []}
-            settings_path.parent.mkdir(parents=True, exist_ok=True)
-            settings_path.write_text(json_module.dumps(data, indent=2) + "\n")
-            click.echo(f"Registered buildlog MCP server in {location}")
+        # Get full path to buildlog-mcp. Claude Code's subprocess doesn't have
+        # ~/.local/bin in PATH, so we need the absolute path.
+        # For global mode, prefer ~/.local/bin (where pipx/uv tool installs).
+        global_bin = Path.home() / ".local" / "bin" / "buildlog-mcp"
+        if global_mode and global_bin.exists():
+            mcp_command = str(global_bin)
         else:
+            mcp_command = shutil.which("buildlog-mcp") or "buildlog-mcp"
+        correct_config = {"command": mcp_command, "args": []}
+        current_config = data["mcpServers"].get("buildlog")
+
+        if current_config == correct_config:
             click.echo(f"buildlog MCP server already registered in {location}")
+        else:
+            data["mcpServers"]["buildlog"] = correct_config
+            if not global_mode:
+                settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings_path.write_text(json_module.dumps(data, indent=2) + "\n")
+            if current_config is None:
+                click.echo(f"Registered buildlog MCP server in {location}")
+            else:
+                click.echo(f"Updated buildlog MCP server config in {location}")
 
         # In global mode, also write/update ~/.claude/CLAUDE.md with usage instructions
         if global_mode:
-            _init_global_claude_md(settings_path.parent)
+            _init_global_claude_md(Path.home() / ".claude")
             click.echo(
                 "Claude Code now has buildlog tools + instructions in all projects."
             )
@@ -234,6 +247,7 @@ def _init_global_claude_md(claude_dir: Path) -> None:
             click.echo("Added buildlog instructions to ~/.claude/CLAUDE.md")
         else:
             # Create new file with header
+            claude_dir.mkdir(parents=True, exist_ok=True)
             header = "# Global Claude Instructions\n\nThese instructions apply to all projects.\n"
             claude_md_path.write_text(header + CLAUDE_MD_GLOBAL_SECTION)
             click.echo("Created ~/.claude/CLAUDE.md with buildlog instructions")
@@ -246,7 +260,7 @@ def _init_global_claude_md(claude_dir: Path) -> None:
     "--global",
     "global_",
     is_flag=True,
-    help="Register globally in ~/.claude/settings.json (works in any project)",
+    help="Register globally in ~/.claude.json (works in any project)",
 )
 def init_mcp(global_: bool):
     """Register buildlog as an MCP server for Claude Code.
@@ -254,7 +268,7 @@ def init_mcp(global_: bool):
     Creates or updates .claude/settings.json with the buildlog MCP
     server configuration. Idempotent — safe to run multiple times.
 
-    Use --global to register in ~/.claude/settings.json so buildlog
+    Use --global to register in ~/.claude.json so buildlog
     tools are available in every project without per-project init.
 
     Examples:
@@ -263,7 +277,7 @@ def init_mcp(global_: bool):
         buildlog init-mcp --global     # global (all projects)
     """
     if global_:
-        settings_path = Path.home() / ".claude" / "settings.json"
+        settings_path = Path.home() / ".claude.json"
         _init_mcp(settings_path=settings_path, global_mode=True)
     else:
         _init_mcp()
