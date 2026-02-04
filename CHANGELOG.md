@@ -7,6 +7,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-02-04
+
+### Added
+- `init-mcp` now prompts for confirmation before modifying disk
+- Added `-y`/`--yes` flag to skip prompts (non-interactive mode)
+- `init --defaults` also skips MCP prompts for CI-friendliness
+
 ## [0.10.3] - 2026-02-04
 
 ### Fixed
