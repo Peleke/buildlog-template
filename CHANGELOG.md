@@ -7,6 +7,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-02-03
+
+### Added
+- **Global CLAUDE.md**: `buildlog init-mcp --global` now also creates `~/.claude/CLAUDE.md` with usage instructions, so Claude proactively uses buildlog tools
+- Concise global instructions section with core loop, key tools table, and outputs list
+
+### Changed
+- README prominently features "Always-On Mode" as the recommended installation approach
+
 ## [0.10.0] - 2026-02-03
 
 ### Added
@@ -149,7 +158,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `buildlog_status`, `buildlog_promote`, `buildlog_reject`, `buildlog_diff`
 - **Embedding Backends**: Token-based, sentence-transformers, OpenAI
 
-[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/Peleke/buildlog-template/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/Peleke/buildlog-template/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Peleke/buildlog-template/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Peleke/buildlog-template/compare/v0.7.0...v0.8.0
