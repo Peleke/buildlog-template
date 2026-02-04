@@ -92,7 +92,7 @@ buildlog experiment report
 
 ## Current Limits
 
-This is v0.8, not the end state.
+This is v0.10, not the end state.
 
 - **Extraction quality is uneven.** Regex extractors miss nuance; LLM extractors are accurate but expensive. The middle ground is still being found.
 - **Feedback signals are coarse.** Repeated Mistake Rate works but requires manual tagging. Richer automatic signals (test outcomes, review results, revision distance) are on the roadmap.
@@ -110,15 +110,17 @@ We run buildlog as an **ambient data capture layer** across all projects. One co
 
 ```bash
 pipx install buildlog         # or: uv tool install buildlog
-buildlog init-mcp --global    # registers MCP + writes instructions to ~/.claude/CLAUDE.md
+buildlog init-mcp --global -y # registers MCP + writes instructions to ~/.claude/CLAUDE.md
 ```
 
 That's it. Claude Code now has all 29 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
 
 The `--global` flag:
-- Registers the MCP server in `~/.claude/settings.json`
+- Registers the MCP server in `~/.claude.json` (Claude Code's global config)
 - Creates `~/.claude/CLAUDE.md` with usage instructions so Claude proactively uses buildlog
 - Works immediately in any repo, even without a local `buildlog/` directory
+
+The `-y` flag skips confirmation prompts (useful for scripts and CI).
 
 This is how we use buildlog ourselves: always on, capturing structured trajectories from every session, feeding downstream systems that generate engineering logs, courses, and content.
 

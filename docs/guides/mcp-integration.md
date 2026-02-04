@@ -3,24 +3,63 @@
 buildlog ships an MCP server for Claude Code integration. MCP is now a default
 dependency — no extras needed.
 
-## Setup
+## Global Setup (recommended)
+
+Register buildlog globally so it works in every project:
 
 ```bash
-pip install buildlog
-buildlog init --defaults    # auto-registers MCP server
+pipx install buildlog              # or: uv tool install buildlog
+buildlog init-mcp --global -y      # register globally
 ```
 
-For existing projects that already ran `buildlog init`:
+This writes to:
 
-```bash
-buildlog init-mcp           # register MCP in .claude/settings.json
-```
+- `~/.claude.json` — MCP server registration (Claude Code reads this)
+- `~/.claude/CLAUDE.md` — Usage instructions so Claude knows how to use buildlog
 
 ### Verify Installation
 
 ```bash
-buildlog mcp-test           # lists all 29 tools, exits 0 if correct
+claude mcp list           # should show: buildlog - ✓ Connected
+buildlog mcp-test         # lists all 29 tools, exits 0 if correct
+buildlog overview         # works anywhere (shows project state or "not initialized")
 ```
+
+## Per-Project Setup
+
+For project-specific MCP registration:
+
+```bash
+pip install buildlog
+buildlog init --defaults    # scaffolds buildlog/ and registers MCP locally
+```
+
+Or just register MCP without scaffolding:
+
+```bash
+buildlog init-mcp           # register MCP in .claude/settings.json
+buildlog init-mcp -y        # skip confirmation prompts
+```
+
+## Confirmation Prompts
+
+By default, `init-mcp` prompts before modifying files:
+
+```
+Create/modify ~/.claude.json? [y/N]:
+Create ~/.claude/CLAUDE.md with buildlog instructions? [y/N]:
+```
+
+Use `-y` or `--yes` to skip prompts (for scripts, CI, or automation).
+
+## File Locations
+
+| Mode | MCP Config | CLAUDE.md |
+|------|-----------|-----------|
+| Global (`--global`) | `~/.claude.json` | `~/.claude/CLAUDE.md` |
+| Local (default) | `.claude/settings.json` | Not created |
+
+Claude Code reads `~/.claude.json` for global MCP servers. The local `.claude/settings.json` is project-specific.
 
 ## Available tools
 
