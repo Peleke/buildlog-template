@@ -80,8 +80,6 @@ buildlog is building toward **contextual bandits** for automatic rule selection.
 
 **Seed-boosted priors:** Curated rules from gauntlet personas start with boosted priors (Beta(3,1) instead of Beta(1,1)), reflecting our belief that expert-curated rules are likely effective.
 
-For the full mathematical treatment, see the [Theory section](../theory/00-background.md).
-
 ## Theoretical Foundations
 
 | Concept | Application in buildlog | Status |
