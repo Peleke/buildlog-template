@@ -165,7 +165,7 @@ def _init_mcp(settings_path: Path | None = None, global_mode: bool = False) -> N
 
     Args:
         settings_path: Path to settings.json. Defaults to .claude/settings.json
-        global_mode: If True, display global-specific messaging
+        global_mode: If True, also writes usage instructions to ~/.claude/CLAUDE.md
     """
     import json as json_module
 
@@ -190,19 +190,55 @@ def _init_mcp(settings_path: Path | None = None, global_mode: bool = False) -> N
         if "mcpServers" not in data:
             data["mcpServers"] = {}
 
-        if "buildlog" in data["mcpServers"]:
+        mcp_already_registered = "buildlog" in data["mcpServers"]
+
+        if not mcp_already_registered:
+            data["mcpServers"]["buildlog"] = {"command": "buildlog-mcp", "args": []}
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings_path.write_text(json_module.dumps(data, indent=2) + "\n")
+            click.echo(f"Registered buildlog MCP server in {location}")
+        else:
             click.echo(f"buildlog MCP server already registered in {location}")
-            return
 
-        data["mcpServers"]["buildlog"] = {"command": "buildlog-mcp", "args": []}
-
-        settings_path.parent.mkdir(parents=True, exist_ok=True)
-        settings_path.write_text(json_module.dumps(data, indent=2) + "\n")
-        click.echo(f"Registered buildlog MCP server in {location}")
+        # In global mode, also write/update ~/.claude/CLAUDE.md with usage instructions
         if global_mode:
-            click.echo("Claude Code now has access to buildlog tools in all projects.")
+            _init_global_claude_md(settings_path.parent)
+            click.echo(
+                "Claude Code now has buildlog tools + instructions in all projects."
+            )
+
     except Exception as e:
         click.echo(f"Warning: could not register MCP server: {e}", err=True)
+
+
+def _init_global_claude_md(claude_dir: Path) -> None:
+    """Write buildlog usage instructions to ~/.claude/CLAUDE.md.
+
+    Creates or appends to the global CLAUDE.md so Claude knows how to use
+    buildlog tools automatically in any project.
+    """
+    from buildlog.constants import CLAUDE_MD_GLOBAL_SECTION
+
+    claude_md_path = claude_dir / "CLAUDE.md"
+
+    try:
+        if claude_md_path.exists():
+            content = claude_md_path.read_text()
+            # Check if buildlog section already exists
+            if "## buildlog" in content:
+                click.echo("buildlog instructions already in ~/.claude/CLAUDE.md")
+                return
+            # Append to existing file
+            with open(claude_md_path, "a") as f:
+                f.write(CLAUDE_MD_GLOBAL_SECTION)
+            click.echo("Added buildlog instructions to ~/.claude/CLAUDE.md")
+        else:
+            # Create new file with header
+            header = "# Global Claude Instructions\n\nThese instructions apply to all projects.\n"
+            claude_md_path.write_text(header + CLAUDE_MD_GLOBAL_SECTION)
+            click.echo("Created ~/.claude/CLAUDE.md with buildlog instructions")
+    except Exception as e:
+        click.echo(f"Warning: could not write CLAUDE.md: {e}", err=True)
 
 
 @main.command("init-mcp")

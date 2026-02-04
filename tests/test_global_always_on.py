@@ -145,6 +145,134 @@ class TestInitMcpGlobal:
 
 
 # =============================================================================
+# 1b. Global CLAUDE.md Tests
+# =============================================================================
+
+
+class TestGlobalClaudeMd:
+    """Tests for ~/.claude/CLAUDE.md creation with --global flag."""
+
+    def test_global_creates_claude_md(self, runner, mock_home):
+        """--global creates ~/.claude/CLAUDE.md with instructions."""
+        result = runner.invoke(main, ["init-mcp", "--global"])
+        assert result.exit_code == 0
+
+        claude_md = mock_home / ".claude" / "CLAUDE.md"
+        assert claude_md.exists()
+
+    def test_global_claude_md_has_buildlog_section(self, runner, mock_home):
+        """--global CLAUDE.md contains buildlog section."""
+        runner.invoke(main, ["init-mcp", "--global"])
+
+        claude_md = mock_home / ".claude" / "CLAUDE.md"
+        content = claude_md.read_text()
+        assert "## buildlog" in content
+
+    def test_global_claude_md_has_always_on_header(self, runner, mock_home):
+        """--global CLAUDE.md mentions 'Always On'."""
+        runner.invoke(main, ["init-mcp", "--global"])
+
+        claude_md = mock_home / ".claude" / "CLAUDE.md"
+        content = claude_md.read_text()
+        assert "Always On" in content
+
+    def test_global_claude_md_has_tool_instructions(self, runner, mock_home):
+        """--global CLAUDE.md contains key tool instructions."""
+        runner.invoke(main, ["init-mcp", "--global"])
+
+        claude_md = mock_home / ".claude" / "CLAUDE.md"
+        content = claude_md.read_text()
+        # Check for key tools
+        assert "buildlog_overview" in content
+        assert "buildlog_commit" in content
+        assert "buildlog_gauntlet" in content
+        assert "buildlog_log_reward" in content
+
+    def test_global_claude_md_has_core_loop(self, runner, mock_home):
+        """--global CLAUDE.md contains the core loop workflow."""
+        runner.invoke(main, ["init-mcp", "--global"])
+
+        claude_md = mock_home / ".claude" / "CLAUDE.md"
+        content = claude_md.read_text()
+        assert (
+            "Core Loop" in content
+            or "after every significant commit" in content.lower()
+        )
+
+    def test_global_claude_md_mentions_downstream(self, runner, mock_home):
+        """--global CLAUDE.md mentions downstream systems."""
+        runner.invoke(main, ["init-mcp", "--global"])
+
+        claude_md = mock_home / ".claude" / "CLAUDE.md"
+        content = claude_md.read_text()
+        assert "downstream" in content.lower()
+
+    def test_global_claude_md_preserves_existing_content(self, runner, mock_home):
+        """--global appends to existing CLAUDE.md without overwriting."""
+        claude_dir = mock_home / ".claude"
+        claude_dir.mkdir()
+        existing_content = "# My Custom Instructions\n\nDo things my way.\n"
+        (claude_dir / "CLAUDE.md").write_text(existing_content)
+
+        runner.invoke(main, ["init-mcp", "--global"])
+
+        claude_md = claude_dir / "CLAUDE.md"
+        content = claude_md.read_text()
+        # Original content preserved
+        assert "My Custom Instructions" in content
+        assert "Do things my way" in content
+        # New content appended
+        assert "## buildlog" in content
+
+    def test_global_claude_md_idempotent(self, runner, mock_home):
+        """Running --global twice doesn't duplicate buildlog section."""
+        runner.invoke(main, ["init-mcp", "--global"])
+        runner.invoke(main, ["init-mcp", "--global"])
+
+        claude_md = mock_home / ".claude" / "CLAUDE.md"
+        content = claude_md.read_text()
+        # Should only have one buildlog section
+        assert content.count("## buildlog") == 1
+
+    def test_global_claude_md_output_message(self, runner, mock_home):
+        """--global shows message about CLAUDE.md creation."""
+        result = runner.invoke(main, ["init-mcp", "--global"])
+        assert "CLAUDE.md" in result.output
+
+    def test_global_claude_md_already_exists_message(self, runner, mock_home):
+        """Running --global twice shows 'already in' message for CLAUDE.md."""
+        runner.invoke(main, ["init-mcp", "--global"])
+        result = runner.invoke(main, ["init-mcp", "--global"])
+        assert "already" in result.output.lower()
+
+    def test_global_creates_header_for_new_file(self, runner, mock_home):
+        """New CLAUDE.md has a header explaining it's global instructions."""
+        runner.invoke(main, ["init-mcp", "--global"])
+
+        claude_md = mock_home / ".claude" / "CLAUDE.md"
+        content = claude_md.read_text()
+        assert "Global" in content
+        assert "all projects" in content.lower()
+
+    def test_global_claude_md_has_outputs_section(self, runner, mock_home):
+        """--global CLAUDE.md lists the output files for downstream consumption."""
+        runner.invoke(main, ["init-mcp", "--global"])
+
+        claude_md = mock_home / ".claude" / "CLAUDE.md"
+        content = claude_md.read_text()
+        assert "reward_events.jsonl" in content or "Outputs" in content
+
+    def test_local_mode_does_not_create_global_claude_md(
+        self, runner, mock_home, isolated_fs
+    ):
+        """Local init-mcp (without --global) doesn't touch ~/.claude/CLAUDE.md."""
+        runner.invoke(main, ["init-mcp"])
+
+        global_claude_md = mock_home / ".claude" / "CLAUDE.md"
+        assert not global_claude_md.exists()
+
+
+# =============================================================================
 # 2. Graceful Fallback Tests - Overview Command
 # =============================================================================
 
