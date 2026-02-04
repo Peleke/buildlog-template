@@ -160,11 +160,19 @@ def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
     click.echo("Start now: buildlog new my-first-task --quick")
 
 
-def _init_mcp() -> None:
-    """Register buildlog as an MCP server in .claude/settings.json."""
+def _init_mcp(settings_path: Path | None = None, global_mode: bool = False) -> None:
+    """Register buildlog as an MCP server in settings.json.
+
+    Args:
+        settings_path: Path to settings.json. Defaults to .claude/settings.json
+        global_mode: If True, display global-specific messaging
+    """
     import json as json_module
 
-    settings_path = Path(".claude") / "settings.json"
+    if settings_path is None:
+        settings_path = Path(".claude") / "settings.json"
+
+    location = "~/.claude/settings.json" if global_mode else ".claude/settings.json"
 
     try:
         if settings_path.exists():
@@ -172,7 +180,7 @@ def _init_mcp() -> None:
                 data = json_module.loads(settings_path.read_text())
             except json_module.JSONDecodeError:
                 click.echo(
-                    "Warning: .claude/settings.json is malformed, skipping MCP registration",
+                    f"Warning: {location} is malformed, skipping MCP registration",
                     err=True,
                 )
                 return
@@ -183,30 +191,46 @@ def _init_mcp() -> None:
             data["mcpServers"] = {}
 
         if "buildlog" in data["mcpServers"]:
-            click.echo("buildlog MCP server already registered")
+            click.echo(f"buildlog MCP server already registered in {location}")
             return
 
         data["mcpServers"]["buildlog"] = {"command": "buildlog-mcp", "args": []}
 
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         settings_path.write_text(json_module.dumps(data, indent=2) + "\n")
-        click.echo("Registered buildlog MCP server in .claude/settings.json")
+        click.echo(f"Registered buildlog MCP server in {location}")
+        if global_mode:
+            click.echo("Claude Code now has access to buildlog tools in all projects.")
     except Exception as e:
         click.echo(f"Warning: could not register MCP server: {e}", err=True)
 
 
 @main.command("init-mcp")
-def init_mcp():
+@click.option(
+    "--global",
+    "global_",
+    is_flag=True,
+    help="Register globally in ~/.claude/settings.json (works in any project)",
+)
+def init_mcp(global_: bool):
     """Register buildlog as an MCP server for Claude Code.
 
     Creates or updates .claude/settings.json with the buildlog MCP
     server configuration. Idempotent — safe to run multiple times.
 
+    Use --global to register in ~/.claude/settings.json so buildlog
+    tools are available in every project without per-project init.
+
     Examples:
 
-        buildlog init-mcp
+        buildlog init-mcp              # local (current project)
+        buildlog init-mcp --global     # global (all projects)
     """
-    _init_mcp()
+    if global_:
+        settings_path = Path.home() / ".claude" / "settings.json"
+        _init_mcp(settings_path=settings_path, global_mode=True)
+    else:
+        _init_mcp()
 
 
 @main.command("mcp-test")
@@ -254,6 +278,7 @@ def overview(output_json: bool):
     """Show the full state of your buildlog at a glance.
 
     Entries, skills, promoted rules, experiments — everything in one view.
+    Works even without buildlog init (shows uninitialized state).
 
     Examples:
 
@@ -264,9 +289,38 @@ def overview(output_json: bool):
 
     buildlog_dir = Path("buildlog")
 
+    # Handle uninitialized state gracefully
     if not buildlog_dir.exists():
-        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
-        raise SystemExit(1)
+        result = {
+            "initialized": False,
+            "entries": 0,
+            "skills": {
+                "total": 0,
+                "by_confidence": {},
+                "promoted": 0,
+                "rejected": 0,
+                "pending": 0,
+            },
+            "active_session": None,
+            "render_targets": [],
+            "message": "buildlog not initialized. Run 'buildlog init' to enable full features.",
+        }
+        if output_json:
+            click.echo(json_module.dumps(result, indent=2))
+        else:
+            click.echo("buildlog overview")
+            click.echo("=" * 40)
+            click.echo("  Status:      Not initialized")
+            click.echo()
+            click.echo("Get started:")
+            click.echo("  buildlog init --defaults    # Initialize buildlog")
+            click.echo()
+            click.echo("Or use globally without init:")
+            click.echo("  buildlog init-mcp --global  # Register MCP server globally")
+            click.echo(
+                "  buildlog gauntlet list      # Review personas work without init"
+            )
+        return
 
     # Count entries
     entries = sorted(buildlog_dir.glob("20??-??-??-*.md"))
@@ -314,6 +368,7 @@ def overview(output_json: bool):
     from buildlog.render import RENDERERS
 
     result = {
+        "initialized": True,
         "entries": len(entries),
         "skills": {
             "total": total_skills,
@@ -692,7 +747,7 @@ def distill(
     """Extract patterns from all buildlog entries.
 
     Parses the Improvements section of each buildlog entry and aggregates
-    insights into structured output (JSON or YAML).
+    insights into structured output (JSON or YAML). Returns empty result if not initialized.
 
     Examples:
 
@@ -702,11 +757,25 @@ def distill(
         buildlog distill --since 2026-01-01    # Filter by date
         buildlog distill --category workflow   # Filter by category
     """
+    import json as json_module
+
     buildlog_dir = Path("buildlog")
 
+    # Handle uninitialized state gracefully
     if not buildlog_dir.exists():
-        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
-        raise SystemExit(1)
+        empty_result = {
+            "initialized": False,
+            "patterns": [],
+            "statistics": {"total_patterns": 0, "total_entries": 0},
+            "message": "buildlog not initialized",
+        }
+        if fmt == "json":
+            click.echo(json_module.dumps(empty_result, indent=2))
+        else:
+            click.echo(
+                "# buildlog not initialized - run 'buildlog init' first\npatterns: []"
+            )
+        return
 
     # Convert datetime to date if provided
     since_date = since.date() if since else None
@@ -757,6 +826,7 @@ def stats(output_json: bool, detailed: bool, since_date: str | None):
     """Show buildlog statistics and analytics.
 
     Provides insights on buildlog usage, coverage, and quality.
+    Returns empty stats if not initialized.
 
     Examples:
 
@@ -765,11 +835,27 @@ def stats(output_json: bool, detailed: bool, since_date: str | None):
         buildlog stats --detailed   # Include top sources
         buildlog stats --since 2026-01-01
     """
+    import json as json_module
+
     buildlog_dir = Path("buildlog")
 
+    # Handle uninitialized state gracefully
     if not buildlog_dir.exists():
-        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
-        raise SystemExit(1)
+        empty_stats = {
+            "initialized": False,
+            "total_entries": 0,
+            "total_patterns": 0,
+            "categories": {},
+            "date_range": None,
+            "message": "buildlog not initialized",
+        }
+        if output_json:
+            click.echo(json_module.dumps(empty_stats, indent=2))
+        else:
+            click.echo("buildlog stats")
+            click.echo("=" * 40)
+            click.echo("  Not initialized. Run 'buildlog init' first.")
+        return
 
     # Parse since date if provided
     parsed_since = None
@@ -832,7 +918,7 @@ def skills(
     """Generate agent-consumable skills from buildlog patterns.
 
     Transforms distilled patterns into actionable rules with deduplication,
-    confidence scoring, and stable IDs.
+    confidence scoring, and stable IDs. Returns empty set if not initialized.
 
     Examples:
 
@@ -849,9 +935,31 @@ def skills(
     """
     buildlog_dir = Path("buildlog")
 
+    # Handle uninitialized state gracefully - return empty skill set
     if not buildlog_dir.exists():
-        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
-        raise SystemExit(1)
+        if fmt == "json":
+            import json as json_module
+
+            click.echo(
+                json_module.dumps(
+                    {
+                        "initialized": False,
+                        "skills": {},
+                        "total_skills": 0,
+                        "message": "buildlog not initialized",
+                    },
+                    indent=2,
+                )
+            )
+        elif fmt == "yaml":
+            click.echo(
+                "# buildlog not initialized - run 'buildlog init' first\nskills: {}\ntotal_skills: 0"
+            )
+        else:
+            click.echo(
+                "No buildlog/ directory found. Run 'buildlog init' to extract skills."
+            )
+        return
 
     # Convert datetime to date if provided
     since_date = since.date() if since else None
@@ -1041,7 +1149,7 @@ def status_cmd(min_confidence: str, output_json: bool):
     """Show extracted skills by category and confidence.
 
     Displays all skills extracted from buildlog entries, grouped by category,
-    with confidence levels and promotion status.
+    with confidence levels and promotion status. Returns empty state if not initialized.
 
     Examples:
 
@@ -1054,9 +1162,23 @@ def status_cmd(min_confidence: str, output_json: bool):
 
     buildlog_dir = Path("buildlog")
 
+    # Handle uninitialized state gracefully
     if not buildlog_dir.exists():
-        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
-        raise SystemExit(1)
+        empty_result = {
+            "initialized": False,
+            "total_skills": 0,
+            "total_entries": 0,
+            "skills": {},
+            "by_confidence": {"high": 0, "medium": 0, "low": 0},
+            "promotable_ids": [],
+            "error": None,
+        }
+        if output_json:
+            click.echo(json_module.dumps(empty_result, indent=2))
+        else:
+            click.echo("Skills: 0 total from 0 entries")
+            click.echo("  buildlog not initialized. Run 'buildlog init' first.")
+        return
 
     result = status(buildlog_dir, min_confidence=min_confidence)  # type: ignore[arg-type]
 
@@ -1198,6 +1320,7 @@ def diff_cmd(output_json: bool):
     """Show skills pending review (not yet promoted or rejected).
 
     Useful for seeing what's new since the last time you reviewed skills.
+    Returns empty diff if not initialized.
 
     Examples:
 
@@ -1209,9 +1332,22 @@ def diff_cmd(output_json: bool):
 
     buildlog_dir = Path("buildlog")
 
+    # Handle uninitialized state gracefully
     if not buildlog_dir.exists():
-        click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
-        raise SystemExit(1)
+        empty_result = {
+            "initialized": False,
+            "pending": {},
+            "total_pending": 0,
+            "already_promoted": 0,
+            "already_rejected": 0,
+            "error": None,
+        }
+        if output_json:
+            click.echo(json_module.dumps(empty_result, indent=2))
+        else:
+            click.echo("Pending: 0 | Promoted: 0 | Rejected: 0")
+            click.echo("  buildlog not initialized. Run 'buildlog init' first.")
+        return
 
     result = core_diff(buildlog_dir)
 
