@@ -20,7 +20,7 @@ buildlog overview                # Project state at a glance
 buildlog init-mcp                # Register MCP in .claude/settings.json (local)
 buildlog init-mcp --global       # Register in ~/.claude.json (global)
 buildlog init-mcp --global -y    # Global, skip confirmation prompts
-buildlog mcp-test                # Verify all 29 tools are registered
+buildlog mcp-test                # Verify all 31 tools are registered
 ```
 
 ### Flags for `init-mcp`
@@ -83,3 +83,34 @@ buildlog gauntlet loop <path>    # Auto-fix loop with HITL checkpoints
 ```
 
 See [Review Gauntlet](review-gauntlet.md) for details on personas and the gauntlet loop.
+
+## Storage
+
+```bash
+buildlog migrate                 # Migrate legacy JSON/JSONL to global SQLite DB
+buildlog migrate --dry-run       # Preview what would be migrated without writing
+buildlog export                  # Export data to JSONL files
+buildlog export --format jsonl   # Explicit format (jsonl is the default)
+buildlog export --output ./dump  # Write to a specific directory
+buildlog export --project <id>   # Export only a specific project
+buildlog export --tables rewards,skills  # Export specific tables only
+```
+
+### Flags for `migrate`
+
+| Flag | Effect |
+|------|--------|
+| `--dry-run` | Show what would be migrated without making changes |
+
+Migration is idempotent and non-destructive. Legacy files are renamed to `*.migrated` after successful migration, so they are preserved but no longer read by the system.
+
+### Flags for `export`
+
+| Flag | Effect |
+|------|--------|
+| `--format` | Output format (`jsonl` is currently the only supported format) |
+| `--output` | Directory to write exported files (defaults to current directory) |
+| `--project` | Export data for a specific project ID only |
+| `--tables` | Comma-separated list of tables to export (exports all by default) |
+
+See [Storage Architecture](storage-architecture.md) for details on the global SQLite backend and migration process.

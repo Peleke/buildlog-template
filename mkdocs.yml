@@ -65,6 +65,7 @@ nav:
   - Guides:
     - CLI Reference: guides/cli-reference.md
     - MCP Integration: guides/mcp-integration.md
+    - Storage Architecture: guides/storage-architecture.md
     - Experiments: guides/experiments.md
     - Review Gauntlet: guides/review-gauntlet.md
     - Multi-Agent Setup: guides/multi-agent.md

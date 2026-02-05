@@ -55,7 +55,7 @@ This command:
 
 ```bash
 claude mcp list              # should show: buildlog - ✓ Connected
-buildlog mcp-test            # lists all 29 tools
+buildlog mcp-test            # lists all 31 tools
 buildlog overview            # works anywhere (shows "not initialized" if no buildlog/)
 ```
 
@@ -78,6 +78,8 @@ buildlog init --defaults   # Non-interactive (CI-friendly)
 ```
 
 This creates the `buildlog/` directory with templates and registers MCP for this project only.
+
+New projects automatically use the **global SQLite storage backend** at `~/.buildlog/buildlog.db`. There is no per-project database setup required. If you have an existing project with legacy JSON/JSONL files in `.buildlog/`, run `buildlog migrate` to move that data into the global database. See the [Storage Architecture](../guides/storage-architecture.md) guide for details.
 
 ### Flags for `init`
 
