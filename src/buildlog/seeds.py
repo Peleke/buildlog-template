@@ -28,9 +28,11 @@ from __future__ import annotations
 __all__ = [
     "SeedRule",
     "SeedFile",
+    "ImportSeedResult",
     "load_seed_file",
     "load_all_seeds",
     "seeds_to_skills",
+    "import_seed_file",
     "get_package_seeds_dir",
     "get_default_seeds_dir",
 ]
@@ -119,6 +121,7 @@ class SeedRule:
     rationale: str
     tags: list[str] = field(default_factory=list)
     references: list[SeedReference] = field(default_factory=list)
+    provenance: dict[str, Any] | None = None
 
 
 @dataclass
@@ -138,15 +141,18 @@ class SeedFile:
                 SeedReference(url=r["url"], title=r["title"])
                 for r in rule_data.get("references", [])
             ]
+            raw_prov = rule_data.get("provenance")
+            provenance = raw_prov if isinstance(raw_prov, dict) else None
             rules.append(
                 SeedRule(
                     rule=rule_data["rule"],
-                    category=rule_data.get("category", "security"),
+                    category=rule_data.get("category", "general"),
                     context=rule_data.get("context", ""),
                     antipattern=rule_data.get("antipattern", ""),
                     rationale=rule_data.get("rationale", ""),
                     tags=rule_data.get("tags", []),
                     references=refs,
+                    provenance=provenance,
                 )
             )
         return cls(
@@ -181,6 +187,10 @@ def _validate_seed_schema(data: dict) -> bool:
         if not isinstance(rule, dict):
             return False
         if "rule" not in rule:
+            return False
+        # provenance must be a dict if present
+        prov = rule.get("provenance")
+        if prov is not None and not isinstance(prov, dict):
             return False
 
     return True
@@ -283,10 +293,158 @@ def seeds_to_skills(seed_file: SeedFile) -> list[Skill]:
             antipattern=seed.antipattern,
             rationale=seed.rationale,
             persona_tags=[seed_file.persona],
+            provenance=seed.provenance,
         )
         skills.append(skill)
 
     return skills
+
+
+@dataclass
+class ImportSeedResult:
+    """Result of importing a seed file."""
+
+    persona: str
+    rule_count: int
+    provenance_count: int
+    target_path: str
+    version_changed: bool
+    decayed_rules: int
+    message: str
+
+
+def _check_version_decay(
+    old_file: SeedFile,
+    new_file: SeedFile,
+    buildlog_dir: Path,
+) -> tuple[bool, int]:
+    """Compare graph_version between old and new seed files per rule.
+
+    For rules whose provenance.graph_version has changed, decay the
+    corresponding bandit arm to reduce stale learned signal.
+
+    Args:
+        old_file: Previously imported seed file.
+        new_file: Newly imported seed file.
+        buildlog_dir: Path to buildlog directory (for bandit state).
+
+    Returns:
+        Tuple of (version_changed, decayed_count).
+    """
+    from buildlog.core.bandit import ThompsonSamplingBandit
+
+    # Build lookup: rule text → provenance for old and new
+    def _version_map(sf: SeedFile) -> dict[str, str | None]:
+        result: dict[str, str | None] = {}
+        for rule in sf.rules:
+            version = None
+            if rule.provenance and "graph_version" in rule.provenance:
+                version = str(rule.provenance["graph_version"])
+            result[rule.rule] = version
+        return result
+
+    old_versions = _version_map(old_file)
+    new_versions = _version_map(new_file)
+
+    changed_rules: list[str] = []
+    for rule_text, new_ver in new_versions.items():
+        old_ver = old_versions.get(rule_text)
+        if old_ver is not None and new_ver is not None and old_ver != new_ver:
+            changed_rules.append(rule_text)
+
+    if not changed_rules:
+        return False, 0
+
+    # Decay bandit arms for changed rules
+    bandit_path = buildlog_dir / "bandit_state.jsonl"
+    if not bandit_path.exists():
+        return True, 0
+
+    bandit = ThompsonSamplingBandit(bandit_path)
+    decayed = 0
+    for rule_text in changed_rules:
+        # Find the category to generate the skill ID
+        for rule in new_file.rules:
+            if rule.rule == rule_text:
+                skill_id = _generate_skill_id(rule.category, rule_text)
+                if bandit.decay_arm(skill_id):
+                    decayed += 1
+                break
+
+    return True, decayed
+
+
+def import_seed_file(
+    source_path: Path,
+    target_dir: Path | None = None,
+    buildlog_dir: Path | None = None,
+) -> ImportSeedResult:
+    """Import a seed file, optionally detecting version changes and decaying bandit arms.
+
+    Args:
+        source_path: Path to the source YAML seed file.
+        target_dir: Directory to copy the seed file into. Defaults to
+            .buildlog/seeds/ in the current directory.
+        buildlog_dir: Path to buildlog directory for bandit state.
+            Defaults to ./buildlog.
+
+    Returns:
+        ImportSeedResult with import summary.
+
+    Raises:
+        FileNotFoundError: If source_path doesn't exist.
+        ValueError: If the source file is invalid.
+    """
+    import shutil
+
+    if not source_path.exists():
+        raise FileNotFoundError(f"Seed file not found: {source_path}")
+
+    # Load and validate source
+    new_file = load_seed_file(source_path)
+    if new_file is None:
+        raise ValueError(f"Invalid seed file: {source_path}")
+
+    # Resolve defaults
+    if target_dir is None:
+        target_dir = Path(".buildlog") / "seeds"
+    if buildlog_dir is None:
+        buildlog_dir = Path("buildlog")
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / source_path.name
+
+    # Check for version changes if target already exists
+    version_changed = False
+    decayed_rules = 0
+    if target_path.exists():
+        old_file = load_seed_file(target_path)
+        if old_file is not None:
+            version_changed, decayed_rules = _check_version_decay(
+                old_file, new_file, buildlog_dir
+            )
+
+    # Copy source to target
+    shutil.copy2(source_path, target_path)
+
+    # Count rules with provenance
+    provenance_count = sum(1 for r in new_file.rules if r.provenance is not None)
+
+    parts = [f"Imported {len(new_file.rules)} rules for {new_file.persona}"]
+    if provenance_count > 0:
+        parts.append(f"{provenance_count} with provenance")
+    if version_changed:
+        parts.append(f"version changed, {decayed_rules} arms decayed")
+
+    return ImportSeedResult(
+        persona=new_file.persona,
+        rule_count=len(new_file.rules),
+        provenance_count=provenance_count,
+        target_path=str(target_path),
+        version_changed=version_changed,
+        decayed_rules=decayed_rules,
+        message=" | ".join(parts),
+    )
 
 
 def get_rules_for_persona(all_skills: list[Skill], persona: str) -> list[Skill]:

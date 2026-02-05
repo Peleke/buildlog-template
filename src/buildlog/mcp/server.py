@@ -23,6 +23,7 @@ from buildlog.mcp.tools import (
     buildlog_gauntlet_loop,
     buildlog_gauntlet_prompt,
     buildlog_gauntlet_rules,
+    buildlog_import_seed,
     buildlog_init,
     buildlog_learn_from_review,
     buildlog_log_mistake,
@@ -83,6 +84,9 @@ mcp.tool()(buildlog_gauntlet_list_personas)
 # Storage tools
 mcp.tool()(buildlog_migrate)
 mcp.tool()(buildlog_export)
+
+# Seed import
+mcp.tool()(buildlog_import_seed)
 
 # P2: Nice-to-have
 mcp.tool()(buildlog_gauntlet_generate)

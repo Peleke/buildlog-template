@@ -2395,6 +2395,58 @@ def migrate(dry_run: bool, buildlog_dir: str):
         click.echo(line)
 
 
+@main.command("import-seed")
+@click.argument("source", type=click.Path(exists=True))
+@click.option(
+    "--target-dir",
+    type=click.Path(),
+    default=None,
+    help="Target directory for seed file (default: .buildlog/seeds)",
+)
+@click.option(
+    "--buildlog-dir",
+    type=click.Path(),
+    default="buildlog",
+    help="Path to buildlog directory",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def import_seed(
+    source: str, target_dir: str | None, buildlog_dir: str, output_json: bool
+):
+    """Import an external seed file (e.g. from qortex).
+
+    Copies the seed file to the seeds directory and optionally triggers
+    bandit decay if the graph_version has changed from a previous import.
+
+    Examples:
+
+        buildlog import-seed qortex-rules.yaml
+        buildlog import-seed rules.yaml --target-dir .buildlog/seeds
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.seeds import import_seed_file
+
+    try:
+        result = import_seed_file(
+            source_path=Path(source),
+            target_dir=Path(target_dir) if target_dir else None,
+            buildlog_dir=Path(buildlog_dir),
+        )
+    except (FileNotFoundError, ValueError) as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(f"✓ {result.message}")
+        click.echo(f"  Target: {result.target_path}")
+        if result.version_changed:
+            click.echo(f"  Decayed: {result.decayed_rules} bandit arms")
+
+
 @main.command("export")
 @click.option(
     "--format",

@@ -395,15 +395,15 @@ class TestFlowExperiment:
 
 
 class TestFlowMCPServer:
-    """Verify all 31 tools are registered in the MCP server."""
+    """Verify all 32 tools are registered in the MCP server."""
 
     @pytest.mark.asyncio
-    async def test_server_has_31_tools(self):
-        """MCP server should expose exactly 31 tools."""
+    async def test_server_has_32_tools(self):
+        """MCP server should expose exactly 32 tools."""
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 31
+        assert len(tools) == 32
 
     @pytest.mark.asyncio
     async def test_tool_metadata_valid(self):

@@ -653,6 +653,143 @@ class TestBanditIntegration:
 # =============================================================================
 
 
+class TestVersionAwareDecay:
+    """Tests for version-aware bandit decay (B6)."""
+
+    def test_decay_halves_learned_signal(self, bandit_path):
+        """Beta(5,3) with factor=0.5 → Beta(3,2)."""
+        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit.state.set_params("ctx", "rule", BetaParams(alpha=5.0, beta=3.0))
+        bandit.state.save(bandit_path)
+
+        result = bandit.decay_arm("rule", decay_factor=0.5, context="ctx")
+
+        assert result is True
+        params = bandit.state.get_params("ctx", "rule")
+        # new_alpha = 1.0 + (5.0 - 1.0) * 0.5 = 1.0 + 2.0 = 3.0
+        assert params.alpha == 3.0
+        # new_beta = 1.0 + (3.0 - 1.0) * 0.5 = 1.0 + 1.0 = 2.0
+        assert params.beta == 2.0
+
+    def test_decay_full_reset(self, bandit_path):
+        """factor=0.0 should reset to Beta(1,1)."""
+        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit.state.set_params("ctx", "rule", BetaParams(alpha=10.0, beta=5.0))
+        bandit.state.save(bandit_path)
+
+        bandit.decay_arm("rule", decay_factor=0.0, context="ctx")
+
+        params = bandit.state.get_params("ctx", "rule")
+        assert params.alpha == 1.0
+        assert params.beta == 1.0
+
+    def test_decay_no_change(self, bandit_path):
+        """factor=1.0 should leave params unchanged."""
+        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit.state.set_params("ctx", "rule", BetaParams(alpha=5.0, beta=3.0))
+        bandit.state.save(bandit_path)
+
+        bandit.decay_arm("rule", decay_factor=1.0, context="ctx")
+
+        params = bandit.state.get_params("ctx", "rule")
+        assert params.alpha == 5.0
+        assert params.beta == 3.0
+
+    def test_decay_nonexistent_returns_false(self, bandit_path):
+        """Decaying a non-existent rule should return False."""
+        bandit = ThompsonSamplingBandit(bandit_path)
+        result = bandit.decay_arm("nonexistent", context="ctx")
+        assert result is False
+
+    def test_decay_specific_context(self, bandit_path):
+        """Should only decay in the specified context."""
+        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit.state.set_params("ctx1", "rule", BetaParams(alpha=5.0, beta=3.0))
+        bandit.state.set_params("ctx2", "rule", BetaParams(alpha=5.0, beta=3.0))
+        bandit.state.save(bandit_path)
+
+        bandit.decay_arm("rule", decay_factor=0.5, context="ctx1")
+
+        # ctx1 decayed
+        assert bandit.state.get_params("ctx1", "rule").alpha == 3.0
+        # ctx2 unchanged
+        assert bandit.state.get_params("ctx2", "rule").alpha == 5.0
+
+    def test_decay_all_contexts(self, bandit_path):
+        """context=None should decay across all contexts."""
+        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit.state.set_params("ctx1", "rule", BetaParams(alpha=5.0, beta=3.0))
+        bandit.state.set_params("ctx2", "rule", BetaParams(alpha=5.0, beta=3.0))
+        bandit.state.save(bandit_path)
+
+        bandit.decay_arm("rule", decay_factor=0.5)
+
+        assert bandit.state.get_params("ctx1", "rule").alpha == 3.0
+        assert bandit.state.get_params("ctx2", "rule").alpha == 3.0
+
+
+class TestConfidenceWeightedBoosting:
+    """Tests for confidence-weighted seed boosting (B5)."""
+
+    def test_create_prior_with_confidence(self, bandit_path):
+        """confidence=0.5 should give half the seed boost."""
+        bandit = ThompsonSamplingBandit(bandit_path, seed_boost=2.0)
+        params = bandit._create_prior(is_seed=True, confidence=0.5)
+        # effective_boost = 2.0 * 0.5 = 1.0 → alpha = 1.0 + 1.0 = 2.0
+        assert params.alpha == 2.0
+        assert params.beta == 1.0
+
+    def test_create_prior_full_confidence(self, bandit_path):
+        """confidence=1.0 should give same result as no confidence arg."""
+        bandit = ThompsonSamplingBandit(bandit_path, seed_boost=2.0)
+        params_with = bandit._create_prior(is_seed=True, confidence=1.0)
+        params_without = bandit._create_prior(is_seed=True)
+        assert params_with.alpha == params_without.alpha
+        assert params_with.beta == params_without.beta
+
+    def test_create_prior_zero_confidence(self, bandit_path):
+        """confidence=0.0 should give no boost (alpha=1.0)."""
+        bandit = ThompsonSamplingBandit(bandit_path, seed_boost=2.0)
+        params = bandit._create_prior(is_seed=True, confidence=0.0)
+        assert params.alpha == 1.0
+        assert params.beta == 1.0
+
+    def test_create_prior_clamps_confidence(self, bandit_path):
+        """confidence > 1.0 should be clamped to 1.0."""
+        bandit = ThompsonSamplingBandit(bandit_path, seed_boost=2.0)
+        params = bandit._create_prior(is_seed=True, confidence=1.5)
+        # clamped to 1.0 → same as full boost → alpha = 3.0
+        assert params.alpha == 3.0
+        assert params.beta == 1.0
+
+    def test_select_uses_confidence_map(self, bandit_path):
+        """select() should pass confidence to _create_prior via confidence map."""
+        bandit = ThompsonSamplingBandit(bandit_path, seed_boost=2.0)
+        bandit.select(
+            candidates=["seed-rule"],
+            context="ctx",
+            k=1,
+            seed_rule_ids={"seed-rule"},
+            seed_confidence_map={"seed-rule": 0.5},
+        )
+        params = bandit.state.get_params("ctx", "seed-rule")
+        # effective_boost = 2.0 * 0.5 = 1.0 → alpha = 2.0
+        assert params.alpha == 2.0
+
+    def test_select_backward_compat_without_confidence(self, bandit_path):
+        """select() without confidence map should use full boost."""
+        bandit = ThompsonSamplingBandit(bandit_path, seed_boost=2.0)
+        bandit.select(
+            candidates=["seed-rule"],
+            context="ctx",
+            k=1,
+            seed_rule_ids={"seed-rule"},
+        )
+        params = bandit.state.get_params("ctx", "seed-rule")
+        # Full boost → alpha = 3.0
+        assert params.alpha == 3.0
+
+
 class TestThompsonSamplingIntuitions:
     """Tests that verify our intuitions about Thompson Sampling behavior.
 

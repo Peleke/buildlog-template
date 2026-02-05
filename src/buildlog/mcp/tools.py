@@ -1208,34 +1208,85 @@ def buildlog_migrate(
     }
 
 
+def buildlog_import_seed(
+    source: str,
+    target_dir: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Import an external seed file (e.g. from qortex) into the seeds directory.
+
+    Copies the seed file, validates it, and optionally triggers bandit decay
+    if the graph_version has changed from a previous import.
+
+    Args:
+        source: Path to the source YAML seed file.
+        target_dir: Directory to copy the seed file into.
+            Defaults to .buildlog/seeds/.
+        buildlog_dir: Path to buildlog directory.
+
+    Returns:
+        Dict with persona, rule_count, provenance_count, target_path,
+        version_changed, decayed_rules, message.
+
+    Example:
+        buildlog_import_seed(source="qortex-rules.yaml")
+    """
+    from buildlog.seeds import import_seed_file
+
+    try:
+        result = import_seed_file(
+            source_path=Path(source),
+            target_dir=Path(target_dir) if target_dir else None,
+            buildlog_dir=Path(buildlog_dir),
+        )
+        return asdict(result)
+    except (FileNotFoundError, ValueError) as e:
+        return {
+            "persona": "",
+            "rule_count": 0,
+            "provenance_count": 0,
+            "target_path": "",
+            "version_changed": False,
+            "decayed_rules": 0,
+            "message": "",
+            "error": str(e),
+        }
+
+
 def buildlog_export(
     format: str = "jsonl",
     output: str | None = None,
     project: str | None = None,
     tables: str | None = None,
     buildlog_dir: str = "buildlog",
+    include_manifest: bool = True,
+    include_rules_join: bool = True,
 ) -> dict:
     """Export data from the storage backend to files.
 
-    Writes event data (rewards, sessions, mistakes) to JSONL files.
-    Can export a single project or all projects at once.
+    Writes event data (rewards, sessions, mistakes, bandit_state,
+    learnings, skill_decisions) to JSONL files. Optionally generates
+    a manifest.json and rules.jsonl join table.
 
     Args:
         format: Output format (currently only 'jsonl').
         output: Directory to write files into.  None = return as string.
         project: Limit to a specific project ID.  None = current project
             (or all if global DB).
-        tables: Comma-separated table names (e.g., "rewards,sessions").
+        tables: Comma-separated table names (e.g., "rewards,sessions,bandit_state").
             None = all tables.
         buildlog_dir: Path to buildlog directory.
+        include_manifest: Generate manifest.json with export metadata.
+        include_rules_join: Generate rules.jsonl join table from seeds.
 
     Returns:
         Dict with summary message and export details.
 
     Example:
         buildlog_export(tables="rewards,sessions")
-        buildlog_export(output="./backup/")
+        buildlog_export(output="./backup/", tables="bandit_state,skill_decisions")
     """
+    from buildlog.seeds import get_default_seeds_dir
     from buildlog.storage import get_backend
     from buildlog.storage.exporters import JsonlExporter
 
@@ -1245,15 +1296,25 @@ def buildlog_export(
     output_path = Path(output) if output else None
     pid = project or project_id
 
+    seeds_dir = get_default_seeds_dir() if include_rules_join else None
+
     exporter = JsonlExporter()
     summary = exporter.export(
-        backend, project_id=pid, output_path=output_path, tables=table_list
+        backend,
+        project_id=pid,
+        output_path=output_path,
+        tables=table_list,
+        include_manifest=include_manifest,
+        include_rules_join=include_rules_join,
+        seeds_dir=seeds_dir,
     )
+
+    from buildlog.storage.exporters import _EXPORTABLE_TABLES
 
     return {
         "format": format,
         "project_id": pid,
-        "tables": table_list or ["rewards", "sessions", "mistakes"],
+        "tables": table_list or _EXPORTABLE_TABLES,
         "output": str(output_path) if output_path else None,
         "summary": summary,
     }
