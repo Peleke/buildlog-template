@@ -7,6 +7,33 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-02-05
+
+### Added
+- **Global SQLite storage backend** at `~/.buildlog/buildlog.db` — replaces per-project JSON/JSONL files
+- `StorageBackend` protocol with `SQLiteBackend` and `LegacyBackend` implementations
+- Automatic backend resolution: new projects get SQLite, legacy files still work as fallback
+- `buildlog migrate [--dry-run]` — migrate legacy files to global DB (non-destructive, idempotent)
+- `buildlog export [--format jsonl] [--output DIR] [--tables ...]` — export data to JSONL
+- `buildlog_migrate` and `buildlog_export` MCP tools (31 tools total)
+- Thread-safe connection pooling for MCP server (long-running process)
+- Transaction safety for multi-statement writes (BEGIN IMMEDIATE/COMMIT/ROLLBACK)
+- Storage architecture documentation with Mermaid diagrams
+- 58 new storage tests (908 total)
+
+### Changed
+- All storage operations now go through `StorageBackend` protocol
+- Project IDs derived from git remote URL hash (portable) or absolute path hash (fallback)
+- Tool count references updated from 29 to 31 across all docs, source, and tests
+- `save_learnings()` uses timestamp-based dedup instead of fragile count-based approach
+- Migration reports skipped records with line-level error detail
+
+### Fixed
+- Connection leak: `get_backend()` no longer opens a new connection per call
+- `promote()` now persists to storage backend (was only writing to legacy tracking file)
+- `save_id_set()` edge case with empty ID sets
+- SQL table name interpolation hardened with whitelist assertion
+
 ## [0.10.5] - 2026-02-04
 
 ### Changed
