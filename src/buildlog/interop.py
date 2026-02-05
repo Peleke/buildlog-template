@@ -7,7 +7,7 @@ Implements the consumer side of a producer/consumer directory protocol:
     ~/.qortex/seeds/failed/     <- consumer moves here on failure (+ .error sidecar)
     ~/.qortex/signals/projections.jsonl  <- optional append-only signal log
 
-Any producer following this layout works — not just qortex.
+Any producer following this layout works, not just qortex.
 """
 
 from __future__ import annotations
@@ -179,6 +179,32 @@ def _write_error_sidecar(failed_path: Path, error: str) -> None:
     sidecar.write_text(json.dumps(payload, indent=2))
 
 
+def _fail_file(
+    path: Path,
+    error: str,
+    source: "SeedSource",
+    result: "IngestResult",
+    persona: str = "",
+) -> None:
+    """Move a file to failed/, write sidecar, update result, and log signal."""
+    dest = source.failed_dir / path.name
+    shutil.move(str(path), str(dest))
+    _write_error_sidecar(dest, error)
+    result.failed += 1
+    result.files.append(
+        IngestFileResult(file=path.name, status="failed", persona=persona, error=error)
+    )
+    _append_signal(
+        source.signal_log,
+        {
+            "type": "seed_failed",
+            "file": path.name,
+            "error": error,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # B7c: Signal log appender
 # ---------------------------------------------------------------------------
@@ -271,73 +297,24 @@ def ingest_pending(
                         },
                     )
                 else:
-                    # Size violations get moved to failed
-                    dest = source.failed_dir / path.name
-                    shutil.move(str(path), str(dest))
-                    _write_error_sidecar(dest, error)
-                    result.failed += 1
-                    result.files.append(
-                        IngestFileResult(file=path.name, status="failed", error=error)
-                    )
-                    _append_signal(
-                        source.signal_log,
-                        {
-                            "type": "seed_failed",
-                            "file": path.name,
-                            "error": error,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                        },
-                    )
+                    _fail_file(path, error, source, result)
                 continue
 
             # Layer 5: YAML parse + Layer 6: schema validation
             seed_file = load_seed_file(path)
             if seed_file is None:
-                error_msg = "Invalid YAML or schema"
-                dest = source.failed_dir / path.name
-                shutil.move(str(path), str(dest))
-                _write_error_sidecar(dest, error_msg)
-                result.failed += 1
-                result.files.append(
-                    IngestFileResult(file=path.name, status="failed", error=error_msg)
-                )
-                _append_signal(
-                    source.signal_log,
-                    {
-                        "type": "seed_failed",
-                        "file": path.name,
-                        "error": error_msg,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    },
-                )
+                _fail_file(path, "Invalid YAML or schema", source, result)
                 continue
 
             # Layer 7: Content size limits
             if len(seed_file.rules) > config.max_rules_per_file:
-                error_msg = (
+                _fail_file(
+                    path,
                     f"Too many rules: {len(seed_file.rules)} "
-                    f"(max {config.max_rules_per_file})"
-                )
-                dest = source.failed_dir / path.name
-                shutil.move(str(path), str(dest))
-                _write_error_sidecar(dest, error_msg)
-                result.failed += 1
-                result.files.append(
-                    IngestFileResult(
-                        file=path.name,
-                        status="failed",
-                        persona=seed_file.persona,
-                        error=error_msg,
-                    )
-                )
-                _append_signal(
-                    source.signal_log,
-                    {
-                        "type": "seed_failed",
-                        "file": path.name,
-                        "error": error_msg,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    },
+                    f"(max {config.max_rules_per_file})",
+                    source,
+                    result,
+                    persona=seed_file.persona,
                 )
                 continue
 
@@ -350,34 +327,17 @@ def ingest_pending(
                 None,
             )
             if oversized_rule is not None:
-                error_msg = (
+                _fail_file(
+                    path,
                     f"Rule text too long: {len(oversized_rule.rule)} chars "
-                    f"(max {config.max_rule_text_length})"
-                )
-                dest = source.failed_dir / path.name
-                shutil.move(str(path), str(dest))
-                _write_error_sidecar(dest, error_msg)
-                result.failed += 1
-                result.files.append(
-                    IngestFileResult(
-                        file=path.name,
-                        status="failed",
-                        persona=seed_file.persona,
-                        error=error_msg,
-                    )
-                )
-                _append_signal(
-                    source.signal_log,
-                    {
-                        "type": "seed_failed",
-                        "file": path.name,
-                        "error": error_msg,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    },
+                    f"(max {config.max_rule_text_length})",
+                    source,
+                    result,
+                    persona=seed_file.persona,
                 )
                 continue
 
-            # All checks passed — import
+            # All checks passed -- import
             try:
                 import_result = import_seed_file(
                     source_path=path,
@@ -385,23 +345,7 @@ def ingest_pending(
                     buildlog_dir=buildlog_dir,
                 )
             except (FileNotFoundError, ValueError) as e:
-                error_msg = str(e)
-                dest = source.failed_dir / path.name
-                shutil.move(str(path), str(dest))
-                _write_error_sidecar(dest, error_msg)
-                result.failed += 1
-                result.files.append(
-                    IngestFileResult(file=path.name, status="failed", error=error_msg)
-                )
-                _append_signal(
-                    source.signal_log,
-                    {
-                        "type": "seed_failed",
-                        "file": path.name,
-                        "error": error_msg,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    },
-                )
+                _fail_file(path, str(e), source, result)
                 continue
 
             # Success — move to processed

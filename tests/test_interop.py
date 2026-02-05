@@ -469,8 +469,9 @@ class TestSignalLog:
 
     def test_signal_log_none(self, tmp_path):
         """No-op when signal_log is None."""
+        nonexistent = tmp_path / "should_not_exist.jsonl"
         _append_signal(None, {"type": "test"})
-        # Should not raise
+        assert not nonexistent.exists()
 
 
 # ===========================================================================
@@ -543,3 +544,79 @@ class TestMCPTool:
             result = buildlog_ingest_seeds(buildlog_dir=str(tmp_path / "buildlog"))
 
         assert result["total_ingested"] == 0
+
+
+# ===========================================================================
+# TestCLIIngestSeeds
+# ===========================================================================
+
+
+class TestCLIIngestSeeds:
+    """Tests for the CLI ingest-seeds command."""
+
+    def test_cli_happy_path(self, tmp_path):
+        """ingest-seeds ingests files and prints summary."""
+        from click.testing import CliRunner
+
+        from buildlog.cli import main
+
+        source = _make_source(tmp_path)
+        _write_seed(source.pending_dir)
+        config = InteropConfig(sources=[source])
+
+        runner = CliRunner()
+        with patch("buildlog.interop.load_interop_config", return_value=config):
+            result = runner.invoke(
+                main,
+                ["ingest-seeds", "--buildlog-dir", str(tmp_path / "buildlog")],
+            )
+
+        assert result.exit_code == 0
+        assert "1 ingested" in result.output
+
+    def test_cli_json_output(self, tmp_path):
+        """--json flag produces valid JSON."""
+        from click.testing import CliRunner
+
+        from buildlog.cli import main
+
+        source = _make_source(tmp_path)
+        _write_seed(source.pending_dir)
+        config = InteropConfig(sources=[source])
+
+        runner = CliRunner()
+        with patch("buildlog.interop.load_interop_config", return_value=config):
+            result = runner.invoke(
+                main,
+                [
+                    "ingest-seeds",
+                    "--json",
+                    "--buildlog-dir",
+                    str(tmp_path / "buildlog"),
+                ],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+        assert data[0]["ingested"] == 1
+
+    def test_cli_no_pending(self, tmp_path):
+        """Empty pending dir prints no-op message."""
+        from click.testing import CliRunner
+
+        from buildlog.cli import main
+
+        source = _make_source(tmp_path)
+        source.pending_dir.mkdir(parents=True)
+        config = InteropConfig(sources=[source])
+
+        runner = CliRunner()
+        with patch("buildlog.interop.load_interop_config", return_value=config):
+            result = runner.invoke(
+                main,
+                ["ingest-seeds", "--buildlog-dir", str(tmp_path / "buildlog")],
+            )
+
+        assert result.exit_code == 0
+        assert "No pending files" in result.output
