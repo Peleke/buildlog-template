@@ -33,23 +33,7 @@ which backend to use.
 
 When buildlog starts, it determines which backend to use for the current project:
 
-```mermaid
-flowchart TD
-    A["buildlog starts"] --> B{"Global DB exists?<br/>~/.buildlog/buildlog.db"}
-    B -- Yes --> C{"Project registered<br/>in global DB?"}
-    B -- No --> D{"Legacy .buildlog/<br/>has files?"}
-
-    C -- Yes --> E["SQLiteBackend"]
-    C -- No --> F["Auto-register project"] --> E
-
-    D -- Yes --> G["LegacyBackend<br/>(read-only fallback)"]
-    D -- No --> H["Create global DB +<br/>register project"] --> E
-
-    style E fill:#4ecdc4,color:#fff
-    style G fill:#ff6b6b,color:#fff
-    style F fill:#ffe66d,color:#333
-    style H fill:#ffe66d,color:#333
-```
+![Backend resolution flowchart](../diagrams/backend-resolution.svg)
 
 The four resolution cases in order:
 
@@ -84,33 +68,7 @@ buildlog migrate --dry-run   # preview without writing
 
 ### Data Flow
 
-```mermaid
-flowchart LR
-    subgraph Legacy[".buildlog/ (per-project)"]
-        A["reward_events.jsonl"]
-        B["promoted.json"]
-        C["review_learnings.json"]
-        D["sessions.json"]
-        E["bandit_state.json"]
-    end
-
-    subgraph Global["~/.buildlog/buildlog.db"]
-        F["rewards table"]
-        G["skills table"]
-        H["review_learnings table"]
-        I["sessions table"]
-        J["bandit_state table"]
-    end
-
-    A --> F
-    B --> G
-    C --> H
-    D --> I
-    E --> J
-
-    style Legacy fill:#ff6b6b,color:#fff
-    style Global fill:#4ecdc4,color:#fff
-```
+![Migration data flow](../diagrams/migration-flow.svg)
 
 ### Safety Guarantees
 

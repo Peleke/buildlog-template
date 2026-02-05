@@ -7,24 +7,15 @@
 
 ## Install
 
-=== "uv (recommended)"
+```bash
+# Recommended: install as a global tool
+pipx install buildlog
+# or: uv tool install buildlog
 
-    ```bash
-    uv pip install buildlog
-    ```
-
-=== "pip"
-
-    ```bash
-    pip install buildlog
-    ```
-
-=== "pipx (global CLI)"
-
-    ```bash
-    pipx install buildlog
-    # or: uv tool install buildlog
-    ```
+# Alternative: install in a virtual environment
+uv pip install buildlog
+# or: pip install buildlog
+```
 
 ## Optional extras
 

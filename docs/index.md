@@ -14,7 +14,7 @@ buildlog extracts decision patterns from your AI-assisted work and uses a [Thomp
 - **Extract** — distill entries into reusable engineering rules with semantic deduplication
 - **Select** — Thompson Sampling bandit automatically surfaces the most effective rules per context
 - **Measure** — track Repeated Mistake Rate (RMR) across experiments with statistical rigor
-- **Review** — run code through curated reviewer personas (Security Karen, Test Terrorist, Bragi)
+- **Review** — run code through curated reviewer personas (Security Karen, Test Terrorist)
 - **Integrate** — works with Claude Code, Cursor, GitHub Copilot, Windsurf, and Continue.dev
 
 ## Quick install
@@ -39,17 +39,7 @@ buildlog experiment report     # see the numbers
 
 ## The pipeline
 
-```mermaid
-flowchart LR
-    A["Work Sessions"] --> B["Structured Entries"]
-    B --> C["Extracted Rules"]
-    C --> D["Bandit Selection"]
-    D --> E["Rules Surfaced"]
-    E --> F["Human Feedback"]
-    F --> G["Reward Logged"]
-    G --> H["Bandit Updates"]
-    H --> D
-```
+![buildlog pipeline](diagrams/pipeline.svg)
 
 *Thompson Sampling closes the loop: rules are selected based on learned effectiveness, and feedback updates the model.*
 

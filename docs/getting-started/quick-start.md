@@ -64,21 +64,6 @@ buildlog_log_reward(
 
 ## The pipeline
 
-```mermaid
-flowchart LR
-    A["Work Sessions"] --> B["Structured Entries"]
-    B --> C["Extracted Rules"]
-    C --> D["Bandit Selection"]
-    D --> E["Rule Surfaced"]
-    E --> F["Human Feedback"]
-    F --> G["Reward Logged"]
-    G --> H["Bandit Updates"]
-    H --> D
-
-    style D fill:#4ecdc4,color:#fff
-    style F fill:#ff6b6b,color:#fff
-    style G fill:#4ecdc4,color:#fff
-    style H fill:#4ecdc4,color:#fff
-```
+![buildlog pipeline](../diagrams/pipeline.svg)
 
 *Thompson Sampling closes the loop: rules are selected based on learned effectiveness, and feedback updates the model.*

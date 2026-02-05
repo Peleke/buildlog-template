@@ -16,17 +16,8 @@ markdown_extensions:
       permalink: true
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.superfences
   - pymdownx.inlinehilite
-  - pymdownx.tabbed:
-      alternate_style: true
-
-extra_javascript:
-  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
 
 nav:
   - Home: index.md
