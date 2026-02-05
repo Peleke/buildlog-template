@@ -84,6 +84,7 @@ __all__ = [
     "ThompsonSamplingBandit",
     "DEFAULT_SEED_BOOST",
     "DEFAULT_CONTEXT",
+    "DEFAULT_DECAY_FACTOR",
 ]
 
 # ============================================================================
@@ -92,6 +93,7 @@ __all__ = [
 
 DEFAULT_SEED_BOOST = 2.0  # Extra α for seed rules (higher prior confidence)
 DEFAULT_CONTEXT = "general"  # Fallback when no error class specified
+DEFAULT_DECAY_FACTOR = 0.5  # Halve learned signal on version change
 
 
 # ============================================================================
@@ -474,6 +476,7 @@ class ThompsonSamplingBandit:
         context: str | None = None,
         k: int = 3,
         seed_rule_ids: set[str] | None = None,
+        seed_confidence_map: dict[str, float] | None = None,
     ) -> list[str]:
         """Select top-k rules using Thompson Sampling.
 
@@ -494,6 +497,9 @@ class ThompsonSamplingBandit:
             k: Number of rules to select.
             seed_rule_ids: Set of rule IDs that are from seeds (axioms).
                           These get boosted priors.
+            seed_confidence_map: Optional mapping of seed rule IDs to
+                confidence weights in [0, 1]. When provided, seed boost
+                is scaled by the confidence value for each rule.
 
         Returns:
             List of k rule IDs, ordered by their sampled values (best first).
@@ -501,6 +507,7 @@ class ThompsonSamplingBandit:
         """
         ctx = context or self.default_context
         seed_ids = seed_rule_ids or set()
+        conf_map = seed_confidence_map or {}
 
         # Sample from each candidate's distribution
         samples: list[tuple[str, float]] = []
@@ -511,7 +518,8 @@ class ThompsonSamplingBandit:
             if params is None:
                 # Initialize new arm
                 is_seed = rule_id in seed_ids
-                params = self._create_prior(is_seed)
+                confidence = conf_map.get(rule_id) if is_seed else None
+                params = self._create_prior(is_seed, confidence=confidence)
                 self.state.set_params(ctx, rule_id, params, is_seed)
 
             # THE KEY STEP: sample, don't use mean
@@ -654,7 +662,9 @@ class ThompsonSamplingBandit:
         ranked.sort(key=lambda x: x[1], reverse=True)
         return ranked[:k]
 
-    def _create_prior(self, is_seed: bool) -> BetaParams:
+    def _create_prior(
+        self, is_seed: bool, confidence: float | None = None
+    ) -> BetaParams:
         """Create prior distribution for a new arm.
 
         Seed rules (from gauntlet personas / axioms) get a boosted prior,
@@ -665,15 +675,23 @@ class ThompsonSamplingBandit:
 
         Args:
             is_seed: Whether this rule comes from seeds.
+            confidence: Optional confidence weight in [0, 1] for seed rules.
+                When provided, the seed boost is scaled by this factor:
+                ``effective_boost = seed_boost * clamp(confidence, 0, 1)``.
+                When None, the full seed_boost is used (backward compat).
 
         Returns:
             BetaParams with appropriate prior.
         """
         if is_seed:
-            # Boosted prior: as if rule already had seed_boost successes
+            if confidence is not None:
+                clamped = max(0.0, min(1.0, confidence))
+                effective_boost = self.seed_boost * clamped
+            else:
+                effective_boost = self.seed_boost
+            # Boosted prior: as if rule already had effective_boost successes
             # Beta(1 + boost, 1) → mean = (1 + boost) / (2 + boost)
-            # With boost=2: mean = 3/4 = 0.75 (optimistic)
-            return BetaParams(alpha=1.0 + self.seed_boost, beta=1.0)
+            return BetaParams(alpha=1.0 + effective_boost, beta=1.0)
         else:
             # Uninformative prior: maximum uncertainty
             # Beta(1, 1) is uniform → mean = 0.5
@@ -697,3 +715,53 @@ class ThompsonSamplingBandit:
                 del self.state.seed_flags[context]
 
         self.state.save(self.state_path)
+
+    def decay_arm(
+        self,
+        rule_id: str,
+        decay_factor: float = DEFAULT_DECAY_FACTOR,
+        context: str | None = None,
+    ) -> bool:
+        """Decay learned signal for an arm, preserving the prior baseline.
+
+        Used when a rule's upstream source changes (e.g. graph_version bump).
+        The learned signal (deviations from the Beta(1,1) prior) is scaled
+        down by the decay factor while keeping the baseline intact.
+
+        Formula:
+            new_alpha = 1.0 + (old_alpha - 1.0) * decay_factor
+            new_beta  = 1.0 + (old_beta  - 1.0) * decay_factor
+
+        Args:
+            rule_id: The rule whose arms should be decayed.
+            decay_factor: How much learned signal to retain (0.0 = full reset
+                to prior, 1.0 = no change, 0.5 = halve learned signal).
+            context: If provided, only decay in this context.
+                If None, decay across all contexts.
+
+        Returns:
+            True if at least one arm was decayed, False if rule not found.
+        """
+        # Clamp to [0.0, 1.0] to prevent invalid Beta parameters
+        decay_factor = max(0.0, min(1.0, decay_factor))
+
+        decayed = False
+
+        if context is not None:
+            contexts = [context]
+        else:
+            contexts = list(self.state.arms.keys())
+
+        for ctx in contexts:
+            params = self.state.get_params(ctx, rule_id)
+            if params is None:
+                continue
+
+            params.alpha = 1.0 + (params.alpha - 1.0) * decay_factor
+            params.beta = 1.0 + (params.beta - 1.0) * decay_factor
+            decayed = True
+
+        if decayed:
+            self.state.save(self.state_path)
+
+        return decayed

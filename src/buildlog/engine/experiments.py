@@ -139,6 +139,7 @@ def start_session(
     select_k: int = 3,
     available_rules: list[str] | None = None,
     seed_rule_ids: set[str] | None = None,
+    seed_confidence_map: dict[str, float] | None = None,
 ) -> StartSessionResult:
     """Start a new experiment session with bandit-selected rules.
 
@@ -179,6 +180,7 @@ def start_session(
             context=error_class or "general",
             k=min(select_k, len(current_rules)),
             seed_rule_ids=seed_rule_ids or set(),
+            seed_confidence_map=seed_confidence_map,
         )
 
     session = Session(

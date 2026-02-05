@@ -9,12 +9,14 @@ import pytest
 import yaml
 
 from buildlog.seeds import (
+    ImportSeedResult,
     SeedFile,
     SeedReference,
     SeedRule,
     get_default_seeds_dir,
     get_package_seeds_dir,
     get_rules_for_persona,
+    import_seed_file,
     load_all_seeds,
     load_seed_file,
     seeds_to_skills,
@@ -96,6 +98,80 @@ class TestSeedRule:
         )
         assert rule.tags == []
         assert rule.references == []
+
+
+class TestSeedRuleProvenance:
+    """Tests for provenance field on SeedRule (B2)."""
+
+    def test_seed_rule_with_provenance(self):
+        """SeedRule accepts a provenance dict."""
+        prov = {"source_id": "q-123", "confidence": 0.8, "graph_version": "v2"}
+        rule = SeedRule(
+            rule="Test rule",
+            category="general",
+            context="ctx",
+            antipattern="anti",
+            rationale="why",
+            provenance=prov,
+        )
+        assert rule.provenance == prov
+        assert rule.provenance["confidence"] == 0.8
+
+    def test_seed_rule_without_provenance(self):
+        """SeedRule defaults provenance to None."""
+        rule = SeedRule(
+            rule="Test rule",
+            category="general",
+            context="ctx",
+            antipattern="anti",
+            rationale="why",
+        )
+        assert rule.provenance is None
+
+    def test_from_dict_parses_provenance(self):
+        """from_dict should parse a valid provenance dict."""
+        data = {
+            "persona": "test",
+            "version": 1,
+            "rules": [
+                {
+                    "rule": "Test",
+                    "provenance": {
+                        "source_id": "q-1",
+                        "confidence": 0.9,
+                        "graph_version": "v3",
+                    },
+                }
+            ],
+        }
+        sf = SeedFile.from_dict(data)
+        assert sf.rules[0].provenance is not None
+        assert sf.rules[0].provenance["source_id"] == "q-1"
+
+    def test_from_dict_ignores_invalid_provenance(self):
+        """from_dict should set provenance=None when value is not a dict."""
+        data = {
+            "persona": "test",
+            "version": 1,
+            "rules": [
+                {
+                    "rule": "Test",
+                    "provenance": "not-a-dict",
+                }
+            ],
+        }
+        sf = SeedFile.from_dict(data)
+        assert sf.rules[0].provenance is None
+
+    def test_default_category_is_general(self):
+        """Default category should be 'general', not 'security'."""
+        data = {
+            "persona": "test",
+            "version": 1,
+            "rules": [{"rule": "No category specified"}],
+        }
+        sf = SeedFile.from_dict(data)
+        assert sf.rules[0].category == "general"
 
 
 class TestSeedFile:
@@ -296,6 +372,49 @@ class TestSeedsToSkills:
         assert "seed:security_karen:v3" in skills[0].sources
 
 
+class TestProvenanceForwardedToSkill:
+    """Tests for provenance forwarding from SeedRule to Skill (B3)."""
+
+    def test_provenance_forwarded_to_skill(self):
+        """Provenance on SeedRule should carry through to the Skill."""
+        prov = {"source_id": "q-42", "confidence": 0.7, "graph_version": "v2"}
+        seed_file = SeedFile(
+            persona="test",
+            version=1,
+            rules=[
+                SeedRule(
+                    rule="Provenance rule",
+                    category="general",
+                    context="ctx",
+                    antipattern="anti",
+                    rationale="why",
+                    provenance=prov,
+                )
+            ],
+        )
+        skills = seeds_to_skills(seed_file)
+        assert skills[0].provenance == prov
+        assert skills[0].provenance["source_id"] == "q-42"
+
+    def test_provenance_none_when_absent(self):
+        """Skill.provenance should be None when SeedRule has no provenance."""
+        seed_file = SeedFile(
+            persona="test",
+            version=1,
+            rules=[
+                SeedRule(
+                    rule="No provenance",
+                    category="general",
+                    context="ctx",
+                    antipattern="anti",
+                    rationale="why",
+                )
+            ],
+        )
+        skills = seeds_to_skills(seed_file)
+        assert skills[0].provenance is None
+
+
 class TestGetRulesForPersona:
     """Tests for persona filtering."""
 
@@ -475,3 +594,237 @@ class TestSeedSchemaValidation:
         result = load_seed_file(seed_path)
         assert result is not None
         assert len(result.rules) == 0
+
+    def test_rejects_non_dict_provenance(self, tmp_path: Path):
+        """Should reject rules where provenance is not a dict."""
+        seed_path = tmp_path / "bad_prov.yaml"
+        seed_path.write_text(
+            "persona: test\nrules:\n  - rule: Test\n    provenance: not-a-dict"
+        )
+        result = load_seed_file(seed_path)
+        assert result is None
+
+
+class TestImportSeedFile:
+    """Tests for seed file import with version decay."""
+
+    def _make_seed_yaml(
+        self,
+        persona: str = "test_persona",
+        rules: list[dict] | None = None,
+    ) -> str:
+        """Helper to create seed YAML content."""
+        if rules is None:
+            rules = [
+                {
+                    "rule": "Always validate input",
+                    "category": "security",
+                    "context": "User input handling",
+                    "antipattern": "Trusting raw input",
+                    "rationale": "Prevents injection attacks",
+                    "provenance": {
+                        "source_id": "q-001",
+                        "graph_version": "1",
+                        "confidence": 0.9,
+                    },
+                },
+                {
+                    "rule": "Use parameterized queries",
+                    "category": "security",
+                    "context": "Database access",
+                    "antipattern": "String concatenation in SQL",
+                    "rationale": "SQL injection prevention",
+                },
+            ]
+        data = {"persona": persona, "version": 1, "rules": rules}
+        return yaml.dump(data)
+
+    def test_import_valid_seed_file(self, tmp_path: Path):
+        """Happy path: import a valid seed file with provenance."""
+        source = tmp_path / "source" / "test_persona.yaml"
+        source.parent.mkdir()
+        source.write_text(self._make_seed_yaml())
+
+        target_dir = tmp_path / "target" / "seeds"
+
+        result = import_seed_file(
+            source, target_dir=target_dir, buildlog_dir=tmp_path / "buildlog"
+        )
+
+        assert result.persona == "test_persona"
+        assert result.rule_count == 2
+        assert result.provenance_count == 1
+        assert result.version_changed is False
+        assert result.decayed_rules == 0
+        assert "Imported 2 rules" in result.message
+        assert "1 with provenance" in result.message
+        # Target file should exist
+        assert (target_dir / "test_persona.yaml").exists()
+
+    def test_import_invalid_seed_file(self, tmp_path: Path):
+        """Should raise ValueError for invalid YAML schema."""
+        source = tmp_path / "bad.yaml"
+        source.write_text("- just\n- a\n- list")
+
+        with pytest.raises(ValueError, match="Invalid seed file"):
+            import_seed_file(source, target_dir=tmp_path / "seeds")
+
+    def test_import_nonexistent_source(self, tmp_path: Path):
+        """Should raise FileNotFoundError for missing source."""
+        source = tmp_path / "nonexistent.yaml"
+
+        with pytest.raises(FileNotFoundError, match="Seed file not found"):
+            import_seed_file(source)
+
+    def test_import_detects_version_change(self, tmp_path: Path):
+        """Should detect graph_version change between old and new seed."""
+        target_dir = tmp_path / "seeds"
+        target_dir.mkdir()
+        buildlog_dir = tmp_path / "buildlog"
+
+        # Write "old" version at target
+        old_rules = [
+            {
+                "rule": "Always validate input",
+                "category": "security",
+                "provenance": {"graph_version": "1"},
+            }
+        ]
+        old_yaml = yaml.dump({"persona": "test", "version": 1, "rules": old_rules})
+        (target_dir / "test.yaml").write_text(old_yaml)
+
+        # Write "new" version at source with changed graph_version
+        new_rules = [
+            {
+                "rule": "Always validate input",
+                "category": "security",
+                "provenance": {"graph_version": "2"},
+            }
+        ]
+        source = tmp_path / "source" / "test.yaml"
+        source.parent.mkdir()
+        source.write_text(
+            yaml.dump({"persona": "test", "version": 2, "rules": new_rules})
+        )
+
+        result = import_seed_file(
+            source, target_dir=target_dir, buildlog_dir=buildlog_dir
+        )
+
+        assert result.version_changed is True
+        assert "version changed" in result.message
+
+    def test_import_no_version_change(self, tmp_path: Path):
+        """Should not flag version change when graph_version is same."""
+        target_dir = tmp_path / "seeds"
+        target_dir.mkdir()
+        buildlog_dir = tmp_path / "buildlog"
+
+        rules = [
+            {
+                "rule": "Always validate input",
+                "category": "security",
+                "provenance": {"graph_version": "1"},
+            }
+        ]
+        seed_yaml = yaml.dump({"persona": "test", "version": 1, "rules": rules})
+
+        # Same content at both source and target
+        (target_dir / "test.yaml").write_text(seed_yaml)
+        source = tmp_path / "source" / "test.yaml"
+        source.parent.mkdir()
+        source.write_text(seed_yaml)
+
+        result = import_seed_file(
+            source, target_dir=target_dir, buildlog_dir=buildlog_dir
+        )
+
+        assert result.version_changed is False
+        assert result.decayed_rules == 0
+
+    def test_import_triggers_bandit_decay(self, tmp_path: Path):
+        """Should actually decay bandit arms when version changes."""
+        from buildlog.core.bandit import BetaParams, ThompsonSamplingBandit
+        from buildlog.skills import _generate_skill_id
+
+        target_dir = tmp_path / "seeds"
+        target_dir.mkdir()
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        rule_text = "Always validate input"
+        category = "security"
+        skill_id = _generate_skill_id(category, rule_text)
+
+        # Pre-populate bandit with learned signal for this rule
+        bandit_path = buildlog_dir / "bandit_state.jsonl"
+        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit.state.set_params("default", skill_id, BetaParams(alpha=5.0, beta=3.0))
+        bandit.state.save(bandit_path)
+
+        # Verify pre-decay state
+        pre_params = bandit.state.get_params("default", skill_id)
+        assert pre_params.alpha == 5.0
+
+        # Old version: graph_version=1
+        old_rules = [
+            {
+                "rule": rule_text,
+                "category": category,
+                "provenance": {"graph_version": "1"},
+            }
+        ]
+        (target_dir / "test.yaml").write_text(
+            yaml.dump({"persona": "test", "version": 1, "rules": old_rules})
+        )
+
+        # New version: graph_version=2
+        new_rules = [
+            {
+                "rule": rule_text,
+                "category": category,
+                "provenance": {"graph_version": "2"},
+            }
+        ]
+        source = tmp_path / "source" / "test.yaml"
+        source.parent.mkdir()
+        source.write_text(
+            yaml.dump({"persona": "test", "version": 2, "rules": new_rules})
+        )
+
+        result = import_seed_file(
+            source, target_dir=target_dir, buildlog_dir=buildlog_dir
+        )
+
+        assert result.version_changed is True
+        assert result.decayed_rules == 1
+
+        # Verify the bandit arm was actually decayed by re-loading
+        bandit2 = ThompsonSamplingBandit(bandit_path)
+        post_params = bandit2.state.get_params("default", skill_id)
+        # new_alpha = 1.0 + (5.0 - 1.0) * 0.5 = 3.0
+        assert post_params.alpha == 3.0
+
+    def test_import_creates_target_dir(self, tmp_path: Path):
+        """Should create target directory if it doesn't exist."""
+        source = tmp_path / "test.yaml"
+        source.write_text(
+            yaml.dump(
+                {
+                    "persona": "test",
+                    "version": 1,
+                    "rules": [{"rule": "Test rule"}],
+                }
+            )
+        )
+
+        target_dir = tmp_path / "deep" / "nested" / "seeds"
+        assert not target_dir.exists()
+
+        result = import_seed_file(
+            source, target_dir=target_dir, buildlog_dir=tmp_path / "buildlog"
+        )
+
+        assert target_dir.exists()
+        assert (target_dir / "test.yaml").exists()
+        assert result.rule_count == 1

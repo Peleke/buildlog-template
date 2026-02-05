@@ -325,7 +325,7 @@ def mcp_test():
     """Verify the MCP server starts and all tools are registered.
 
     Checks that the buildlog-mcp server can be imported and lists
-    all registered tools. Exits 0 if all 31 tools are found, 1 otherwise.
+    all registered tools. Exits 0 if all 32 tools are found, 1 otherwise.
 
     Examples:
 
@@ -346,7 +346,7 @@ def mcp_test():
         click.echo("Warning: could not inspect tools via internal API", err=True)
         tool_names = []
 
-    expected = 31
+    expected = 32
     click.echo(f"buildlog MCP server: {len(tool_names)} tools registered")
     for name in tool_names:
         click.echo(f"  {name}")
@@ -2395,6 +2395,111 @@ def migrate(dry_run: bool, buildlog_dir: str):
         click.echo(line)
 
 
+@main.command("import-seed")
+@click.argument("source", type=click.Path(exists=True))
+@click.option(
+    "--target-dir",
+    type=click.Path(),
+    default=None,
+    help="Target directory for seed file (default: .buildlog/seeds)",
+)
+@click.option(
+    "--buildlog-dir",
+    type=click.Path(),
+    default="buildlog",
+    help="Path to buildlog directory",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def import_seed(
+    source: str, target_dir: str | None, buildlog_dir: str, output_json: bool
+):
+    """Import an external seed file (e.g. from qortex).
+
+    Copies the seed file to the seeds directory and optionally triggers
+    bandit decay if the graph_version has changed from a previous import.
+
+    Examples:
+
+        buildlog import-seed qortex-rules.yaml
+        buildlog import-seed rules.yaml --target-dir .buildlog/seeds
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.seeds import import_seed_file
+
+    try:
+        result = import_seed_file(
+            source_path=Path(source),
+            target_dir=Path(target_dir) if target_dir else None,
+            buildlog_dir=Path(buildlog_dir),
+        )
+    except (FileNotFoundError, ValueError) as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo(f"✓ {result.message}")
+        click.echo(f"  Target: {result.target_path}")
+        if result.version_changed:
+            click.echo(f"  Decayed: {result.decayed_rules} bandit arms")
+
+
+@main.command("ingest-seeds")
+@click.option("--source", default=None, help="Filter to a specific source name")
+@click.option(
+    "--buildlog-dir",
+    type=click.Path(),
+    default="buildlog",
+    help="Path to buildlog directory",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def ingest_seeds_cmd(source: str | None, buildlog_dir: str, output_json: bool):
+    """Ingest pending seed files from external producers.
+
+    Scans configured seed source directories (default: ~/.qortex/seeds/pending)
+    for YAML seed files, validates and imports them, then moves files to
+    processed/ or failed/ directories.
+
+    Configure sources via ~/.buildlog/interop.yaml or use the default qortex layout.
+
+    Examples:
+
+        buildlog ingest-seeds
+        buildlog ingest-seeds --source qortex
+        buildlog ingest-seeds --json
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.interop import ingest_pending
+
+    results = ingest_pending(
+        source_name=source,
+        buildlog_dir=Path(buildlog_dir),
+    )
+
+    if output_json:
+        click.echo(json_module.dumps([asdict(r) for r in results], indent=2))
+    else:
+        for r in results:
+            click.echo(r.message)
+            for f in r.files:
+                icon = {"ingested": "✓", "failed": "✗", "skipped": "⊘"}.get(
+                    f.status, "?"
+                )
+                detail = f"  {icon} {f.file}"
+                if f.persona:
+                    detail += f" ({f.persona}, {f.rule_count} rules)"
+                if f.error:
+                    detail += f" — {f.error}"
+                click.echo(detail)
+        if not results:
+            click.echo("No sources configured.")
+
+
 @main.command("export")
 @click.option(
     "--format",
@@ -2416,7 +2521,10 @@ def migrate(dry_run: bool, buildlog_dir: str):
     "--tables",
     type=str,
     default=None,
-    help="Comma-separated table names (default: all). Options: rewards, sessions, mistakes",
+    help=(
+        "Comma-separated table names (default: all). "
+        "Options: rewards, sessions, mistakes, bandit_state, learnings, skill_decisions"
+    ),
 )
 def export_cmd(fmt: str, output: str | None, project: str | None, tables: str | None):
     """Export storage data to files.

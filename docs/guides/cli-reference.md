@@ -20,7 +20,7 @@ buildlog overview                # Project state at a glance
 buildlog init-mcp                # Register MCP in .claude/settings.json (local)
 buildlog init-mcp --global       # Register in ~/.claude.json (global)
 buildlog init-mcp --global -y    # Global, skip confirmation prompts
-buildlog mcp-test                # Verify all 31 tools are registered
+buildlog mcp-test                # Verify all 32 tools are registered
 ```
 
 ### Flags for `init-mcp`
@@ -89,11 +89,11 @@ See [Review Gauntlet](review-gauntlet.md) for details on personas and the gauntl
 ```bash
 buildlog migrate                 # Migrate legacy JSON/JSONL to global SQLite DB
 buildlog migrate --dry-run       # Preview what would be migrated without writing
-buildlog export                  # Export data to JSONL files
-buildlog export --format jsonl   # Explicit format (jsonl is the default)
+buildlog export                  # Export all 6 tables to JSONL files
 buildlog export --output ./dump  # Write to a specific directory
 buildlog export --project <id>   # Export only a specific project
-buildlog export --tables rewards,skills  # Export specific tables only
+buildlog export --tables rewards,bandit_state  # Export specific tables only
+buildlog import-seed seed.yaml   # Import external seed file
 ```
 
 ### Flags for `migrate`
@@ -111,6 +111,18 @@ Migration is idempotent and non-destructive. Legacy files are renamed to `*.migr
 | `--format` | Output format (`jsonl` is currently the only supported format) |
 | `--output` | Directory to write exported files (defaults to current directory) |
 | `--project` | Export data for a specific project ID only |
-| `--tables` | Comma-separated list of tables to export (exports all by default) |
+| `--tables` | Comma-separated list of tables: `rewards`, `sessions`, `mistakes`, `bandit_state`, `learnings`, `skill_decisions` (exports all by default) |
+
+Export also generates `manifest.json` (export metadata + record counts) and `rules.jsonl` (join table mapping buildlog IDs to upstream provenance fields).
+
+### Flags for `import-seed`
+
+| Flag | Effect |
+|------|--------|
+| `--target-dir` | Directory to copy seed file into (default: `.buildlog/seeds/`) |
+| `--buildlog-dir` | Path to buildlog directory for bandit state (default: `buildlog`) |
+| `--json` | Output result as JSON |
+
+If the target seed file already exists, `import-seed` compares `provenance.graph_version` per rule. Changed versions trigger 50% decay of learned bandit signal for affected rules.
 
 See [Storage Architecture](storage-architecture.md) for details on the global SQLite backend and migration process.

@@ -18,7 +18,7 @@ class TestCLAUDEMDConstant:
     """Tests for the CLAUDE.md constant."""
 
     def test_mentions_all_tools(self):
-        """All 31 tool names should appear in the constant."""
+        """All 33 tool names should appear in the constant."""
         tools = [
             "buildlog_status",
             "buildlog_promote",
@@ -51,6 +51,8 @@ class TestCLAUDEMDConstant:
             "buildlog_update",
             "buildlog_migrate",
             "buildlog_export",
+            "buildlog_import_seed",
+            "buildlog_ingest_seeds",
         ]
         for tool in tools:
             assert tool in CLAUDE_MD_BUILDLOG_SECTION, f"Missing tool: {tool}"
@@ -98,15 +100,15 @@ class TestE2EEntryWorkflow:
 
 
 class TestE2EMCPServer29Tools:
-    """Verify the MCP server has all 31 tools."""
+    """Verify the MCP server has all 33 tools."""
 
     @pytest.mark.asyncio
-    async def test_server_has_31_tools(self):
-        """Server should list 31 tools, each callable."""
+    async def test_server_has_33_tools(self):
+        """Server should list 33 tools, each callable."""
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 31
+        assert len(tools) == 33
 
         # Each should have a name and description
         for tool in tools:

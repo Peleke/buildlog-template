@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -52,6 +53,7 @@ def make_skill():
         tags: list[str] | None = None,
         confidence_score: float | None = None,
         confidence_tier: str | None = None,
+        provenance: dict[str, Any] | None = None,
     ) -> Skill:
         return Skill(
             id=id,
@@ -63,6 +65,7 @@ def make_skill():
             tags=tags if tags is not None else ["test"],
             confidence_score=confidence_score,
             confidence_tier=confidence_tier,
+            provenance=provenance,
         )
 
     return _make_skill

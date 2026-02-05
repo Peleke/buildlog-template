@@ -548,6 +548,23 @@ class TestSkillWithContinuousConfidence:
         assert skill.confidence_tier == "entrenched"
 
 
+class TestSkillProvenance:
+    """Tests for provenance field on Skill (B3)."""
+
+    def test_skill_to_dict_includes_provenance(self, make_skill):
+        """to_dict should include provenance when set."""
+        prov = {"source_id": "q-42", "confidence": 0.8}
+        skill = make_skill(provenance=prov)
+        d = skill.to_dict()
+        assert d["provenance"] == prov
+
+    def test_skill_to_dict_omits_none_provenance(self, make_skill):
+        """to_dict should omit provenance when None."""
+        skill = make_skill()
+        d = skill.to_dict()
+        assert "provenance" not in d
+
+
 class TestDeduplicationWithEarliestDate:
     """Tests for earliest_date tracking in deduplication."""
 

@@ -1208,34 +1208,101 @@ def buildlog_migrate(
     }
 
 
+def buildlog_import_seed(
+    source: str,
+    target_dir: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Import an external seed file (e.g. from qortex) into the seeds directory.
+
+    Copies the seed file, validates it, and optionally triggers bandit decay
+    if the graph_version has changed from a previous import.
+
+    Args:
+        source: Path to the source YAML seed file.
+        target_dir: Directory to copy the seed file into.
+            Defaults to .buildlog/seeds/.
+        buildlog_dir: Path to buildlog directory.
+
+    Returns:
+        Dict with persona, rule_count, provenance_count, target_path,
+        version_changed, decayed_rules, message.
+
+    Example:
+        buildlog_import_seed(source="qortex-rules.yaml")
+    """
+    from buildlog.seeds import import_seed_file
+
+    try:
+        # Resolve target_dir to prevent path traversal
+        resolved_target = Path(target_dir).resolve() if target_dir else None
+        if resolved_target is not None:
+            cwd = Path.cwd().resolve()
+            if not str(resolved_target).startswith(str(cwd)):
+                return {
+                    "persona": "",
+                    "rule_count": 0,
+                    "provenance_count": 0,
+                    "target_path": "",
+                    "version_changed": False,
+                    "decayed_rules": 0,
+                    "message": "",
+                    "error": f"target_dir must be within working directory: {resolved_target}",
+                }
+
+        result = import_seed_file(
+            source_path=Path(source),
+            target_dir=resolved_target,
+            buildlog_dir=Path(buildlog_dir),
+        )
+        return asdict(result)
+    except (FileNotFoundError, ValueError) as e:
+        return {
+            "persona": "",
+            "rule_count": 0,
+            "provenance_count": 0,
+            "target_path": "",
+            "version_changed": False,
+            "decayed_rules": 0,
+            "message": "",
+            "error": str(e),
+        }
+
+
 def buildlog_export(
     format: str = "jsonl",
     output: str | None = None,
     project: str | None = None,
     tables: str | None = None,
     buildlog_dir: str = "buildlog",
+    include_manifest: bool = True,
+    include_rules_join: bool = True,
 ) -> dict:
     """Export data from the storage backend to files.
 
-    Writes event data (rewards, sessions, mistakes) to JSONL files.
-    Can export a single project or all projects at once.
+    Writes event data (rewards, sessions, mistakes, bandit_state,
+    learnings, skill_decisions) to JSONL files. Optionally generates
+    a manifest.json and rules.jsonl join table.
 
     Args:
         format: Output format (currently only 'jsonl').
         output: Directory to write files into.  None = return as string.
         project: Limit to a specific project ID.  None = current project
             (or all if global DB).
-        tables: Comma-separated table names (e.g., "rewards,sessions").
+        tables: Comma-separated table names (e.g., "rewards,sessions,bandit_state").
             None = all tables.
         buildlog_dir: Path to buildlog directory.
+        include_manifest: Generate manifest.json with export metadata.
+        include_rules_join: Generate rules.jsonl join table from seeds.
 
     Returns:
         Dict with summary message and export details.
 
     Example:
         buildlog_export(tables="rewards,sessions")
-        buildlog_export(output="./backup/")
+        buildlog_export(output="./backup/", tables="bandit_state,skill_decisions")
     """
+    from buildlog.seeds import get_default_seeds_dir
     from buildlog.storage import get_backend
     from buildlog.storage.exporters import JsonlExporter
 
@@ -1245,17 +1312,61 @@ def buildlog_export(
     output_path = Path(output) if output else None
     pid = project or project_id
 
+    seeds_dir = get_default_seeds_dir() if include_rules_join else None
+
     exporter = JsonlExporter()
     summary = exporter.export(
-        backend, project_id=pid, output_path=output_path, tables=table_list
+        backend,
+        project_id=pid,
+        output_path=output_path,
+        tables=table_list,
+        include_manifest=include_manifest,
+        include_rules_join=include_rules_join,
+        seeds_dir=seeds_dir,
     )
+
+    from buildlog.storage.exporters import EXPORTABLE_TABLES
 
     return {
         "format": format,
         "project_id": pid,
-        "tables": table_list or ["rewards", "sessions", "mistakes"],
+        "tables": table_list or EXPORTABLE_TABLES,
         "output": str(output_path) if output_path else None,
         "summary": summary,
+    }
+
+
+def buildlog_ingest_seeds(
+    source: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Ingest pending seed files from external producers (e.g. qortex).
+
+    Scans configured seed source directories for pending YAML files,
+    validates them, imports into the local seeds directory, and moves
+    processed files. Supports multiple producers via ~/.buildlog/interop.yaml.
+
+    Args:
+        source: Filter to a specific source name (e.g. "qortex").
+            None = scan all configured sources.
+        buildlog_dir: Path to buildlog directory.
+
+    Returns:
+        Dict with per-source ingest results.
+    """
+    from dataclasses import asdict as _asdict
+
+    from buildlog.interop import ingest_pending
+
+    results = ingest_pending(
+        source_name=source,
+        buildlog_dir=Path(buildlog_dir),
+    )
+    return {
+        "sources": [_asdict(r) for r in results],
+        "total_ingested": sum(r.ingested for r in results),
+        "total_failed": sum(r.failed for r in results),
+        "total_skipped": sum(r.skipped for r in results),
     }
 
 

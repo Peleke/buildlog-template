@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Final, Literal, TypedDict
 
 if TYPE_CHECKING:
     from buildlog.llm import LLMBackend
@@ -90,6 +90,8 @@ class SkillDict(_SkillDictRequired, total=False):
     severity: str  # critical/major/minor/info
     scope: str  # global/module/function
     applicability: list[str]  # contexts where relevant
+    # Cross-system provenance (from qortex interop)
+    provenance: dict[str, Any]
 
 
 class SkillSetDict(TypedDict):
@@ -145,6 +147,8 @@ class Skill:
     severity: str | None = None
     scope: str | None = None
     applicability: list[str] = field(default_factory=list)
+    # Cross-system provenance (from qortex interop)
+    provenance: dict[str, Any] | None = None
 
     def to_dict(self) -> SkillDict:
         """Convert to dictionary for serialization.
@@ -179,6 +183,8 @@ class Skill:
             result["scope"] = self.scope
         if self.applicability:
             result["applicability"] = self.applicability
+        if self.provenance is not None:
+            result["provenance"] = self.provenance
         return result
 
 

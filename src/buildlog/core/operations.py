@@ -1419,29 +1419,42 @@ def _get_current_rules(buildlog_dir: Path) -> list[str]:
     return sorted(backend.load_id_set(project_id, "promoted"))
 
 
-def _get_seed_rule_ids(buildlog_dir: Path) -> set[str]:
-    """Get IDs of rules that come from seed personas.
+def _get_seed_rule_ids(buildlog_dir: Path) -> tuple[set[str], dict[str, float]]:
+    """Get IDs of rules that come from seed personas plus confidence map.
 
     Seed rules (from gauntlet personas like Test Terrorist, Security Karen)
     have non-empty persona_tags. These rules get boosted priors in the
     bandit because they represent curated, expert knowledge.
 
     Returns:
-        Set of rule IDs that have persona_tags.
+        Tuple of (seed_ids, confidence_map) where confidence_map maps
+        rule IDs to provenance confidence values for weighted boosting.
     """
     try:
         skill_set = generate_skills(buildlog_dir)
         seed_ids: set[str] = set()
+        confidence_map: dict[str, float] = {}
 
         for category_skills in skill_set.skills.values():
             for skill in category_skills:
                 if skill.persona_tags:  # Non-empty means it's from a seed
                     seed_ids.add(skill.id)
+                    # Extract confidence from provenance if available
+                    if (
+                        skill.provenance is not None
+                        and "confidence" in skill.provenance
+                    ):
+                        try:
+                            confidence_map[skill.id] = float(
+                                skill.provenance["confidence"]
+                            )
+                        except (ValueError, TypeError):
+                            pass
 
-        return seed_ids
+        return seed_ids, confidence_map
     except Exception:
         # If skill generation fails, treat no rules as seeds
-        return set()
+        return set(), {}
 
 
 def _load_sessions(buildlog_dir: Path) -> list[Session]:
@@ -1574,7 +1587,7 @@ def start_session(
 
         # Identify seed rules (those with persona_tags from gauntlet)
         # Seeds get boosted priors - we believe curated rules are good
-        seed_rule_ids = _get_seed_rule_ids(buildlog_dir)
+        seed_rule_ids, seed_confidence_map = _get_seed_rule_ids(buildlog_dir)
 
         # SELECT: Sample from Beta distributions, pick top-k
         selected_rules = bandit.select(
@@ -1582,6 +1595,7 @@ def start_session(
             context=error_class or "general",
             k=min(select_k, len(current_rules)),
             seed_rule_ids=seed_rule_ids,
+            seed_confidence_map=seed_confidence_map or None,
         )
 
     session = Session(
