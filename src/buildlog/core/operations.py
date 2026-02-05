@@ -648,6 +648,14 @@ def promote(
 
     message = renderer.render(found_skills)
 
+    # Persist promoted IDs to storage backend
+    backend, project_id = _get_storage(buildlog_dir)
+    existing = backend.load_id_set(project_id, "promoted")
+    now = datetime.now(timezone.utc).isoformat()
+    new_ids = existing | {s.id for s in found_skills}
+    metadata = {s.id: now for s in found_skills}
+    backend.save_id_set(project_id, "promoted", new_ids, metadata)  # type: ignore[arg-type]
+
     return PromoteResult(
         promoted_ids=[s.id for s in found_skills],
         target=target,

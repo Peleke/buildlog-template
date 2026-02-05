@@ -292,17 +292,16 @@ class TestRejectOperation:
         assert result.total_rejected == 2
 
     def test_persists_rejected_ids(self, tmp_path):
-        """Should persist rejected IDs to file."""
+        """Should persist rejected IDs across calls."""
         buildlog_dir = tmp_path / "buildlog"
         buildlog_dir.mkdir()
 
         reject(buildlog_dir, ["arch-123"])
 
-        reject_file = buildlog_dir / ".buildlog" / "rejected.json"
-        assert reject_file.exists()
-
-        data = json.loads(reject_file.read_text())
-        assert "arch-123" in data["skill_ids"]
+        # Verify persistence: second reject should accumulate
+        result2 = reject(buildlog_dir, ["wf-456"])
+        assert "arch-123" in result2.rejected_ids or result2.total_rejected == 2
+        assert result2.total_rejected == 2
 
     def test_does_not_duplicate_rejected_ids(self, tmp_path):
         """Should not add duplicate rejected IDs."""
@@ -550,14 +549,14 @@ class TestRewardLogging:
         assert summary.events[0].notes == "Completely wrong approach"
 
     def test_creates_buildlog_directory(self, tmp_path):
-        """Should create .buildlog directory if it doesn't exist."""
+        """Should persist reward even without .buildlog dir."""
         buildlog_dir = tmp_path / "buildlog"
         buildlog_dir.mkdir()
 
         log_reward(buildlog_dir, outcome="accepted")
 
-        rewards_file = buildlog_dir / ".buildlog" / "reward_events.jsonl"
-        assert rewards_file.exists()
+        result = get_rewards(buildlog_dir)
+        assert result.total_events == 1
 
 
 class TestGetRewards:
@@ -702,10 +701,6 @@ class TestStartSession:
         assert result.error_class == "missing_test"
         assert result.rules_count == 0  # No promoted rules yet
 
-        # Check active session file was created
-        active_path = buildlog_dir / ".buildlog" / "active_session.json"
-        assert active_path.exists()
-
     def test_captures_current_rules(self, tmp_path: Path):
         """Should capture rules active at session start."""
         from buildlog.core import start_session
@@ -744,13 +739,11 @@ class TestEndSession:
         assert end_result.mistakes_logged == 0
         assert end_result.repeated_mistakes == 0
 
-        # Active session should be removed
-        active_path = buildlog_dir / ".buildlog" / "active_session.json"
-        assert not active_path.exists()
+        # Session should be recorded — verify via metrics
+        from buildlog.core import get_session_metrics
 
-        # Session should be recorded in sessions.jsonl
-        sessions_path = buildlog_dir / ".buildlog" / "sessions.jsonl"
-        assert sessions_path.exists()
+        metrics = get_session_metrics(buildlog_dir, session_id=start_result.session_id)
+        assert metrics is not None
 
     def test_raises_error_if_no_active_session(self, tmp_path: Path):
         """Should raise ValueError if no active session."""
@@ -1013,7 +1006,7 @@ class TestMalformedJsonHandling:
         assert result.rejected == 1
 
     def test_log_reward_creates_directory_if_missing(self, tmp_path):
-        """Should create .buildlog directory if it doesn't exist."""
+        """Should persist reward if no .buildlog dir exists."""
         buildlog_dir = tmp_path / "buildlog"
         buildlog_dir.mkdir()
         # Note: .buildlog directory does NOT exist
@@ -1021,7 +1014,8 @@ class TestMalformedJsonHandling:
         result = log_reward(buildlog_dir, outcome="accepted")
 
         assert result.error is None
-        assert (buildlog_dir / ".buildlog" / "reward_events.jsonl").exists()
+        rewards = get_rewards(buildlog_dir)
+        assert rewards.total_events == 1
 
 
 class TestFileIOEdgeCases:

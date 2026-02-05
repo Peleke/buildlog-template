@@ -150,9 +150,12 @@ class TestGauntletProcessIssues:
         # Learnings should be persisted
         assert result.learnings_persisted >= 0  # May be 0 if dedup happens
 
-        # Check learnings file exists
-        learnings_file = buildlog_dir / ".buildlog" / "review_learnings.json"
-        assert learnings_file.exists()
+        # Verify persistence via backend
+        from buildlog.storage import get_backend
+
+        backend, pid = get_backend(buildlog_dir, project_root=tmp_path)
+        data = backend.load_learnings(pid)
+        assert "learnings" in data
 
     def test_uses_custom_source(self, tmp_path: Path):
         """Should use custom source for learnings."""

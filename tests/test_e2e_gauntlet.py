@@ -168,10 +168,11 @@ class TestFullLoopExtractToLearn:
         assert len(result.new_learnings) == 2
         assert len(result.reinforced_learnings) == 0
 
-        # Verify persistence
-        learnings_path = buildlog_dir / ".buildlog" / "review_learnings.json"
-        assert learnings_path.exists()
-        data = json.loads(learnings_path.read_text())
+        # Verify persistence via backend
+        from buildlog.storage import get_backend
+
+        backend, pid = get_backend(buildlog_dir, project_root=tmp_path)
+        data = backend.load_learnings(pid)
         assert len(data["learnings"]) == 2
 
 
@@ -234,9 +235,11 @@ class TestGauntletLearnPersistsAndReinforces:
         assert len(r2.reinforced_learnings) == 2
         assert len(r2.new_learnings) == 1
 
-        # Verify reinforcement counts
-        learnings_path = buildlog_dir / ".buildlog" / "review_learnings.json"
-        data = json.loads(learnings_path.read_text())
+        # Verify reinforcement counts via backend
+        from buildlog.storage import get_backend
+
+        backend, pid = get_backend(buildlog_dir, project_root=tmp_path)
+        data = backend.load_learnings(pid)
 
         for lid in r2.reinforced_learnings:
             learning = data["learnings"][lid]
