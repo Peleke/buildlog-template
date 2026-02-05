@@ -7,6 +7,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-02-05
+
+### Added
+- Optional `*_file` parameters on 4 MCP tools that accept large structured data
+  - `buildlog_gauntlet_issues`: `issues_file` (alternative to `issues`)
+  - `buildlog_learn_from_review`: `issues_file` (alternative to `issues`)
+  - `buildlog_gauntlet_accept_risk`: `issues_file` (alternative to `remaining_issues`)
+  - `buildlog_gauntlet_generate`: `source_file` (alternative to `source_text`)
+- `_resolve_file_or_inline` and `_resolve_text_file_or_inline` helpers with mutual exclusion enforcement
+- 19 new tests for file-based parameter resolution (48 total in test_mcp_tools.py)
+
+### Fixed
+- `buildlog_log_reward` example in quick-start guide used incorrect parameter names
+
 ## [0.11.0] - 2026-02-05
 
 ### Added

@@ -55,10 +55,9 @@ Log reward signals when rules help (or don't).
 ```python
 # Via MCP
 buildlog_log_reward(
-    skill_id="arch-123",
-    reward=1,           # 1 = helped, 0 = didn't help
-    context="type-errors",
-    outcome="Caught the bug before commit"
+    outcome="accepted",
+    rules_active=["arch-123"],
+    notes="Caught the bug before commit"
 )
 ```
 
