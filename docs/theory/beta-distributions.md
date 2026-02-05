@@ -29,6 +29,8 @@ For a restaurant you've never visited: **Beta(1, 1)**
 
 ### What the shape tells you
 
+![Beta distribution shapes](../diagrams/beta-shapes.svg)
+
 | Distribution | Shape | Meaning |
 |-------------|-------|---------|
 | Beta(1, 1) | Flat line | "I have no idea. Could be anything." |
@@ -100,6 +102,8 @@ The optimistic prior for curated rules is a deliberate choice: it takes more evi
 ## How data overwhelms the prior
 
 Priors matter when you have little data. They stop mattering as data accumulates.
+
+![Prior washout](../diagrams/prior-washout.svg)
 
 | Observations | Prior Beta(3, 1) | Posterior (4 success, 1 failure) | Mean |
 |-------------|------------------|----------------------------------|------|

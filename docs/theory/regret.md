@@ -46,6 +46,8 @@ Night 1-5: try 5 places. Night 6-30: mostly go to the best one, occasionally try
 
 This is where the math helps.
 
+![Regret curves](../diagrams/regret-curves.svg)
+
 ## How fast can regret grow?
 
 Theoretical computer science gives us bounds on how well any algorithm can do:
