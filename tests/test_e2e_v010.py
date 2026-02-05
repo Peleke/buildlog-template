@@ -99,12 +99,12 @@ class TestE2EMCPServer29Tools:
     """Verify the MCP server has all 29 tools."""
 
     @pytest.mark.asyncio
-    async def test_server_has_29_tools(self):
-        """Server should list 29 tools, each callable."""
+    async def test_server_has_31_tools(self):
+        """Server should list 31 tools, each callable."""
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 29
+        assert len(tools) == 31
 
         # Each should have a name and description
         for tool in tools:

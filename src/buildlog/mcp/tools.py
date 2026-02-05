@@ -1033,6 +1033,90 @@ def buildlog_gauntlet_generate(
     return asdict(result)
 
 
+def buildlog_migrate(
+    dry_run: bool = False,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Migrate legacy JSON/JSONL files to the global SQLite database.
+
+    Moves per-project data from buildlog/.buildlog/*.json(l) files into
+    ~/.buildlog/buildlog.db.  Original files are renamed to *.migrated
+    (not deleted).  Safe to run multiple times — idempotent.
+
+    Args:
+        dry_run: If True, show what would happen without writing anything.
+        buildlog_dir: Path to buildlog directory.
+
+    Returns:
+        Dict with lines (migration log) and summary.
+
+    Example:
+        buildlog_migrate(dry_run=True)  # Preview
+        buildlog_migrate()              # Run it
+    """
+    from buildlog.storage.migrate import migrate_project
+
+    lines = migrate_project(
+        Path(buildlog_dir),
+        dry_run=dry_run,
+    )
+    return {
+        "lines": lines,
+        "summary": lines[-1] if lines else "Nothing to do.",
+    }
+
+
+def buildlog_export(
+    format: str = "jsonl",
+    output: str | None = None,
+    project: str | None = None,
+    tables: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Export data from the storage backend to files.
+
+    Writes event data (rewards, sessions, mistakes) to JSONL files.
+    Can export a single project or all projects at once.
+
+    Args:
+        format: Output format (currently only 'jsonl').
+        output: Directory to write files into.  None = return as string.
+        project: Limit to a specific project ID.  None = current project
+            (or all if global DB).
+        tables: Comma-separated table names (e.g., "rewards,sessions").
+            None = all tables.
+        buildlog_dir: Path to buildlog directory.
+
+    Returns:
+        Dict with summary message and export details.
+
+    Example:
+        buildlog_export(tables="rewards,sessions")
+        buildlog_export(output="./backup/")
+    """
+    from buildlog.storage import get_backend
+    from buildlog.storage.exporters import JsonlExporter
+
+    backend, project_id = get_backend(Path(buildlog_dir))
+
+    table_list = [t.strip() for t in tables.split(",")] if tables else None
+    output_path = Path(output) if output else None
+    pid = project or project_id
+
+    exporter = JsonlExporter()
+    summary = exporter.export(
+        backend, project_id=pid, output_path=output_path, tables=table_list
+    )
+
+    return {
+        "format": format,
+        "project_id": pid,
+        "tables": table_list or ["rewards", "sessions", "mistakes"],
+        "output": str(output_path) if output_path else None,
+        "summary": summary,
+    }
+
+
 def buildlog_init(
     defaults: bool = True,
     no_claude_md: bool = False,
