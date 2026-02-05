@@ -18,13 +18,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - **Export manifest** — `manifest.json` generated with `exported_at`, `project_id`, and per-table record counts
 - **Rules join table** — `rules.jsonl` maps `buildlog_id` to upstream provenance fields (`source_id`, `source_domain`, `graph_version`, etc.)
 - 30 new tests across seeds, skills, bandit, and export modules (966 total)
+- **B7: Shared directory protocol** — `ingest_pending()` consumer-side ingest from external producers with 7-layer security validation
+- **`buildlog ingest-seeds`** CLI command and `buildlog_ingest_seeds` MCP tool (33 tools total)
+- **Signal log** — append-only JSONL event log for seed ingest observability
+- **Error sidecars** — `.error` JSON files written next to failed seed files
+- **Interop config** — `~/.buildlog/interop.yaml` for multi-source seed ingestion
+- 31 new interop tests (997 total)
+- SVG plots for theory docs (beta distributions, regret curves, Thompson Sampling convergence)
 
 ### Changed
 - Default seed rule category changed from `"security"` to `"general"` (less opinionated default)
 - `_get_seed_rule_ids()` now returns `(set[str], dict[str, float])` tuple with confidence map
 - `ThompsonSamplingBandit.select()` accepts optional `seed_confidence_map` parameter
 - `JsonlExporter.export()` accepts `include_manifest`, `include_rules_join`, `seeds_dir` params
-- Tool count references updated from 31 to 32 across all docs, source, and tests
+- Tool count references updated from 31 to 33 across all docs, source, and tests
 
 ## [0.11.1] - 2026-02-05
 
