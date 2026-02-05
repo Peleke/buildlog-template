@@ -119,7 +119,7 @@ pipx install buildlog         # or: uv tool install buildlog
 buildlog init-mcp --global -y # registers MCP + writes instructions to ~/.claude/CLAUDE.md
 ```
 
-That's it. Claude Code now has all 31 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
+That's it. Claude Code now has all 32 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
 
 The `--global` flag:
 - Registers the MCP server in `~/.claude.json` (Claude Code's global config)
@@ -150,7 +150,7 @@ npx @peleke.s/buildlog init
 ### Verify installation
 
 ```bash
-buildlog mcp-test          # verify all 31 tools are registered
+buildlog mcp-test          # verify all 32 tools are registered
 buildlog overview          # check project state (works without init in global mode)
 ```
 

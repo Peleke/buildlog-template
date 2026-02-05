@@ -85,15 +85,20 @@ The `buildlog export` command dumps data from the global SQLite database into JS
 files for portability, backup, or external analysis.
 
 ```bash
-buildlog export                              # export everything for current project
-buildlog export --output ./backup            # write to a specific directory
-buildlog export --project <id>               # export a specific project
-buildlog export --tables rewards,skills      # export only specific tables
-buildlog export --format jsonl               # explicit format (jsonl is the default)
+buildlog export                                            # export all 6 tables
+buildlog export --output ./backup                          # write to a specific directory
+buildlog export --project <id>                             # export a specific project
+buildlog export --tables rewards,bandit_state,learnings    # export specific tables
 ```
+
+**Available tables:** `rewards`, `sessions`, `mistakes`, `bandit_state`, `learnings`, `skill_decisions`
 
 Each table is exported as a separate `.jsonl` file, one JSON object per line. The
 output directory defaults to the current working directory.
+
+Additionally, export generates:
+- **`manifest.json`** — export metadata with `exported_at`, `project_id`, and per-table record counts
+- **`rules.jsonl`** — join table mapping `buildlog_id` to upstream provenance fields (`source_id`, `source_domain`, `graph_version`, etc.) from seed files
 
 ## When to Migrate
 

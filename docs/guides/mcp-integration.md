@@ -21,7 +21,7 @@ This writes to:
 
 ```bash
 claude mcp list           # should show: buildlog - ✓ Connected
-buildlog mcp-test         # lists all 31 tools, exits 0 if correct
+buildlog mcp-test         # lists all 32 tools, exits 0 if correct
 buildlog overview         # works anywhere (shows project state or "not initialized")
 ```
 
@@ -95,7 +95,8 @@ Claude Code reads `~/.claude.json` for global MCP servers. The local `.claude/se
 | `buildlog_entry_new` | Create a new buildlog journal entry |
 | `buildlog_entry_list` | List all buildlog journal entries |
 | `buildlog_migrate` | Migrate legacy JSON/JSONL files to global SQLite database |
-| `buildlog_export` | Export storage data to JSONL files |
+| `buildlog_export` | Export storage data to JSONL files (6 tables + manifest + rules join) |
+| `buildlog_import_seed` | Import external seed files with version-aware bandit decay |
 
 ## Always-On Workflow
 
