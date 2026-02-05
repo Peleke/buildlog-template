@@ -325,7 +325,7 @@ def mcp_test():
     """Verify the MCP server starts and all tools are registered.
 
     Checks that the buildlog-mcp server can be imported and lists
-    all registered tools. Exits 0 if all 32 tools are found, 1 otherwise.
+    all registered tools. Exits 0 if all 33 tools are found, 1 otherwise.
 
     Examples:
 

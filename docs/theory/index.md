@@ -4,7 +4,7 @@
 
 You already solve bandit problems every day. You just don't call them that.
 
-This tutorial series builds from everyday decision-making to the exact algorithm buildlog uses to select rules. No prerequisites beyond curiosity. By the end, the math won't feel like math — it'll feel like common sense you finally have notation for.
+This series builds from everyday decision-making to the exact algorithm buildlog uses to select rules. No prerequisites beyond curiosity. By the end, the math won't feel like math — it'll feel like common sense you finally have notation for.
 
 ## The arc
 
@@ -20,7 +20,7 @@ This tutorial series builds from everyday decision-making to the exact algorithm
 
 buildlog uses a Thompson Sampling contextual bandit to decide which engineering rules to surface in your editor. The "restaurants" are rules. The "meals" are coding sessions. The "reviews" are whether you made the same mistake again.
 
-Everything in this tutorial series maps directly to `src/buildlog/core/bandit.py`. The theory isn't academic — it's the code running in your terminal.
+Everything in this series maps directly to `src/buildlog/core/bandit.py`. The theory isn't academic — it's the code running in your terminal.
 
 ## Who this is for
 
