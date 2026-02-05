@@ -9,9 +9,14 @@ from pathlib import Path
 import pytest
 
 from buildlog.mcp.tools import (
+    _resolve_file_or_inline,
+    _resolve_text_file_or_inline,
     buildlog_diff,
     buildlog_entry_list,
     buildlog_entry_new,
+    buildlog_gauntlet_accept_risk,
+    buildlog_gauntlet_generate,
+    buildlog_gauntlet_issues,
     buildlog_gauntlet_rules,
     buildlog_learn_from_review,
     buildlog_overview,
@@ -482,3 +487,204 @@ class TestBuildlogEntryList:
         result = buildlog_entry_list(buildlog_dir=str(bd))
         assert result["count"] == 0
         assert result["entries"] == []
+
+
+# =============================================================================
+# File-based parameter resolution tests (v0.11.1)
+# =============================================================================
+
+
+class TestResolveFileOrInline:
+    """Tests for _resolve_file_or_inline helper."""
+
+    def test_returns_inline(self):
+        """Should return inline value when provided."""
+        data = [{"a": 1}]
+        assert _resolve_file_or_inline(data, None, "issues") == data
+
+    def test_reads_json_file(self, tmp_path):
+        """Should read and parse JSON file."""
+        f = tmp_path / "data.json"
+        f.write_text(json.dumps([{"severity": "critical"}]))
+        result = _resolve_file_or_inline(None, str(f), "issues")
+        assert result == [{"severity": "critical"}]
+
+    def test_raises_on_both(self):
+        """Should raise ValueError when both inline and file provided."""
+        with pytest.raises(ValueError, match="not both"):
+            _resolve_file_or_inline([{"a": 1}], "/tmp/f.json", "issues")
+
+    def test_raises_on_neither(self):
+        """Should raise ValueError when neither provided."""
+        with pytest.raises(ValueError, match="Provide either"):
+            _resolve_file_or_inline(None, None, "issues")
+
+    def test_raises_on_missing_file(self, tmp_path):
+        """Should raise FileNotFoundError for nonexistent file."""
+        with pytest.raises(FileNotFoundError, match="File not found"):
+            _resolve_file_or_inline(None, str(tmp_path / "nope.json"), "issues")
+
+    def test_raises_on_non_array_json(self, tmp_path):
+        """Should raise ValueError if JSON is not an array."""
+        f = tmp_path / "obj.json"
+        f.write_text(json.dumps({"not": "an array"}))
+        with pytest.raises(ValueError, match="Expected JSON array"):
+            _resolve_file_or_inline(None, str(f), "issues")
+
+    def test_raises_on_malformed_json(self, tmp_path):
+        """Should raise ValueError on malformed JSON (subclass)."""
+        f = tmp_path / "bad.json"
+        f.write_text("{not valid json")
+        with pytest.raises(ValueError):
+            _resolve_file_or_inline(None, str(f), "issues")
+
+
+class TestResolveTextFileOrInline:
+    """Tests for _resolve_text_file_or_inline helper."""
+
+    def test_returns_inline(self):
+        """Should return inline string when provided."""
+        assert _resolve_text_file_or_inline("hello", None, "source_text") == "hello"
+
+    def test_reads_text_file(self, tmp_path):
+        """Should read text file contents."""
+        f = tmp_path / "source.txt"
+        f.write_text("some content here")
+        assert (
+            _resolve_text_file_or_inline(None, str(f), "source_text")
+            == "some content here"
+        )
+
+    def test_raises_on_both(self):
+        """Should raise ValueError when both provided."""
+        with pytest.raises(ValueError, match="not both"):
+            _resolve_text_file_or_inline("hi", "/tmp/f.txt", "source_text")
+
+    def test_raises_on_neither(self):
+        """Should raise ValueError when neither provided."""
+        with pytest.raises(ValueError, match="Provide either"):
+            _resolve_text_file_or_inline(None, None, "source_text")
+
+
+class TestFileBasedGauntletIssues:
+    """Integration tests for buildlog_gauntlet_issues with file param."""
+
+    def test_file_works(self, tmp_path):
+        """Should accept issues via file path."""
+        bd = tmp_path / "buildlog"
+        bd.mkdir()
+
+        issues = [
+            {
+                "severity": "minor",
+                "category": "testing",
+                "description": "Test issue",
+                "rule_learned": "Test rule",
+            }
+        ]
+        f = tmp_path / "issues.json"
+        f.write_text(json.dumps(issues))
+
+        result = buildlog_gauntlet_issues(
+            issues_file=str(f),
+            buildlog_dir=str(bd),
+        )
+        assert "error" not in result or result.get("error") is None
+        assert result["action"] in (
+            "fix_criticals",
+            "checkpoint_majors",
+            "checkpoint_minors",
+            "clean",
+        )
+
+    def test_mutual_exclusion_error(self, tmp_path):
+        """Should return error when both inline and file provided."""
+        result = buildlog_gauntlet_issues(
+            issues=[{"severity": "minor"}],
+            issues_file="/tmp/x.json",
+            buildlog_dir=str(tmp_path),
+        )
+        assert result["error"] is not None
+        assert "not both" in result["error"]
+
+    def test_neither_error(self):
+        """Should return error when neither provided."""
+        result = buildlog_gauntlet_issues(buildlog_dir="buildlog")
+        assert result["error"] is not None
+        assert "Provide either" in result["error"]
+
+
+class TestFileBasedLearnFromReview:
+    """Integration tests for buildlog_learn_from_review with file param."""
+
+    def test_file_works(self, tmp_path):
+        """Should accept issues via file path."""
+        bd = tmp_path / "buildlog"
+        bd.mkdir()
+
+        issues = [
+            {
+                "severity": "major",
+                "category": "architectural",
+                "description": "No validation",
+                "rule_learned": "Validate inputs",
+            }
+        ]
+        f = tmp_path / "issues.json"
+        f.write_text(json.dumps(issues))
+
+        result = buildlog_learn_from_review(
+            issues_file=str(f),
+            source="test",
+            buildlog_dir=str(bd),
+        )
+        assert result["error"] is None
+        assert result["total_issues_processed"] == 1
+
+
+class TestFileBasedGauntletAcceptRisk:
+    """Integration tests for buildlog_gauntlet_accept_risk with file param."""
+
+    def test_file_works(self, tmp_path):
+        """Should accept remaining_issues via file path."""
+        issues = [
+            {
+                "severity": "minor",
+                "category": "testing",
+                "description": "Missing edge case test",
+            }
+        ]
+        f = tmp_path / "remaining.json"
+        f.write_text(json.dumps(issues))
+
+        result = buildlog_gauntlet_accept_risk(issues_file=str(f))
+        assert result["accepted_issues"] == 1
+
+    def test_neither_error(self):
+        """Should return error when neither provided."""
+        result = buildlog_gauntlet_accept_risk()
+        assert result["error"] is not None
+        assert "Provide either" in result["error"]
+
+
+class TestFileBasedGauntletGenerate:
+    """Integration tests for buildlog_gauntlet_generate with file param."""
+
+    def test_mutual_exclusion_error(self, tmp_path):
+        """Should return error when both inline and file provided."""
+        f = tmp_path / "src.txt"
+        f.write_text("some text")
+
+        result = buildlog_gauntlet_generate(
+            source_text="inline text",
+            source_file=str(f),
+            persona="test",
+        )
+        assert result["error"] is not None
+        assert "not both" in result["error"]
+
+    def test_neither_error(self):
+        """Should return error when neither provided."""
+        result = buildlog_gauntlet_generate(persona="test")
+        assert result["error"] is not None
+        assert "Provide either" in result["error"]
