@@ -69,41 +69,7 @@ Thompson Sampling today uses per-context posteriors with error class as the cont
 
 This is the bridge from "rules that worked" to "rules that work *in situations like this one*."
 
-## What you could do with this
-
-| Question | How to answer it |
-|----------|-----------------|
-| "What have I learned?" | Visualize the rule graph. Dense clusters = well-validated knowledge. |
-| "What should I learn next?" | Sparse regions adjacent to dense clusters = unexplored territory near known patterns. |
-| "What transfers across projects?" | High cross-project convergence = most generalizable rules. |
-| "Am I getting better?" | Track cluster density over time. More density = more validated knowledge. |
-
-## Implementation order
-
-| Step | Layer | Type | Description |
-|------|-------|------|-------------|
-| 1 | 1 | Engineering | sqlite-vec table creation + embedding storage |
-| 2 | 1 | Engineering | Replace pairwise dedup with KNN search |
-| 3 | 2 | Engineering | Cross-project convergence tracking on ingest |
-| 4 | 2 | Engineering | Salience scoring from convergence signals |
-| 5 | 3 | Research | Centroid extraction via clustering |
-| 6 | 3 | Research | Graph construction from co-occurrence + temporal + bandit signals |
-| 7 | 3 | Research | LinUCB contextual bandit with embedding context vectors |
-
-Steps 1-4 are shipping next. Steps 5-7 are experiments with explicit success/failure criteria.
-
-## External integration: qortex
-
-[qortex](https://github.com/Peleke/qortex) is a separate knowledge graph project. Once functional, buildlog will integrate with it via MCP for:
-
-- **Rule import** — query qortex for rules relevant to a context
-- **Feedback loop** — send reward signals back to qortex's confidence scoring
-- **Checkpoint coordination** — synchronized rollback across both systems
-
-This integration depends on qortex's MCP server milestone. See [#87](https://github.com/Peleke/buildlog-template/issues/87) for details.
-
-## Related issues
+## Related
 
 - [#100](https://github.com/Peleke/buildlog-template/issues/100) — sqlite-vec + emergent rule graphs: full design document
 - [#87](https://github.com/Peleke/buildlog-template/issues/87) — qortex knowledge graph integration
-- [#43](https://github.com/Peleke/buildlog-template/issues/43) — Thompson Sampling tutorial series
