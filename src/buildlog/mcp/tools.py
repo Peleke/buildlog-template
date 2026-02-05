@@ -1336,6 +1336,40 @@ def buildlog_export(
     }
 
 
+def buildlog_ingest_seeds(
+    source: str | None = None,
+    buildlog_dir: str = "buildlog",
+) -> dict:
+    """Ingest pending seed files from external producers (e.g. qortex).
+
+    Scans configured seed source directories for pending YAML files,
+    validates them, imports into the local seeds directory, and moves
+    processed files. Supports multiple producers via ~/.buildlog/interop.yaml.
+
+    Args:
+        source: Filter to a specific source name (e.g. "qortex").
+            None = scan all configured sources.
+        buildlog_dir: Path to buildlog directory.
+
+    Returns:
+        Dict with per-source ingest results.
+    """
+    from dataclasses import asdict as _asdict
+
+    from buildlog.interop import ingest_pending
+
+    results = ingest_pending(
+        source_name=source,
+        buildlog_dir=Path(buildlog_dir),
+    )
+    return {
+        "sources": [_asdict(r) for r in results],
+        "total_ingested": sum(r.ingested for r in results),
+        "total_failed": sum(r.failed for r in results),
+        "total_skipped": sum(r.skipped for r in results),
+    }
+
+
 def buildlog_init(
     defaults: bool = True,
     no_claude_md: bool = False,

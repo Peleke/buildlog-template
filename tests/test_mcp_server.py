@@ -85,14 +85,14 @@ async def test_tool_has_input_schema():
 
 
 @pytest.mark.asyncio
-async def test_all_32_tools_registered():
-    """Server should have exactly 32 tools registered."""
+async def test_all_33_tools_registered():
+    """Server should have exactly 33 tools registered."""
     from buildlog.mcp.server import mcp
 
     tools = await mcp.list_tools()
     assert (
-        len(tools) == 32
-    ), f"Expected 32 tools, got {len(tools)}: {[t.name for t in tools]}"
+        len(tools) == 33
+    ), f"Expected 33 tools, got {len(tools)}: {[t.name for t in tools]}"
 
 
 @pytest.mark.asyncio

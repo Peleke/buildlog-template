@@ -2447,6 +2447,59 @@ def import_seed(
             click.echo(f"  Decayed: {result.decayed_rules} bandit arms")
 
 
+@main.command("ingest-seeds")
+@click.option("--source", default=None, help="Filter to a specific source name")
+@click.option(
+    "--buildlog-dir",
+    type=click.Path(),
+    default="buildlog",
+    help="Path to buildlog directory",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def ingest_seeds_cmd(source: str | None, buildlog_dir: str, output_json: bool):
+    """Ingest pending seed files from external producers.
+
+    Scans configured seed source directories (default: ~/.qortex/seeds/pending)
+    for YAML seed files, validates and imports them, then moves files to
+    processed/ or failed/ directories.
+
+    Configure sources via ~/.buildlog/interop.yaml or use the default qortex layout.
+
+    Examples:
+
+        buildlog ingest-seeds
+        buildlog ingest-seeds --source qortex
+        buildlog ingest-seeds --json
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.interop import ingest_pending
+
+    results = ingest_pending(
+        source_name=source,
+        buildlog_dir=Path(buildlog_dir),
+    )
+
+    if output_json:
+        click.echo(json_module.dumps([asdict(r) for r in results], indent=2))
+    else:
+        for r in results:
+            click.echo(r.message)
+            for f in r.files:
+                icon = {"ingested": "✓", "failed": "✗", "skipped": "⊘"}.get(
+                    f.status, "?"
+                )
+                detail = f"  {icon} {f.file}"
+                if f.persona:
+                    detail += f" ({f.persona}, {f.rule_count} rules)"
+                if f.error:
+                    detail += f" — {f.error}"
+                click.echo(detail)
+        if not results:
+            click.echo("No sources configured.")
+
+
 @main.command("export")
 @click.option(
     "--format",
