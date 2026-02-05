@@ -150,8 +150,8 @@ class TestLearnFromReview:
         assert result.total_issues_processed == 2
         assert "PR#42" in result.source
 
-    def test_persists_to_file(self, tmp_path):
-        """Should persist learnings to review_learnings.json."""
+    def test_persists_to_backend(self, tmp_path):
+        """Should persist learnings to storage backend."""
         buildlog_dir = tmp_path / "buildlog"
         buildlog_dir.mkdir()
 
@@ -166,10 +166,10 @@ class TestLearnFromReview:
 
         learn_from_review(buildlog_dir, issues, source="test")
 
-        learnings_file = buildlog_dir / ".buildlog" / "review_learnings.json"
-        assert learnings_file.exists()
+        from buildlog.storage import get_backend
 
-        data = json.loads(learnings_file.read_text())
+        backend, pid = get_backend(buildlog_dir, project_root=tmp_path)
+        data = backend.load_learnings(pid)
         assert "learnings" in data
         assert "review_history" in data
         assert len(data["learnings"]) == 1
@@ -199,9 +199,11 @@ class TestLearnFromReview:
         assert len(result2.new_learnings) == 0
         assert len(result2.reinforced_learnings) == 1
 
-        # Check reinforcement count increased
-        learnings_file = buildlog_dir / ".buildlog" / "review_learnings.json"
-        data = json.loads(learnings_file.read_text())
+        # Check reinforcement count increased via backend
+        from buildlog.storage import get_backend
+
+        backend, pid = get_backend(buildlog_dir, project_root=tmp_path)
+        data = backend.load_learnings(pid)
         learning_id = result1.new_learnings[0]
         assert data["learnings"][learning_id]["reinforcement_count"] == 2
 
@@ -306,8 +308,10 @@ class TestLearnFromReview:
         learn_from_review(buildlog_dir, issues, source="PR#1")
         learn_from_review(buildlog_dir, issues, source="PR#2")
 
-        learnings_file = buildlog_dir / ".buildlog" / "review_learnings.json"
-        data = json.loads(learnings_file.read_text())
+        from buildlog.storage import get_backend
+
+        backend, pid = get_backend(buildlog_dir, project_root=tmp_path)
+        data = backend.load_learnings(pid)
 
         assert len(data["review_history"]) == 2
         assert data["review_history"][0]["source"] == "review:PR#1"

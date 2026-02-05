@@ -83,6 +83,8 @@ buildlog experiment report
 
 - **Review gauntlet:** automated quality gate with curated reviewer personas. Runs on commits (via Claude Code hooks or CI) and files GitHub issues for findings, categorized by severity.
 - **LLM-backed extraction:** when regex isn't enough, the seed engine can use OpenAI, Anthropic, or Ollama to extract patterns from code and logs. Metered backend tracks token usage and cost.
+- **Global SQLite storage:** all buildlog data is stored in a single global database at `~/.buildlog/buildlog.db` (SQLite with WAL mode). Project isolation via hashed project IDs derived from git remote URLs. Legacy per-project JSON/JSONL files are still supported as a fallback.
+- **Migration and export:** `buildlog migrate` converts legacy JSON/JSONL files to the global database (idempotent, non-destructive). `buildlog export` dumps data back to JSONL for portability or backup.
 - **MCP server:** buildlog exposes itself as an MCP server so agents can query seeds, skills, and build history programmatically during sessions.
 - **npm wrapper:** `npx @peleke.s/buildlog` for JS/TS projects. Thin shim that finds and invokes the Python CLI.
 
@@ -109,7 +111,7 @@ pipx install buildlog         # or: uv tool install buildlog
 buildlog init-mcp --global -y # registers MCP + writes instructions to ~/.claude/CLAUDE.md
 ```
 
-That's it. Claude Code now has all 29 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
+That's it. Claude Code now has all 31 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
 
 The `--global` flag:
 - Registers the MCP server in `~/.claude.json` (Claude Code's global config)
@@ -140,7 +142,7 @@ npx @peleke.s/buildlog init
 ### Verify installation
 
 ```bash
-buildlog mcp-test          # verify all 29 tools are registered
+buildlog mcp-test          # verify all 31 tools are registered
 buildlog overview          # check project state (works without init in global mode)
 ```
 
@@ -166,6 +168,7 @@ buildlog experiment report
 | [Core Concepts](https://peleke.github.io/buildlog-template/getting-started/concepts/) | The problem, the claim, and the metric |
 | [CLI Reference](https://peleke.github.io/buildlog-template/guides/cli-reference/) | Every command documented |
 | [MCP Integration](https://peleke.github.io/buildlog-template/guides/mcp-integration/) | Claude Code setup and available tools |
+| [Storage Architecture](https://peleke.github.io/buildlog-template/guides/storage-architecture/) | Global SQLite backend, migration, and export |
 | [Experiments](https://peleke.github.io/buildlog-template/guides/experiments/) | Running and measuring experiments |
 | [Review Gauntlet](https://peleke.github.io/buildlog-template/guides/review-gauntlet/) | Reviewer personas and the gauntlet loop |
 | [Multi-Agent Setup](https://peleke.github.io/buildlog-template/guides/multi-agent/) | Render rules to any AI coding agent |

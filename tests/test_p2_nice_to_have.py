@@ -381,12 +381,12 @@ class TestAllNewToolsRegistered:
         assert "buildlog_update" in names
 
     @pytest.mark.asyncio
-    async def test_total_tool_count_is_29(self):
+    async def test_total_tool_count_is_31(self):
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 29, (
-            f"Expected 29 tools, got {len(tools)}: " f"{[t.name for t in tools]}"
+        assert len(tools) == 31, (
+            f"Expected 31 tools, got {len(tools)}: " f"{[t.name for t in tools]}"
         )
 
     @pytest.mark.asyncio

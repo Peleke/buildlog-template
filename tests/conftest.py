@@ -2,9 +2,25 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from buildlog.skills import ConfidenceLevel, Skill
+
+
+@pytest.fixture(autouse=True)
+def _isolate_global_db(tmp_path):
+    """Prevent tests from hitting the real ~/.buildlog/buildlog.db.
+
+    Points ``GLOBAL_DB_PATH`` at a non-existent file inside ``tmp_path`` so
+    that ``get_backend()`` falls through to ``LegacyBackend`` for existing tests
+    that expect file-level behaviour.  Tests that need a real SQLite backend
+    create their own in-memory connections and are unaffected.
+    """
+    fake = tmp_path / ".buildlog-test" / "buildlog.db"
+    with patch("buildlog.storage.GLOBAL_DB_PATH", fake):
+        yield
 
 
 def pytest_addoption(parser):

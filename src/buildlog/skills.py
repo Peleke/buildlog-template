@@ -38,14 +38,14 @@ logger = logging.getLogger(__name__)
 
 
 def _load_review_learnings(buildlog_dir: Path) -> dict:
-    """Load review learnings from .buildlog/review_learnings.json."""
-    learnings_path = buildlog_dir / ".buildlog" / "review_learnings.json"
-    if not learnings_path.exists():
-        return {"learnings": {}}
-    try:
-        return json.loads(learnings_path.read_text())
-    except (json.JSONDecodeError, OSError):
-        return {"learnings": {}}
+    """Load review learnings via storage backend."""
+    from buildlog.storage import get_backend as get_storage_backend
+
+    project_root = (
+        buildlog_dir.parent if buildlog_dir.name == "buildlog" else buildlog_dir.parent
+    )
+    backend, project_id = get_storage_backend(buildlog_dir, project_root=project_root)
+    return backend.load_learnings(project_id)
 
 
 # Configuration constants

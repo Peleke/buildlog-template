@@ -15,6 +15,7 @@ from buildlog.mcp.tools import (
     buildlog_experiment_metrics,
     buildlog_experiment_report,
     buildlog_experiment_start,
+    buildlog_export,
     buildlog_gauntlet_accept_risk,
     buildlog_gauntlet_generate,
     buildlog_gauntlet_issues,
@@ -26,6 +27,7 @@ from buildlog.mcp.tools import (
     buildlog_learn_from_review,
     buildlog_log_mistake,
     buildlog_log_reward,
+    buildlog_migrate,
     buildlog_overview,
     buildlog_promote,
     buildlog_reject,
@@ -77,6 +79,10 @@ mcp.tool()(buildlog_distill)
 mcp.tool()(buildlog_skills)
 mcp.tool()(buildlog_stats)
 mcp.tool()(buildlog_gauntlet_list_personas)
+
+# Storage tools
+mcp.tool()(buildlog_migrate)
+mcp.tool()(buildlog_export)
 
 # P2: Nice-to-have
 mcp.tool()(buildlog_gauntlet_generate)

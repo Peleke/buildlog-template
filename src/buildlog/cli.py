@@ -325,7 +325,7 @@ def mcp_test():
     """Verify the MCP server starts and all tools are registered.
 
     Checks that the buildlog-mcp server can be imported and lists
-    all registered tools. Exits 0 if all 29 tools are found, 1 otherwise.
+    all registered tools. Exits 0 if all 31 tools are found, 1 otherwise.
 
     Examples:
 
@@ -346,7 +346,7 @@ def mcp_test():
         click.echo("Warning: could not inspect tools via internal API", err=True)
         tool_names = []
 
-    expected = 29
+    expected = 31
     click.echo(f"buildlog MCP server: {len(tool_names)} tools registered")
     for name in tool_names:
         click.echo(f"  {name}")
@@ -2355,6 +2355,105 @@ def gauntlet_loop(
         click.echo("\n" + "=" * 60)
         click.echo("Ready. Run gauntlet review and process issues.")
         click.echo("=" * 60)
+
+
+# -----------------------------------------------------------------------------
+# Storage Migration & Export Commands
+# -----------------------------------------------------------------------------
+
+
+@main.command()
+@click.option(
+    "--dry-run", is_flag=True, help="Show what would be migrated without writing"
+)
+@click.option(
+    "--buildlog-dir",
+    default="buildlog",
+    type=click.Path(),
+    help="Path to buildlog directory",
+)
+def migrate(dry_run: bool, buildlog_dir: str):
+    """Migrate legacy JSON/JSONL files to the global SQLite database.
+
+    Reads per-project files from buildlog/.buildlog/ and writes them into
+    ~/.buildlog/buildlog.db. Original files are renamed to *.migrated
+    (not deleted) for safety.
+
+    Idempotent: safe to run multiple times.
+
+    Examples:
+
+        buildlog migrate
+        buildlog migrate --dry-run
+        buildlog migrate --buildlog-dir path/to/buildlog
+    """
+    from buildlog.storage.migrate import migrate_project
+
+    bl_path = Path(buildlog_dir)
+    lines = migrate_project(bl_path, dry_run=dry_run)
+    for line in lines:
+        click.echo(line)
+
+
+@main.command("export")
+@click.option(
+    "--format",
+    "fmt",
+    default="jsonl",
+    type=click.Choice(["jsonl"]),
+    help="Export format",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output directory (default: print to stdout)",
+)
+@click.option(
+    "--project", type=str, default=None, help="Project ID to export (default: current)"
+)
+@click.option(
+    "--tables",
+    type=str,
+    default=None,
+    help="Comma-separated table names (default: all). Options: rewards, sessions, mistakes",
+)
+def export_cmd(fmt: str, output: str | None, project: str | None, tables: str | None):
+    """Export storage data to files.
+
+    Exports event data from the storage backend (SQLite or legacy files)
+    into JSONL files that match the legacy format.
+
+    Examples:
+
+        buildlog export
+        buildlog export -o ./backup/
+        buildlog export --tables rewards,sessions
+        buildlog export --project abc123def456
+    """
+    from buildlog.storage import get_backend
+    from buildlog.storage.exporters import JsonlExporter
+
+    backend, project_id = get_backend(Path("buildlog"))
+
+    # Use current project if not specified
+    target_project = project or project_id
+
+    table_list = tables.split(",") if tables else None
+    output_path = Path(output) if output else None
+
+    exporter = JsonlExporter()
+    try:
+        summary = exporter.export(
+            backend,
+            project_id=target_project,
+            output_path=output_path,
+            tables=table_list,
+        )
+        click.echo(summary)
+    except ValueError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ from buildlog.mcp.tools import buildlog_distill, buildlog_skills, buildlog_stats
 # Path to test fixtures shipped with the repo
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "buildlog"
 
-# All 29 MCP tool names registered in the server
+# All 31 MCP tool names registered in the server
 ALL_TOOL_NAMES = [
     "buildlog_status",
     "buildlog_promote",
@@ -85,6 +85,8 @@ ALL_TOOL_NAMES = [
     "buildlog_gauntlet_generate",
     "buildlog_init",
     "buildlog_update",
+    "buildlog_migrate",
+    "buildlog_export",
 ]
 
 
@@ -393,15 +395,15 @@ class TestFlowExperiment:
 
 
 class TestFlowMCPServer:
-    """Verify all 29 tools are registered in the MCP server."""
+    """Verify all 31 tools are registered in the MCP server."""
 
     @pytest.mark.asyncio
-    async def test_server_has_29_tools(self):
-        """MCP server should expose exactly 29 tools."""
+    async def test_server_has_31_tools(self):
+        """MCP server should expose exactly 31 tools."""
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 29
+        assert len(tools) == 31
 
     @pytest.mark.asyncio
     async def test_tool_metadata_valid(self):

@@ -16,7 +16,6 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -33,6 +32,7 @@ from buildlog.core.operations import (
     SessionMetrics,
     StartSessionResult,
 )
+from buildlog.storage import StorageBackend, get_backend
 
 __all__ = [
     "start_session",
@@ -46,43 +46,21 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Path helpers (duplicated from operations to avoid tight coupling)
+# Storage helpers
 # ---------------------------------------------------------------------------
 
 
-def _get_sessions_path(buildlog_dir: Path) -> Path:
-    return buildlog_dir / ".buildlog" / "sessions.jsonl"
-
-
-def _get_mistakes_path(buildlog_dir: Path) -> Path:
-    return buildlog_dir / ".buildlog" / "mistakes.jsonl"
-
-
-def _get_active_session_path(buildlog_dir: Path) -> Path:
-    return buildlog_dir / ".buildlog" / "active_session.json"
-
-
-def _get_rewards_path(buildlog_dir: Path) -> Path:
-    return buildlog_dir / ".buildlog" / "reward_events.jsonl"
-
-
-def _get_promoted_path(buildlog_dir: Path) -> Path:
-    return buildlog_dir / ".buildlog" / "promoted.json"
-
-
-def _load_json_set(path: Path, key: str) -> set[str]:
-    if not path.exists():
-        return set()
-    try:
-        data = json.loads(path.read_text())
-        return set(data.get(key, []))
-    except (json.JSONDecodeError, OSError):
-        return set()
+def _get_storage(buildlog_dir: Path) -> tuple[StorageBackend, str]:
+    """Resolve the storage backend for the project containing *buildlog_dir*."""
+    project_root = (
+        buildlog_dir.parent if buildlog_dir.name == "buildlog" else buildlog_dir.parent
+    )
+    return get_backend(buildlog_dir, project_root=project_root)
 
 
 def _get_current_rules(buildlog_dir: Path) -> list[str]:
-    promoted_path = _get_promoted_path(buildlog_dir)
-    return list(_load_json_set(promoted_path, "skill_ids"))
+    backend, project_id = _get_storage(buildlog_dir)
+    return sorted(backend.load_id_set(project_id, "promoted"))
 
 
 def _generate_session_id(now: datetime) -> str:
@@ -119,33 +97,13 @@ def _compute_reward_value(
 
 
 def _load_sessions(buildlog_dir: Path) -> list[Session]:
-    sessions_path = _get_sessions_path(buildlog_dir)
-    if not sessions_path.exists():
-        return []
-    sessions = []
-    for line in sessions_path.read_text().strip().split("\n"):
-        if line:
-            try:
-                data = json.loads(line)
-                sessions.append(Session.from_dict(data))
-            except (json.JSONDecodeError, KeyError):
-                continue
-    return sessions
+    backend, project_id = _get_storage(buildlog_dir)
+    return [Session.from_dict(s) for s in backend.load_events(project_id, "sessions")]  # type: ignore[arg-type]
 
 
 def _load_mistakes(buildlog_dir: Path) -> list[Mistake]:
-    mistakes_path = _get_mistakes_path(buildlog_dir)
-    if not mistakes_path.exists():
-        return []
-    mistakes = []
-    for line in mistakes_path.read_text().strip().split("\n"):
-        if line:
-            try:
-                data = json.loads(line)
-                mistakes.append(Mistake.from_dict(data))
-            except (json.JSONDecodeError, KeyError):
-                continue
-    return mistakes
+    backend, project_id = _get_storage(buildlog_dir)
+    return [Mistake.from_dict(m) for m in backend.load_events(project_id, "mistakes")]  # type: ignore[arg-type]
 
 
 def _find_similar_prior_mistake(
@@ -232,9 +190,8 @@ def start_session(
         notes=notes,
     )
 
-    active_path = _get_active_session_path(buildlog_dir)
-    active_path.parent.mkdir(parents=True, exist_ok=True)
-    active_path.write_text(json.dumps(session.to_dict(), indent=2))
+    backend, project_id = _get_storage(buildlog_dir)
+    backend.save_active_session(project_id, session.to_dict())  # type: ignore[arg-type]
 
     return StartSessionResult(
         session_id=session_id,
@@ -263,13 +220,13 @@ def end_session(
     Returns:
         EndSessionResult with session metrics.
     """
-    active_path = _get_active_session_path(buildlog_dir)
+    backend, project_id = _get_storage(buildlog_dir)
 
-    if not active_path.exists():
+    session_data = backend.load_active_session(project_id)
+    if session_data is None:
         raise ValueError("No active session to end")
 
-    session_data = json.loads(active_path.read_text())
-    session = Session.from_dict(session_data)
+    session = Session.from_dict(session_data)  # type: ignore[arg-type]
 
     now = datetime.now(timezone.utc)
     session.ended_at = now
@@ -279,14 +236,12 @@ def end_session(
     if notes:
         session.notes = f"{session.notes or ''}\n{notes}".strip()
 
-    sessions_path = _get_sessions_path(buildlog_dir)
-    sessions_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(sessions_path, "a") as f:
-        f.write(json.dumps(session.to_dict()) + "\n")
+    backend.append_event(project_id, "sessions", session.to_dict())  # type: ignore[arg-type]
+    backend.delete_active_session(project_id)
 
-    active_path.unlink()
-
-    all_mistakes = _load_mistakes(buildlog_dir)
+    all_mistakes = [
+        Mistake.from_dict(m) for m in backend.load_events(project_id, "mistakes")  # type: ignore[arg-type]
+    ]
     session_mistakes = [m for m in all_mistakes if m.session_id == session.id]
     repeated = sum(1 for m in session_mistakes if m.was_repeat)
 
@@ -322,20 +277,22 @@ def log_mistake(
     Returns:
         LogMistakeResult indicating if this was a repeat.
     """
-    active_path = _get_active_session_path(buildlog_dir)
+    backend, project_id = _get_storage(buildlog_dir)
 
-    if not active_path.exists():
+    session_data = backend.load_active_session(project_id)
+    if session_data is None:
         raise ValueError(
             "No active session - start one with 'buildlog experiment start'"
         )
 
-    session_data = json.loads(active_path.read_text())
     session_id = session_data["id"]
 
     now = datetime.now(timezone.utc)
     mistake_id = _generate_mistake_id(error_class, now)
 
-    all_mistakes = _load_mistakes(buildlog_dir)
+    all_mistakes = [
+        Mistake.from_dict(m) for m in backend.load_events(project_id, "mistakes")  # type: ignore[arg-type]
+    ]
     similar = _find_similar_prior_mistake(
         description, error_class, session_id, all_mistakes
     )
@@ -351,10 +308,7 @@ def log_mistake(
         corrected_by_rule=corrected_by_rule,
     )
 
-    mistakes_path = _get_mistakes_path(buildlog_dir)
-    mistakes_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(mistakes_path, "a") as f:
-        f.write(json.dumps(mistake.to_dict()) + "\n")
+    backend.append_event(project_id, "mistakes", mistake.to_dict())  # type: ignore[arg-type]
 
     selected_rules = session_data.get("selected_rules", [])
     if selected_rules:
@@ -409,9 +363,10 @@ def log_reward(
     reward_id = _generate_reward_id(outcome, now)
     reward_value = _compute_reward_value(outcome, revision_distance)
 
-    active_path = _get_active_session_path(buildlog_dir)
-    if active_path.exists():
-        session_data = json.loads(active_path.read_text())
+    backend, project_id = _get_storage(buildlog_dir)
+
+    session_data = backend.load_active_session(project_id)
+    if session_data is not None:
         if rules_active is None:
             rules_active = session_data.get("selected_rules", [])
         if error_class is None:
@@ -429,10 +384,7 @@ def log_reward(
         source=source or "manual",
     )
 
-    rewards_path = _get_rewards_path(buildlog_dir)
-    rewards_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(rewards_path, "a") as f:
-        f.write(json.dumps(event.to_dict()) + "\n")
+    backend.append_event(project_id, "rewards", event.to_dict())  # type: ignore[arg-type]
 
     if rules_active:
         bandit_path = buildlog_dir / "bandit_state.jsonl"
@@ -443,11 +395,7 @@ def log_reward(
             context=error_class or "general",
         )
 
-    total_events = 0
-    if rewards_path.exists():
-        total_events = sum(
-            1 for line in rewards_path.read_text().strip().split("\n") if line
-        )
+    total_events = backend.count_events(project_id, "rewards")
 
     rules_count = len(rules_active) if rules_active else 0
     message = f"Logged {outcome} (reward={reward_value:.2f})"
@@ -475,9 +423,10 @@ def get_rewards(
     Returns:
         RewardSummary with events and statistics.
     """
-    rewards_path = _get_rewards_path(buildlog_dir)
+    backend, project_id = _get_storage(buildlog_dir)
+    raw_events = backend.load_events(project_id, "rewards")
 
-    if not rewards_path.exists():
+    if not raw_events:
         return RewardSummary(
             total_events=0,
             accepted=0,
@@ -488,13 +437,11 @@ def get_rewards(
         )
 
     events: list[RewardEvent] = []
-    for line in rewards_path.read_text().strip().split("\n"):
-        if line:
-            try:
-                data = json.loads(line)
-                events.append(RewardEvent.from_dict(data))
-            except (json.JSONDecodeError, KeyError):
-                continue
+    for data in raw_events:
+        try:
+            events.append(RewardEvent.from_dict(data))  # type: ignore[arg-type]
+        except (KeyError, ValueError):
+            continue
 
     total = len(events)
     accepted = sum(1 for e in events if e.outcome == "accepted")

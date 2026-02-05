@@ -2,6 +2,12 @@
 
 This walks through the full buildlog pipeline: capture, extract, promote, measure, learn.
 
+!!! note "Upgrading from an older version?"
+    If you have an existing project with legacy `.buildlog/` JSON/JSONL files, run
+    `buildlog migrate` to move your data into the new global SQLite database. This is
+    a one-time, non-destructive operation. See [Storage Architecture](../guides/storage-architecture.md)
+    for details.
+
 ## Stage 1: Capture
 
 Document your work. Include the mistakes — they're the most valuable signal.
