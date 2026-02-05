@@ -47,7 +47,7 @@ buildlog closes this gap by providing:
   - Windsurf, Continue.dev, settings.json
 
 **Integration:**
-- `mcp/server.py` - MCP server entry point (32 tools exposed)
+- `mcp/server.py` - MCP server entry point (33 tools exposed)
 - `mcp/tools.py` - Tool implementations
 
 ### Key Data Structures

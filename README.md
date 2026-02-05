@@ -150,7 +150,7 @@ npx @peleke.s/buildlog init
 ### Verify installation
 
 ```bash
-buildlog mcp-test          # verify all 32 tools are registered
+buildlog mcp-test          # verify all 33 tools are registered
 buildlog overview          # check project state (works without init in global mode)
 ```
 

@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 - **Cross-system provenance tracking** — `SeedRule` and `Skill` now carry `provenance: dict` from upstream sources (e.g. qortex knowledge graphs)
-- **`buildlog import-seed`** CLI command and `buildlog_import_seed` MCP tool (32 tools total) — import curated seed files with version-aware bandit decay
+- **`buildlog import-seed`** CLI command and `buildlog_import_seed` MCP tool (33 tools total) — import curated seed files with version-aware bandit decay
 - **Confidence-weighted seed boosting** — seeds with `provenance.confidence` get proportionally boosted priors in Thompson Sampling (`effective_boost = seed_boost * confidence`)
 - **Version-aware bandit decay** — when a seed's `provenance.graph_version` changes on re-import, learned bandit signal is decayed 50% to reduce stale priors
 - **Expanded export** — `buildlog export` now supports 6 tables: `rewards`, `sessions`, `mistakes`, `bandit_state`, `learnings`, `skill_decisions`

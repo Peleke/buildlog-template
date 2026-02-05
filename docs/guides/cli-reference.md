@@ -20,7 +20,7 @@ buildlog overview                # Project state at a glance
 buildlog init-mcp                # Register MCP in .claude/settings.json (local)
 buildlog init-mcp --global       # Register in ~/.claude.json (global)
 buildlog init-mcp --global -y    # Global, skip confirmation prompts
-buildlog mcp-test                # Verify all 32 tools are registered
+buildlog mcp-test                # Verify all 33 tools are registered
 ```
 
 ### Flags for `init-mcp`
@@ -94,6 +94,7 @@ buildlog export --output ./dump  # Write to a specific directory
 buildlog export --project <id>   # Export only a specific project
 buildlog export --tables rewards,bandit_state  # Export specific tables only
 buildlog import-seed seed.yaml   # Import external seed file
+buildlog ingest-seeds            # Ingest pending files from external producers
 ```
 
 ### Flags for `migrate`
@@ -124,5 +125,17 @@ Export also generates `manifest.json` (export metadata + record counts) and `rul
 | `--json` | Output result as JSON |
 
 If the target seed file already exists, `import-seed` compares `provenance.graph_version` per rule. Changed versions trigger 50% decay of learned bandit signal for affected rules.
+
+### Flags for `ingest-seeds`
+
+| Flag | Effect |
+|------|--------|
+| `--source` | Filter to a specific source name (e.g. `qortex`) |
+| `--buildlog-dir` | Path to buildlog directory (default: `buildlog`) |
+| `--json` | Output as JSON |
+
+Ingest scans configured seed source directories for pending YAML files, validates them, imports into the local seeds directory, and moves processed files. Configure sources via `~/.buildlog/interop.yaml` or use the default qortex layout.
+
+See [Interop & Seed Ingestion](interop.md) for the full protocol and configuration reference.
 
 See [Storage Architecture](storage-architecture.md) for details on the global SQLite backend and migration process.
