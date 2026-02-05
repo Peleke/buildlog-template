@@ -60,30 +60,42 @@ class SQLiteBackend:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         now = datetime.now(timezone.utc).isoformat()
-        # Remove old decisions for this collection that are no longer in ids
-        self.conn.execute(
-            "DELETE FROM skill_decisions WHERE project_id = ? AND decision = ? AND skill_id NOT IN ({})".format(
-                ",".join("?" * len(ids)) if ids else "''"
-            ),
-            [project_id, collection, *sorted(ids)],
-        )
-        # Upsert each ID
-        for skill_id in ids:
-            meta_json = None
-            if metadata and skill_id in metadata:
-                meta_json = json.dumps(metadata[skill_id])
-            self.conn.execute(
-                """\
-                INSERT INTO skill_decisions (project_id, skill_id, decision, decided_at, metadata)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (project_id, skill_id)
-                DO UPDATE SET decision = excluded.decision,
-                              decided_at = excluded.decided_at,
-                              metadata = excluded.metadata
-                """,
-                (project_id, skill_id, collection, now, meta_json),
-            )
-        self.conn.commit()
+        # Atomic: DELETE stale + INSERT new in one transaction
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            if ids:
+                self.conn.execute(
+                    "DELETE FROM skill_decisions WHERE project_id = ? AND decision = ? AND skill_id NOT IN ({})".format(
+                        ",".join("?" * len(ids))
+                    ),
+                    [project_id, collection, *sorted(ids)],
+                )
+            else:
+                # Empty set: remove all for this collection
+                self.conn.execute(
+                    "DELETE FROM skill_decisions WHERE project_id = ? AND decision = ?",
+                    [project_id, collection],
+                )
+            # Upsert each ID
+            for skill_id in ids:
+                meta_json = None
+                if metadata and skill_id in metadata:
+                    meta_json = json.dumps(metadata[skill_id])
+                self.conn.execute(
+                    """\
+                    INSERT INTO skill_decisions (project_id, skill_id, decision, decided_at, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT (project_id, skill_id)
+                    DO UPDATE SET decision = excluded.decision,
+                                  decided_at = excluded.decided_at,
+                                  metadata = excluded.metadata
+                    """,
+                    (project_id, skill_id, collection, now, meta_json),
+                )
+            self.conn.execute("COMMIT")
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
 
     # -- Learnings ----------------------------------------------------------
 
@@ -174,13 +186,18 @@ class SQLiteBackend:
                 ),
             )
 
-        # Append new history entries (compare count to avoid duplicates)
-        existing_count = self.conn.execute(
-            "SELECT COUNT(*) FROM review_history WHERE project_id = ?",
-            (project_id,),
-        ).fetchone()[0]
+        # Append new history entries — skip any whose timestamp already exists
+        existing_ts = {
+            row[0]
+            for row in self.conn.execute(
+                "SELECT timestamp FROM review_history WHERE project_id = ?",
+                (project_id,),
+            ).fetchall()
+        }
 
-        for entry in review_history[existing_count:]:
+        for entry in review_history:
+            if entry.get("timestamp") in existing_ts:
+                continue
             self.conn.execute(
                 """\
                 INSERT INTO review_history
@@ -239,10 +256,17 @@ class SQLiteBackend:
         "mistakes": "mistakes",
     }
 
+    # Whitelist of valid SQL table names — f-string interpolation is only
+    # safe for values in this set.
+    _VALID_SQL_TABLES = frozenset({"reward_events", "sessions", "mistakes"})
+
     def _resolve_table(self, table: str) -> str:
         resolved = self._EVENT_TABLE_MAP.get(table)
         if resolved is None:
             raise ValueError(f"Unknown event table: {table}")
+        assert (
+            resolved in self._VALID_SQL_TABLES
+        ), f"Table {resolved!r} not in whitelist"
         return resolved
 
     def append_event(self, project_id: str, table: str, record: dict) -> None:
@@ -395,30 +419,37 @@ class SQLiteBackend:
     def save_bandit_state(
         self, project_id: str, arms: dict[str, dict[str, dict]]
     ) -> None:
-        # Clear and rewrite (compacted save)
-        self.conn.execute("DELETE FROM bandit_arms WHERE project_id = ?", (project_id,))
-        for context, rules in arms.items():
-            for rule_id, params in rules.items():
-                self.conn.execute(
-                    """\
-                    INSERT INTO bandit_arms
-                        (project_id, context, rule_id, alpha, beta, is_seed, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        project_id,
-                        context,
-                        rule_id,
-                        params["alpha"],
-                        params["beta"],
-                        1 if params.get("is_seed") else 0,
-                        params.get(
-                            "updated_at",
-                            datetime.now(timezone.utc).isoformat(),
+        # Atomic: clear and rewrite (compacted save) in one transaction
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            self.conn.execute(
+                "DELETE FROM bandit_arms WHERE project_id = ?", (project_id,)
+            )
+            for context, rules in arms.items():
+                for rule_id, params in rules.items():
+                    self.conn.execute(
+                        """\
+                        INSERT INTO bandit_arms
+                            (project_id, context, rule_id, alpha, beta, is_seed, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            project_id,
+                            context,
+                            rule_id,
+                            params["alpha"],
+                            params["beta"],
+                            1 if params.get("is_seed") else 0,
+                            params.get(
+                                "updated_at",
+                                datetime.now(timezone.utc).isoformat(),
+                            ),
                         ),
-                    ),
-                )
-        self.conn.commit()
+                    )
+            self.conn.execute("COMMIT")
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
 
     def append_bandit_update(
         self, project_id: str, context: str, rule_id: str, record: dict

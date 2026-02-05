@@ -87,7 +87,7 @@ After every significant commit or feature completion:
 4. `buildlog_experiment_metrics()` — per-session or aggregate stats
 5. `buildlog_experiment_report()` — comprehensive report
 
-### Tool Reference (29 tools)
+### Tool Reference (31 tools)
 
 **Commit & Entries:**
 - `buildlog_commit(message, git_args, slug, no_entry)` — git commit with auto buildlog entry
@@ -131,6 +131,8 @@ After every significant commit or feature completion:
 **Project Setup:**
 - `buildlog_init(no_mcp, no_claude_md)` — initialize buildlog in project
 - `buildlog_update()` — update buildlog template to latest
+- `buildlog_migrate(dry_run)` — migrate legacy JSON/JSONL files to global SQLite DB
+- `buildlog_export(format, output, project, tables)` — export data to JSONL files
 
 ### When to Use Each Tool
 

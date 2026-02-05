@@ -152,6 +152,8 @@ class LegacyBackend:
     # -- Bandit state -------------------------------------------------------
 
     def load_bandit_state(self, project_id: str) -> dict[str, dict[str, dict]]:
+        # bandit_state.jsonl lives at buildlog/ level (not .buildlog/) for
+        # historical reasons — it predates the .buildlog/ convention.
         path = self._dot.parent / "bandit_state.jsonl"
         if not path.exists():
             return {}

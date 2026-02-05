@@ -103,8 +103,18 @@ def migrate_project(
             continue
 
         try:
-            count = _MIGRATE_HANDLERS[key](backend, project_id, path)
-            summary.append(f"  OK   {fname} ({count} records)")
+            skipped: list[str] = []
+            handler = _MIGRATE_HANDLERS[key]
+            if key in ("rewards", "sessions", "mistakes"):
+                count = handler(backend, project_id, path, skipped=skipped)  # type: ignore[call-arg]
+            else:
+                count = handler(backend, project_id, path)
+            msg = f"  OK   {fname} ({count} records)"
+            if skipped:
+                msg += f", {len(skipped)} skipped"
+            summary.append(msg)
+            for skip_msg in skipped:
+                summary.append(f"         ^ {skip_msg}")
             path.rename(migrated)
         except Exception as exc:
             summary.append(f"  FAIL {fname}: {exc}")
@@ -160,31 +170,56 @@ def _migrate_learnings(backend: SQLiteBackend, project_id: str, path: Path) -> i
 
 
 def _migrate_jsonl_events(
-    backend: SQLiteBackend, project_id: str, path: Path, table: str
+    backend: SQLiteBackend,
+    project_id: str,
+    path: Path,
+    table: str,
+    skipped: list[str] | None = None,
 ) -> int:
     count = 0
-    for line in path.read_text().strip().split("\n"):
+    for i, line in enumerate(path.read_text().strip().split("\n"), 1):
         if not line:
             continue
         try:
             record = json.loads(line)
             backend.append_event(project_id, table, record)
             count += 1
-        except (json.JSONDecodeError, KeyError):
-            continue
+        except json.JSONDecodeError as exc:
+            msg = f"line {i}: bad JSON ({exc})"
+            if skipped is not None:
+                skipped.append(msg)
+        except KeyError as exc:
+            msg = f"line {i}: missing key {exc}"
+            if skipped is not None:
+                skipped.append(msg)
     return count
 
 
-def _migrate_rewards(backend: SQLiteBackend, project_id: str, path: Path) -> int:
-    return _migrate_jsonl_events(backend, project_id, path, "rewards")
+def _migrate_rewards(
+    backend: SQLiteBackend,
+    project_id: str,
+    path: Path,
+    skipped: list[str] | None = None,
+) -> int:
+    return _migrate_jsonl_events(backend, project_id, path, "rewards", skipped)
 
 
-def _migrate_sessions(backend: SQLiteBackend, project_id: str, path: Path) -> int:
-    return _migrate_jsonl_events(backend, project_id, path, "sessions")
+def _migrate_sessions(
+    backend: SQLiteBackend,
+    project_id: str,
+    path: Path,
+    skipped: list[str] | None = None,
+) -> int:
+    return _migrate_jsonl_events(backend, project_id, path, "sessions", skipped)
 
 
-def _migrate_mistakes(backend: SQLiteBackend, project_id: str, path: Path) -> int:
-    return _migrate_jsonl_events(backend, project_id, path, "mistakes")
+def _migrate_mistakes(
+    backend: SQLiteBackend,
+    project_id: str,
+    path: Path,
+    skipped: list[str] | None = None,
+) -> int:
+    return _migrate_jsonl_events(backend, project_id, path, "mistakes", skipped)
 
 
 def _migrate_active_session(backend: SQLiteBackend, project_id: str, path: Path) -> int:

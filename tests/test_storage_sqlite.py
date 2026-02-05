@@ -345,3 +345,135 @@ class TestBanditState:
         reloaded = backend.load_bandit_state(PID)
         assert "general" in reloaded
         assert "rule-1" in reloaded["general"]
+
+
+class TestConnectionReuse:
+    """Tests for connection caching and lifecycle."""
+
+    def test_get_connection_returns_same_object(self, tmp_path):
+        """_get_connection should return the same conn for the same DB path."""
+        from unittest.mock import patch
+
+        from buildlog.storage import _get_connection
+
+        db = tmp_path / "test.db"
+        # Patch the cache to isolate from global state
+        with patch("buildlog.storage._conn_cache", {}):
+            conn1 = _get_connection(db)
+            conn2 = _get_connection(db)
+            assert conn1 is conn2
+
+    def test_get_connection_reopens_after_close(self, tmp_path):
+        """Should create a new connection if the cached one was closed."""
+        from unittest.mock import patch
+
+        from buildlog.storage import _get_connection
+
+        db = tmp_path / "test.db"
+        with patch("buildlog.storage._conn_cache", {}):
+            conn1 = _get_connection(db)
+            conn1.close()
+            conn2 = _get_connection(db)
+            assert conn2 is not conn1
+            # The new connection should work
+            conn2.execute("SELECT 1")
+
+
+class TestTransactionSafety:
+    """Tests for transaction wrapping in multi-statement writes."""
+
+    def test_save_id_set_atomic(self, backend: SQLiteBackend):
+        """save_id_set should be atomic — either all or nothing."""
+        backend.save_id_set(PID, "promoted", {"a", "b", "c"})
+        assert backend.load_id_set(PID, "promoted") == {"a", "b", "c"}
+        # Overwrite with a new set
+        backend.save_id_set(PID, "promoted", {"d", "e"})
+        assert backend.load_id_set(PID, "promoted") == {"d", "e"}
+
+    def test_save_bandit_state_atomic(self, backend: SQLiteBackend):
+        """save_bandit_state should be atomic — old state fully replaced."""
+        arms_v1 = {
+            "ctx1": {
+                "r1": {"alpha": 1.0, "beta": 1.0, "is_seed": True},
+                "r2": {"alpha": 2.0, "beta": 1.0, "is_seed": False},
+            }
+        }
+        arms_v2 = {
+            "ctx1": {
+                "r3": {"alpha": 5.0, "beta": 1.0, "is_seed": True},
+            }
+        }
+        backend.save_bandit_state(PID, arms_v1)
+        backend.save_bandit_state(PID, arms_v2)
+        loaded = backend.load_bandit_state(PID)
+        assert "r3" in loaded["ctx1"]
+        assert "r1" not in loaded.get("ctx1", {})
+        assert "r2" not in loaded.get("ctx1", {})
+
+
+class TestHistoryDedup:
+    """Tests for timestamp-based history dedup."""
+
+    def test_save_learnings_no_duplicate_history(self, backend: SQLiteBackend):
+        """Saving learnings twice should not duplicate review_history entries."""
+        data = {
+            "learnings": {
+                "test-1": {
+                    "id": "test-1",
+                    "rule": "Always test",
+                    "category": "testing",
+                    "severity": "major",
+                    "source": "review:test",
+                    "first_seen": "2026-01-01",
+                    "last_reinforced": "2026-01-01",
+                    "reinforcement_count": 1,
+                    "contradiction_count": 0,
+                    "functional_principle": None,
+                }
+            },
+            "review_history": [
+                {
+                    "timestamp": "2026-01-01T12:00:00",
+                    "source": "test",
+                    "issues_count": 1,
+                    "new_learning_ids": ["test-1"],
+                    "reinforced_learning_ids": [],
+                }
+            ],
+        }
+        backend.save_learnings(PID, data)
+        backend.save_learnings(PID, data)  # Save again
+        loaded = backend.load_learnings(PID)
+        assert len(loaded["review_history"]) == 1
+
+    def test_save_learnings_appends_new_history(self, backend: SQLiteBackend):
+        """New history entries with different timestamps should be appended."""
+        data1 = {
+            "learnings": {},
+            "review_history": [
+                {
+                    "timestamp": "2026-01-01T12:00:00",
+                    "source": "test",
+                    "issues_count": 1,
+                },
+            ],
+        }
+        data2 = {
+            "learnings": {},
+            "review_history": [
+                {
+                    "timestamp": "2026-01-01T12:00:00",
+                    "source": "test",
+                    "issues_count": 1,
+                },
+                {
+                    "timestamp": "2026-01-02T12:00:00",
+                    "source": "test",
+                    "issues_count": 2,
+                },
+            ],
+        }
+        backend.save_learnings(PID, data1)
+        backend.save_learnings(PID, data2)
+        loaded = backend.load_learnings(PID)
+        assert len(loaded["review_history"]) == 2

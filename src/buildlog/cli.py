@@ -325,7 +325,7 @@ def mcp_test():
     """Verify the MCP server starts and all tools are registered.
 
     Checks that the buildlog-mcp server can be imported and lists
-    all registered tools. Exits 0 if all 29 tools are found, 1 otherwise.
+    all registered tools. Exits 0 if all 31 tools are found, 1 otherwise.
 
     Examples:
 
@@ -346,7 +346,7 @@ def mcp_test():
         click.echo("Warning: could not inspect tools via internal API", err=True)
         tool_names = []
 
-    expected = 29
+    expected = 31
     click.echo(f"buildlog MCP server: {len(tool_names)} tools registered")
     for name in tool_names:
         click.echo(f"  {name}")
