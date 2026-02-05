@@ -90,7 +90,7 @@ buildlog experiment report
 
 ## Current Limits
 
-This is v0.10, not the end state.
+This is v0.11, not the end state.
 
 - **Extraction quality is uneven.** Regex extractors miss nuance; LLM extractors are accurate but expensive. The middle ground is still being found.
 - **Feedback signals are coarse.** Repeated Mistake Rate works but requires manual tagging. Richer automatic signals (test outcomes, review results, revision distance) are on the roadmap.
@@ -98,7 +98,15 @@ This is v0.10, not the end state.
 - **Single-agent only.** Multi-agent coordination (shared learning across agents) is designed but not implemented.
 - **Long-horizon learning is not modeled.** The bandit operates per-session. Longer arcs of competence building need richer policy models.
 
-The roadmap: contextual bandits (now) -> richer policy models -> longer-horizon RL -> multi-agent coordination. Each step builds on the same foundation: measuring whether rule changes actually reduce mistakes.
+### What's next
+
+Three layers building on the global SQLite backend:
+
+1. **Embedding persistence** (sqlite-vec) — persist rule embeddings, replace pairwise dedup with KNN search
+2. **Cross-project convergence** — detect rules independently rediscovered across projects, track salience
+3. **Emergent rule graphs** — cluster embeddings into concept nodes, derive edges from co-occurrence and bandit correlation, contextual bandits with embedding-space context vectors (LinUCB)
+
+See the [full roadmap](https://peleke.github.io/buildlog-template/roadmap/) for details.
 
 ## Installation
 
@@ -166,12 +174,14 @@ buildlog experiment report
 | [Installation](https://peleke.github.io/buildlog-template/getting-started/installation/) | Setup, extras, and initialization |
 | [Quick Start](https://peleke.github.io/buildlog-template/getting-started/quick-start/) | Full pipeline walkthrough |
 | [Core Concepts](https://peleke.github.io/buildlog-template/getting-started/concepts/) | The problem, the claim, and the metric |
+| [Theory](https://peleke.github.io/buildlog-template/theory/) | From restaurant intuition to contextual bandits — the full tutorial |
 | [CLI Reference](https://peleke.github.io/buildlog-template/guides/cli-reference/) | Every command documented |
 | [MCP Integration](https://peleke.github.io/buildlog-template/guides/mcp-integration/) | Claude Code setup and available tools |
 | [Storage Architecture](https://peleke.github.io/buildlog-template/guides/storage-architecture/) | Global SQLite backend, migration, and export |
 | [Experiments](https://peleke.github.io/buildlog-template/guides/experiments/) | Running and measuring experiments |
 | [Review Gauntlet](https://peleke.github.io/buildlog-template/guides/review-gauntlet/) | Reviewer personas and the gauntlet loop |
 | [Multi-Agent Setup](https://peleke.github.io/buildlog-template/guides/multi-agent/) | Render rules to any AI coding agent |
+| [Roadmap](https://peleke.github.io/buildlog-template/roadmap/) | Embeddings, cross-project convergence, rule graphs |
 | [Philosophy](https://peleke.github.io/buildlog-template/philosophy/) | Principles and honest limitations |
 
 ## Contributing
