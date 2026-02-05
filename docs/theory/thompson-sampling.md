@@ -97,6 +97,8 @@ That's the entire learning loop. Sample, select, observe, update.
 
 Imagine 5 rules with true effectiveness rates of 0.9, 0.7, 0.5, 0.3, and 0.1. All start at Beta(1, 1).
 
+![Thompson Sampling convergence](../diagrams/ts-convergence.svg)
+
 | Sessions | Rule 1 (0.9) | Rule 2 (0.7) | Rule 3 (0.5) | Rule 4 (0.3) | Rule 5 (0.1) |
 |----------|-------------|-------------|-------------|-------------|-------------|
 | 0 | Beta(1,1) | Beta(1,1) | Beta(1,1) | Beta(1,1) | Beta(1,1) |
