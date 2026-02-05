@@ -34,6 +34,13 @@ nav:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quick-start.md
     - Core Concepts: getting-started/concepts.md
+  - Theory:
+    - Overview: theory/index.md
+    - The Restaurant Problem: theory/intuition.md
+    - The Price of Learning: theory/regret.md
+    - Keeping Score: theory/beta-distributions.md
+    - Making Decisions: theory/thompson-sampling.md
+    - Context Changes Everything: theory/contextual-bandits.md
   - Guides:
     - CLI Reference: guides/cli-reference.md
     - MCP Integration: guides/mcp-integration.md
@@ -43,4 +50,5 @@ nav:
     - Multi-Agent Setup: guides/multi-agent.md
   - Development:
     - Contributing: development/contributing.md
+  - Roadmap: roadmap.md
   - Philosophy: philosophy.md
