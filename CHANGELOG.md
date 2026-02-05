@@ -7,6 +7,25 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-02-05
+
+### Added
+- **Cross-system provenance tracking** — `SeedRule` and `Skill` now carry `provenance: dict` from upstream sources (e.g. qortex knowledge graphs)
+- **`buildlog import-seed`** CLI command and `buildlog_import_seed` MCP tool (32 tools total) — import curated seed files with version-aware bandit decay
+- **Confidence-weighted seed boosting** — seeds with `provenance.confidence` get proportionally boosted priors in Thompson Sampling (`effective_boost = seed_boost * confidence`)
+- **Version-aware bandit decay** — when a seed's `provenance.graph_version` changes on re-import, learned bandit signal is decayed 50% to reduce stale priors
+- **Expanded export** — `buildlog export` now supports 6 tables: `rewards`, `sessions`, `mistakes`, `bandit_state`, `learnings`, `skill_decisions`
+- **Export manifest** — `manifest.json` generated with `exported_at`, `project_id`, and per-table record counts
+- **Rules join table** — `rules.jsonl` maps `buildlog_id` to upstream provenance fields (`source_id`, `source_domain`, `graph_version`, etc.)
+- 30 new tests across seeds, skills, bandit, and export modules (966 total)
+
+### Changed
+- Default seed rule category changed from `"security"` to `"general"` (less opinionated default)
+- `_get_seed_rule_ids()` now returns `(set[str], dict[str, float])` tuple with confidence map
+- `ThompsonSamplingBandit.select()` accepts optional `seed_confidence_map` parameter
+- `JsonlExporter.export()` accepts `include_manifest`, `include_rules_join`, `seeds_dir` params
+- Tool count references updated from 31 to 32 across all docs, source, and tests
+
 ## [0.11.1] - 2026-02-05
 
 ### Added
