@@ -17,6 +17,7 @@ from buildlog.confidence import ConfidenceMetrics, merge_confidence_metrics
 from buildlog.core.bandit import ThompsonSamplingBandit
 from buildlog.render import get_renderer
 from buildlog.skills import Skill, SkillSet, generate_skills
+from buildlog.storage import StorageBackend, get_backend
 
 __all__ = [
     "StatusResult",
@@ -81,6 +82,18 @@ __all__ = [
     "init_buildlog",
     "update_buildlog",
 ]
+
+
+def _get_storage(buildlog_dir: Path) -> tuple[StorageBackend, str]:
+    """Resolve the storage backend for the project containing *buildlog_dir*.
+
+    The project root is assumed to be ``buildlog_dir.parent`` (e.g.
+    ``/my-project/buildlog`` → ``/my-project``).
+    """
+    project_root = (
+        buildlog_dir.parent if buildlog_dir.name == "buildlog" else buildlog_dir.parent
+    )
+    return get_backend(buildlog_dir, project_root=project_root)
 
 
 @dataclass
@@ -537,7 +550,8 @@ def status(
     skill_set = generate_skills(buildlog_dir)
 
     # Load rejected IDs to filter them out
-    rejected_ids = _load_json_set(_get_rejected_path(buildlog_dir), "skill_ids")
+    backend, project_id = _get_storage(buildlog_dir)
+    rejected_ids = backend.load_id_set(project_id, "rejected")
 
     # Filter by confidence and exclude rejected
     confidence_order = {"low": 0, "medium": 1, "high": 2}
@@ -663,32 +677,28 @@ def reject(
             error="No skill IDs provided",
         )
 
-    reject_file = _get_rejected_path(buildlog_dir)
-    reject_file.parent.mkdir(parents=True, exist_ok=True)
+    backend, project_id = _get_storage(buildlog_dir)
 
     # Load existing rejections
-    if reject_file.exists():
-        try:
-            rejected = json.loads(reject_file.read_text())
-        except json.JSONDecodeError:
-            rejected = {"rejected_at": {}, "skill_ids": []}
-    else:
-        rejected = {"rejected_at": {}, "skill_ids": []}
+    existing_ids = backend.load_id_set(project_id, "rejected")
 
     # Add new rejections
     now = datetime.now(timezone.utc).isoformat()
     newly_rejected: list[str] = []
+    metadata: dict[str, str] = {}
     for skill_id in skill_ids:
-        if skill_id not in rejected["skill_ids"]:
-            rejected["skill_ids"].append(skill_id)
-            rejected["rejected_at"][skill_id] = now
+        if skill_id not in existing_ids:
+            existing_ids.add(skill_id)
+            metadata[skill_id] = now
             newly_rejected.append(skill_id)
 
-    reject_file.write_text(json.dumps(rejected, indent=2))
+    backend.save_id_set(
+        project_id, "rejected", existing_ids, metadata if metadata else None
+    )
 
     return RejectResult(
         rejected_ids=newly_rejected,
-        total_rejected=len(rejected["skill_ids"]),
+        total_rejected=len(existing_ids),
     )
 
 
@@ -715,8 +725,9 @@ def diff(
     skill_set = generate_skills(buildlog_dir)
 
     # Load rejected and promoted IDs
-    rejected_ids = _load_json_set(_get_rejected_path(buildlog_dir), "skill_ids")
-    promoted_ids = _load_json_set(_get_promoted_path(buildlog_dir), "skill_ids")
+    backend, project_id = _get_storage(buildlog_dir)
+    rejected_ids = backend.load_id_set(project_id, "rejected")
+    promoted_ids = backend.load_id_set(project_id, "promoted")
 
     # Find unpromoted, unrejected skills
     pending: dict[str, list[dict]] = {}  # type: ignore[type-arg]
@@ -825,8 +836,8 @@ def learn_from_review(
     elif not source.startswith("review:"):
         source = f"review:{source}"
 
-    learnings_path = _get_learnings_path(buildlog_dir)
-    data = _load_learnings(learnings_path)
+    backend, project_id = _get_storage(buildlog_dir)
+    data = backend.load_learnings(project_id)
 
     new_ids: list[str] = []
     reinforced_ids: list[str] = []
@@ -887,7 +898,7 @@ def learn_from_review(
     )
 
     # Persist
-    _save_learnings(learnings_path, data)
+    backend.save_learnings(project_id, data)
 
     # Build message
     msg_parts = []
@@ -995,10 +1006,11 @@ def log_reward(
     reward_id = _generate_reward_id(outcome, now)
     reward_value = _compute_reward_value(outcome, revision_distance)
 
+    backend, project_id = _get_storage(buildlog_dir)
+
     # Try to get rules and context from active session if not provided
-    active_path = _get_active_session_path(buildlog_dir)
-    if active_path.exists():
-        session_data = json.loads(active_path.read_text())
+    session_data = backend.load_active_session(project_id)
+    if session_data is not None:
         if rules_active is None:
             rules_active = session_data.get("selected_rules", [])
         if error_class is None:
@@ -1016,12 +1028,8 @@ def log_reward(
         source=source or "manual",
     )
 
-    # Append to JSONL file
-    rewards_path = _get_rewards_path(buildlog_dir)
-    rewards_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(rewards_path, "a") as f:
-        f.write(json.dumps(event.to_dict()) + "\n")
+    # Append reward event
+    backend.append_event(project_id, "rewards", event.to_dict())  # type: ignore[arg-type]
 
     # =========================================================================
     # BANDIT LEARNING: Update with explicit reward
@@ -1050,11 +1058,7 @@ def log_reward(
         )
 
     # Count total events
-    total_events = 0
-    if rewards_path.exists():
-        total_events = sum(
-            1 for line in rewards_path.read_text().strip().split("\n") if line
-        )
+    total_events = backend.count_events(project_id, "rewards")
 
     rules_count = len(rules_active) if rules_active else 0
     message = f"Logged {outcome} (reward={reward_value:.2f})"
@@ -1082,9 +1086,12 @@ def get_rewards(
     Returns:
         RewardSummary with events and statistics.
     """
-    rewards_path = _get_rewards_path(buildlog_dir)
+    backend, project_id = _get_storage(buildlog_dir)
 
-    if not rewards_path.exists():
+    # Load all events via backend
+    raw_events = backend.load_events(project_id, "rewards")
+
+    if not raw_events:
         return RewardSummary(
             total_events=0,
             accepted=0,
@@ -1094,15 +1101,13 @@ def get_rewards(
             events=[],
         )
 
-    # Parse all events
+    # Parse into dataclasses
     events: list[RewardEvent] = []
-    for line in rewards_path.read_text().strip().split("\n"):
-        if line:
-            try:
-                data = json.loads(line)
-                events.append(RewardEvent.from_dict(data))
-            except (json.JSONDecodeError, KeyError):
-                continue  # Skip malformed lines
+    for data in raw_events:
+        try:
+            events.append(RewardEvent.from_dict(data))  # type: ignore[arg-type]
+        except (KeyError, ValueError):
+            continue
 
     # Calculate statistics
     total = len(events)
@@ -1402,8 +1407,8 @@ def _compute_semantic_hash(description: str) -> str:
 
 def _get_current_rules(buildlog_dir: Path) -> list[str]:
     """Get list of current promoted rule IDs."""
-    promoted_path = _get_promoted_path(buildlog_dir)
-    return list(_load_json_set(promoted_path, "skill_ids"))
+    backend, project_id = _get_storage(buildlog_dir)
+    return sorted(backend.load_id_set(project_id, "promoted"))
 
 
 def _get_seed_rule_ids(buildlog_dir: Path) -> set[str]:
@@ -1581,9 +1586,8 @@ def start_session(
     )
 
     # Save as active session
-    active_path = _get_active_session_path(buildlog_dir)
-    active_path.parent.mkdir(parents=True, exist_ok=True)
-    active_path.write_text(json.dumps(session.to_dict(), indent=2))
+    backend, project_id = _get_storage(buildlog_dir)
+    backend.save_active_session(project_id, session.to_dict())  # type: ignore[arg-type]
 
     return StartSessionResult(
         session_id=session_id,
@@ -1612,14 +1616,14 @@ def end_session(
     Returns:
         EndSessionResult with session metrics.
     """
-    active_path = _get_active_session_path(buildlog_dir)
+    backend, project_id = _get_storage(buildlog_dir)
 
-    if not active_path.exists():
+    session_data = backend.load_active_session(project_id)
+    if session_data is None:
         raise ValueError("No active session to end")
 
     # Load active session
-    session_data = json.loads(active_path.read_text())
-    session = Session.from_dict(session_data)
+    session = Session.from_dict(session_data)  # type: ignore[arg-type]
 
     # Update session with end info
     now = datetime.now(timezone.utc)
@@ -1631,16 +1635,14 @@ def end_session(
         session.notes = f"{session.notes or ''}\n{notes}".strip()
 
     # Append to sessions log
-    sessions_path = _get_sessions_path(buildlog_dir)
-    sessions_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(sessions_path, "a") as f:
-        f.write(json.dumps(session.to_dict()) + "\n")
+    backend.append_event(project_id, "sessions", session.to_dict())  # type: ignore[arg-type]
 
     # Remove active session marker
-    active_path.unlink()
+    backend.delete_active_session(project_id)
 
     # Calculate session metrics
-    all_mistakes = _load_mistakes(buildlog_dir)
+    raw_mistakes = backend.load_events(project_id, "mistakes")
+    all_mistakes = [Mistake.from_dict(m) for m in raw_mistakes]  # type: ignore[arg-type]
     session_mistakes = [m for m in all_mistakes if m.session_id == session.id]
     repeated = sum(1 for m in session_mistakes if m.was_repeat)
 
@@ -1684,22 +1686,23 @@ def log_mistake(
     Returns:
         LogMistakeResult indicating if this was a repeat.
     """
-    active_path = _get_active_session_path(buildlog_dir)
+    backend, project_id = _get_storage(buildlog_dir)
 
-    if not active_path.exists():
+    session_data = backend.load_active_session(project_id)
+    if session_data is None:
         raise ValueError(
             "No active session - start one with 'buildlog experiment start'"
         )
 
     # Get current session
-    session_data = json.loads(active_path.read_text())
     session_id = session_data["id"]
 
     now = datetime.now(timezone.utc)
     mistake_id = _generate_mistake_id(error_class, now)
 
     # Check for similar prior mistakes
-    all_mistakes = _load_mistakes(buildlog_dir)
+    raw_mistakes = backend.load_events(project_id, "mistakes")
+    all_mistakes = [Mistake.from_dict(m) for m in raw_mistakes]  # type: ignore[arg-type]
     similar = _find_similar_prior_mistake(
         description, error_class, session_id, all_mistakes
     )
@@ -1716,10 +1719,7 @@ def log_mistake(
     )
 
     # Append to mistakes log
-    mistakes_path = _get_mistakes_path(buildlog_dir)
-    mistakes_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(mistakes_path, "a") as f:
-        f.write(json.dumps(mistake.to_dict()) + "\n")
+    backend.append_event(project_id, "mistakes", mistake.to_dict())  # type: ignore[arg-type]
 
     # =========================================================================
     # BANDIT LEARNING: Negative feedback for selected rules
@@ -1777,8 +1777,13 @@ def get_session_metrics(
     Returns:
         SessionMetrics with mistake rates and rule changes.
     """
-    sessions = _load_sessions(buildlog_dir)
-    mistakes = _load_mistakes(buildlog_dir)
+    backend, project_id = _get_storage(buildlog_dir)
+    sessions = [
+        Session.from_dict(s) for s in backend.load_events(project_id, "sessions")  # type: ignore[arg-type]
+    ]
+    mistakes = [
+        Mistake.from_dict(m) for m in backend.load_events(project_id, "mistakes")  # type: ignore[arg-type]
+    ]
 
     if session_id:
         # Filter to specific session
@@ -1824,8 +1829,13 @@ def get_experiment_report(buildlog_dir: Path) -> dict:
     Returns:
         Dictionary with sessions, metrics, and analysis.
     """
-    sessions = _load_sessions(buildlog_dir)
-    mistakes = _load_mistakes(buildlog_dir)
+    backend, project_id = _get_storage(buildlog_dir)
+    sessions = [
+        Session.from_dict(s) for s in backend.load_events(project_id, "sessions")  # type: ignore[arg-type]
+    ]
+    mistakes = [
+        Mistake.from_dict(m) for m in backend.load_events(project_id, "mistakes")  # type: ignore[arg-type]
+    ]
 
     # Per-session metrics
     session_metrics = []
@@ -2349,20 +2359,15 @@ def get_overview(
         by_confidence = {"high": 0, "medium": 0, "low": 0}
 
     # Promoted/rejected
-    promoted_path = _get_promoted_path(buildlog_dir)
-    rejected_path = _get_rejected_path(buildlog_dir)
-    promoted_count = len(_load_json_set(promoted_path, "skill_ids"))
-    rejected_count = len(_load_json_set(rejected_path, "skill_ids"))
+    backend, project_id = _get_storage(buildlog_dir)
+    promoted_count = len(backend.load_id_set(project_id, "promoted"))
+    rejected_count = len(backend.load_id_set(project_id, "rejected"))
 
     # Active session
-    active_session_path = _get_active_session_path(buildlog_dir)
     active_session = None
-    if active_session_path.exists():
-        try:
-            session_data = json.loads(active_session_path.read_text())
-            active_session = session_data.get("id")
-        except (json.JSONDecodeError, OSError):
-            pass
+    active_data = backend.load_active_session(project_id)
+    if active_data is not None:
+        active_session = active_data.get("id")
 
     return OverviewResult(
         entries=len(entries),
