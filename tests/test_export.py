@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from buildlog.storage.exporters import _EXPORTABLE_TABLES, JsonlExporter
+from buildlog.storage.exporters import EXPORTABLE_TABLES, JsonlExporter
 from buildlog.storage.schema import init_schema
 from buildlog.storage.sqlite import SQLiteBackend
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from buildlog.storage.base import StorageBackend
 from buildlog.storage.sqlite import SQLiteBackend
 
-__all__ = ["JsonlExporter"]
+__all__ = ["JsonlExporter", "EXPORTABLE_TABLES"]
 
 # Tables that use load_events (append-only event streams)
 _EVENT_TABLES = ["rewards", "sessions", "mistakes"]
@@ -20,7 +20,7 @@ _EVENT_TABLES = ["rewards", "sessions", "mistakes"]
 # Tables with specialized load methods
 _SPECIAL_TABLES = ["bandit_state", "learnings", "skill_decisions"]
 
-_EXPORTABLE_TABLES = _EVENT_TABLES + _SPECIAL_TABLES
+EXPORTABLE_TABLES = _EVENT_TABLES + _SPECIAL_TABLES
 
 
 def _load_special_table(
@@ -113,25 +113,28 @@ def _build_rules_join(seeds_dir: Path | None) -> list[dict]:
                 "persona": persona,
             }
             if skill.provenance:
+                # Direct-mapped keys (no renaming needed)
                 for key in (
                     "source_id",
                     "source_domain",
                     "source_derivation",
-                    "source_confidence",
                     "graph_version",
-                    "confidence",
                 ):
                     if key in skill.provenance:
-                        row[f"source_{key}" if key == "confidence" else key] = (
-                            skill.provenance[key]
-                        )
+                        row[key] = skill.provenance[key]
+                # Map provenance "confidence" to "source_confidence"
+                # (provenance "source_confidence" takes priority if both exist)
+                if "confidence" in skill.provenance:
+                    row["source_confidence"] = skill.provenance["confidence"]
+                if "source_confidence" in skill.provenance:
+                    row["source_confidence"] = skill.provenance["source_confidence"]
             rows.append(row)
 
     return rows
 
 
 class JsonlExporter:
-    """Export data as JSONL files — same format as the legacy backend."""
+    """Export data as JSONL files (same format as the legacy backend)."""
 
     name: str = "jsonl"
 
@@ -161,11 +164,11 @@ class JsonlExporter:
         Returns:
             Summary message.
         """
-        target_tables = tables or _EXPORTABLE_TABLES
+        target_tables = tables or EXPORTABLE_TABLES
         for t in target_tables:
-            if t not in _EXPORTABLE_TABLES:
+            if t not in EXPORTABLE_TABLES:
                 raise ValueError(
-                    f"Unknown table '{t}'. Must be one of {_EXPORTABLE_TABLES}"
+                    f"Unknown table '{t}'. Must be one of {EXPORTABLE_TABLES}"
                 )
 
         results: dict[str, list[dict]] = {}

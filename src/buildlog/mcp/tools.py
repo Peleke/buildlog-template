@@ -1234,9 +1234,25 @@ def buildlog_import_seed(
     from buildlog.seeds import import_seed_file
 
     try:
+        # Resolve target_dir to prevent path traversal
+        resolved_target = Path(target_dir).resolve() if target_dir else None
+        if resolved_target is not None:
+            cwd = Path.cwd().resolve()
+            if not str(resolved_target).startswith(str(cwd)):
+                return {
+                    "persona": "",
+                    "rule_count": 0,
+                    "provenance_count": 0,
+                    "target_path": "",
+                    "version_changed": False,
+                    "decayed_rules": 0,
+                    "message": "",
+                    "error": f"target_dir must be within working directory: {resolved_target}",
+                }
+
         result = import_seed_file(
             source_path=Path(source),
-            target_dir=Path(target_dir) if target_dir else None,
+            target_dir=resolved_target,
             buildlog_dir=Path(buildlog_dir),
         )
         return asdict(result)
@@ -1309,12 +1325,12 @@ def buildlog_export(
         seeds_dir=seeds_dir,
     )
 
-    from buildlog.storage.exporters import _EXPORTABLE_TABLES
+    from buildlog.storage.exporters import EXPORTABLE_TABLES
 
     return {
         "format": format,
         "project_id": pid,
-        "tables": table_list or _EXPORTABLE_TABLES,
+        "tables": table_list or EXPORTABLE_TABLES,
         "output": str(output_path) if output_path else None,
         "summary": summary,
     }

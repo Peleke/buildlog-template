@@ -742,6 +742,9 @@ class ThompsonSamplingBandit:
         Returns:
             True if at least one arm was decayed, False if rule not found.
         """
+        # Clamp to [0.0, 1.0] to prevent invalid Beta parameters
+        decay_factor = max(0.0, min(1.0, decay_factor))
+
         decayed = False
 
         if context is not None:

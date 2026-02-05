@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from buildlog.mcp.tools import (
     _resolve_file_or_inline,
@@ -18,6 +19,7 @@ from buildlog.mcp.tools import (
     buildlog_gauntlet_generate,
     buildlog_gauntlet_issues,
     buildlog_gauntlet_rules,
+    buildlog_import_seed,
     buildlog_learn_from_review,
     buildlog_overview,
     buildlog_promote,
@@ -688,3 +690,81 @@ class TestFileBasedGauntletGenerate:
         result = buildlog_gauntlet_generate(persona="test")
         assert result["error"] is not None
         assert "Provide either" in result["error"]
+
+
+class TestBuildlogImportSeed:
+    """Tests for buildlog_import_seed MCP tool."""
+
+    def test_happy_path(self, tmp_path, monkeypatch):
+        """Should import valid seed file and return result dict."""
+        monkeypatch.chdir(tmp_path)
+        source = tmp_path / "test.yaml"
+        source.write_text(
+            yaml.dump(
+                {
+                    "persona": "test_persona",
+                    "version": 1,
+                    "rules": [{"rule": "Always test", "category": "testing"}],
+                }
+            )
+        )
+        target_dir = tmp_path / "seeds"
+
+        result = buildlog_import_seed(
+            source=str(source),
+            target_dir=str(target_dir),
+            buildlog_dir=str(tmp_path / "buildlog"),
+        )
+
+        assert "error" not in result
+        assert result["persona"] == "test_persona"
+        assert result["rule_count"] == 1
+        assert (target_dir / "test.yaml").exists()
+
+    def test_error_on_missing_source(self, tmp_path, monkeypatch):
+        """Should return error dict for missing source file."""
+        monkeypatch.chdir(tmp_path)
+        result = buildlog_import_seed(
+            source=str(tmp_path / "nonexistent.yaml"),
+            target_dir=str(tmp_path / "seeds"),
+        )
+
+        assert result["error"] is not None
+        assert "not found" in result["error"]
+        assert result["rule_count"] == 0
+
+    def test_error_on_invalid_yaml(self, tmp_path, monkeypatch):
+        """Should return error dict for invalid seed file."""
+        monkeypatch.chdir(tmp_path)
+        source = tmp_path / "bad.yaml"
+        source.write_text("- just\n- a\n- list")
+
+        result = buildlog_import_seed(
+            source=str(source),
+            target_dir=str(tmp_path / "seeds"),
+        )
+
+        assert result["error"] is not None
+        assert "Invalid" in result["error"]
+
+    def test_rejects_path_traversal(self, tmp_path, monkeypatch):
+        """Should reject target_dir outside working directory."""
+        monkeypatch.chdir(tmp_path)
+        source = tmp_path / "test.yaml"
+        source.write_text(
+            yaml.dump(
+                {
+                    "persona": "test",
+                    "version": 1,
+                    "rules": [{"rule": "Test"}],
+                }
+            )
+        )
+
+        result = buildlog_import_seed(
+            source=str(source),
+            target_dir="/tmp/evil_outside_cwd",
+        )
+
+        assert result["error"] is not None
+        assert "within working directory" in result["error"]

@@ -727,6 +727,30 @@ class TestVersionAwareDecay:
         assert bandit.state.get_params("ctx1", "rule").alpha == 3.0
         assert bandit.state.get_params("ctx2", "rule").alpha == 3.0
 
+    def test_decay_clamps_negative_factor(self, bandit_path):
+        """Negative decay_factor should be clamped to 0.0 (full reset)."""
+        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit.state.set_params("ctx", "rule", BetaParams(alpha=5.0, beta=3.0))
+        bandit.state.save(bandit_path)
+
+        bandit.decay_arm("rule", decay_factor=-1.0, context="ctx")
+
+        params = bandit.state.get_params("ctx", "rule")
+        assert params.alpha == 1.0  # Clamped to 0.0, same as full reset
+        assert params.beta == 1.0
+
+    def test_decay_clamps_factor_above_one(self, bandit_path):
+        """decay_factor > 1.0 should be clamped to 1.0 (no change)."""
+        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit.state.set_params("ctx", "rule", BetaParams(alpha=5.0, beta=3.0))
+        bandit.state.save(bandit_path)
+
+        bandit.decay_arm("rule", decay_factor=2.0, context="ctx")
+
+        params = bandit.state.get_params("ctx", "rule")
+        assert params.alpha == 5.0  # Clamped to 1.0, no change
+        assert params.beta == 3.0
+
 
 class TestConfidenceWeightedBoosting:
     """Tests for confidence-weighted seed boosting (B5)."""
