@@ -41,6 +41,71 @@ def _validate_skill_ids(skill_ids: list[str]) -> list[str]:
     return [sid for sid in skill_ids if sid and isinstance(sid, str) and sid.strip()]
 
 
+def _resolve_file_or_inline(
+    inline: list[dict] | None,
+    file_path: str | None,
+    param_name: str,
+) -> list[dict]:
+    """Resolve a list[dict] param from either inline value or a JSON file.
+
+    Exactly one of *inline* or *file_path* must be provided.
+
+    Raises:
+        ValueError: Both or neither provided, or JSON decode fails.
+        FileNotFoundError: File path doesn't exist.
+    """
+    import json as _json
+
+    if inline is not None and file_path is not None:
+        raise ValueError(
+            f"Provide either '{param_name}' or '{param_name}_file', not both."
+        )
+    if inline is None and file_path is None:
+        raise ValueError(
+            f"Provide either '{param_name}' (inline) or '{param_name}_file' (path)."
+        )
+    if file_path is not None:
+        p = Path(file_path)
+        if not p.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        data = _json.loads(p.read_text())
+        if not isinstance(data, list):
+            raise ValueError(
+                f"Expected JSON array in {file_path}, got {type(data).__name__}"
+            )
+        return data
+    return inline  # type: ignore[return-value]
+
+
+def _resolve_text_file_or_inline(
+    inline: str | None,
+    file_path: str | None,
+    param_name: str,
+) -> str:
+    """Resolve a str param from either inline value or a text file.
+
+    Exactly one of *inline* or *file_path* must be provided.
+
+    Raises:
+        ValueError: Both or neither provided.
+        FileNotFoundError: File path doesn't exist.
+    """
+    if inline is not None and file_path is not None:
+        raise ValueError(
+            f"Provide either '{param_name}' or '{param_name}_file', not both."
+        )
+    if inline is None and file_path is None:
+        raise ValueError(
+            f"Provide either '{param_name}' (inline) or '{param_name}_file' (path)."
+        )
+    if file_path is not None:
+        p = Path(file_path)
+        if not p.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        return p.read_text()
+    return inline  # type: ignore[return-value]
+
+
 def buildlog_status(
     buildlog_dir: str = "buildlog",
     min_confidence: Literal["low", "medium", "high"] = "low",
@@ -122,15 +187,18 @@ def buildlog_diff(
 
 
 def buildlog_learn_from_review(
-    issues: list[dict],
+    issues: list[dict] | None = None,
     source: str | None = None,
     buildlog_dir: str = "buildlog",
+    issues_file: str | None = None,
 ) -> dict:
     """Extract and persist learnings from code review feedback.
 
     Call this after a review loop completes to persist learnings.
     Each issue's rule_learned becomes a tracked learning that gains
     confidence through reinforcement.
+
+    Provide issues inline OR via a JSON file path (not both).
 
     Args:
         issues: List of issues with structure:
@@ -145,6 +213,8 @@ def buildlog_learn_from_review(
             }
         source: Optional identifier (e.g., "PR#13")
         buildlog_dir: Path to buildlog directory
+        issues_file: Path to a JSON file containing the issues array.
+            Mutually exclusive with 'issues'.
 
     Returns:
         Result with new_learnings, reinforced_learnings, total processed
@@ -161,8 +231,22 @@ def buildlog_learn_from_review(
             ],
             source="PR#13"
         )
+        # Or via file:
+        buildlog_learn_from_review(issues_file="/tmp/issues.json", source="PR#13")
     """
-    result = learn_from_review(Path(buildlog_dir), issues, source)
+    try:
+        resolved = _resolve_file_or_inline(issues, issues_file, "issues")
+    except (ValueError, FileNotFoundError) as exc:
+        return {
+            "new_learnings": [],
+            "reinforced_learnings": [],
+            "total_issues_processed": 0,
+            "source": source,
+            "message": "",
+            "error": str(exc),
+        }
+
+    result = learn_from_review(Path(buildlog_dir), resolved, source)
     return asdict(result)
 
 
@@ -471,15 +555,18 @@ def buildlog_bandit_status(
 
 
 def buildlog_gauntlet_issues(
-    issues: list[dict],
+    issues: list[dict] | None = None,
     iteration: int = 1,
     source: str | None = None,
     buildlog_dir: str = "buildlog",
+    issues_file: str | None = None,
 ) -> dict:
     """Process gauntlet issues and determine next action (fix/checkpoint/clean).
 
     Call this after running a gauntlet review. It categorizes issues by
     severity, persists learnings, and returns the appropriate next action.
+
+    Provide issues inline OR via a JSON file path (not both).
 
     Args:
         issues: List of issues from the gauntlet review, each with:
@@ -493,6 +580,8 @@ def buildlog_gauntlet_issues(
         iteration: Current iteration number (for tracking loops)
         source: Optional source identifier for learnings
         buildlog_dir: Path to buildlog directory
+        issues_file: Path to a JSON file containing the issues array.
+            Mutually exclusive with 'issues'.
 
     Returns:
         Dict with:
@@ -517,13 +606,29 @@ def buildlog_gauntlet_issues(
             ],
             iteration=1
         )
+        # Or via file:
+        result = buildlog_gauntlet_issues(issues_file="/tmp/issues.json", iteration=1)
         # result["action"] tells you what to do next
     """
+    try:
+        resolved = _resolve_file_or_inline(issues, issues_file, "issues")
+    except (ValueError, FileNotFoundError) as exc:
+        return {
+            "action": "",
+            "criticals": [],
+            "majors": [],
+            "minors": [],
+            "iteration": iteration,
+            "learnings_persisted": 0,
+            "message": "",
+            "error": str(exc),
+        }
+
     from buildlog.core import gauntlet_process_issues
 
     result = gauntlet_process_issues(
         Path(buildlog_dir),
-        issues=issues,
+        issues=resolved,
         iteration=iteration,
         source=source,
     )
@@ -531,19 +636,24 @@ def buildlog_gauntlet_issues(
 
 
 def buildlog_gauntlet_accept_risk(
-    remaining_issues: list[dict],
+    remaining_issues: list[dict] | None = None,
     create_github_issues: bool = False,
     repo: str | None = None,
+    issues_file: str | None = None,
 ) -> dict:
     """Accept risk for remaining issues, optionally create GitHub issues.
 
     Call this when the user decides to accept remaining issues as risk
     (e.g., only minors remain and they want to move on).
 
+    Provide remaining_issues inline OR via a JSON file path (not both).
+
     Args:
         remaining_issues: Issues being accepted as risk
         create_github_issues: Whether to create GitHub issues for tracking
         repo: Repository for GitHub issues (uses current repo if None)
+        issues_file: Path to a JSON file containing the issues array.
+            Mutually exclusive with 'remaining_issues'.
 
     Returns:
         Dict with:
@@ -559,11 +669,26 @@ def buildlog_gauntlet_accept_risk(
             remaining_issues=[...],
             create_github_issues=True
         )
+        # Or via file:
+        result = buildlog_gauntlet_accept_risk(issues_file="/tmp/remaining.json")
     """
+    try:
+        resolved = _resolve_file_or_inline(
+            remaining_issues, issues_file, "remaining_issues"
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        return {
+            "accepted_issues": 0,
+            "github_issues_created": 0,
+            "github_issue_urls": [],
+            "message": "",
+            "error": str(exc),
+        }
+
     from buildlog.core import gauntlet_accept_risk
 
     result = gauntlet_accept_risk(
-        remaining_issues=remaining_issues,
+        remaining_issues=resolved,
         create_github_issues=create_github_issues,
         repo=repo,
     )
@@ -1002,16 +1127,19 @@ def buildlog_gauntlet_list_personas(
 
 
 def buildlog_gauntlet_generate(
-    source_text: str,
-    persona: str,
+    source_text: str | None = None,
+    persona: str = "",
     output_dir: str | None = None,
     dry_run: bool = False,
     buildlog_dir: str = "buildlog",
+    source_file: str | None = None,
 ) -> dict:
     """Generate seed rules from source text using LLM extraction.
 
     Runs the seed engine pipeline to produce a YAML seed file
     from arbitrary source content (docs, notes, standards).
+
+    Provide source_text inline OR via a file path (not both).
 
     Args:
         source_text: The text content to extract rules from
@@ -1019,13 +1147,27 @@ def buildlog_gauntlet_generate(
         output_dir: Output dir for seed YAML (default: .buildlog/seeds)
         dry_run: Preview without writing to disk
         buildlog_dir: Path to buildlog directory
+        source_file: Path to a text file containing the source content.
+            Mutually exclusive with 'source_text'.
 
     Returns:
         Dict with persona, rule_count, output_path, preview, message
     """
+    try:
+        resolved = _resolve_text_file_or_inline(source_text, source_file, "source_text")
+    except (ValueError, FileNotFoundError) as exc:
+        return {
+            "persona": persona,
+            "rule_count": 0,
+            "output_path": "",
+            "preview": "",
+            "message": "",
+            "error": str(exc),
+        }
+
     out = Path(output_dir) if output_dir else Path(buildlog_dir) / ".buildlog" / "seeds"
     result = gauntlet_generate(
-        source_text=source_text,
+        source_text=resolved,
         persona=persona,
         output_dir=out,
         dry_run=dry_run,
