@@ -86,6 +86,7 @@ buildlog experiment report
 - **Global SQLite storage:** all buildlog data is stored in a single global database at `~/.buildlog/buildlog.db` (SQLite with WAL mode). Project isolation via hashed project IDs derived from git remote URLs. Legacy per-project JSON/JSONL files are still supported as a fallback.
 - **Migration and export:** `buildlog migrate` converts legacy JSON/JSONL files to the global database (idempotent, non-destructive). `buildlog export` dumps data back to JSONL for portability or backup.
 - **Ambient emission protocol:** mistakes and learned rules are automatically emitted as JSON artifacts to `~/.buildlog/emissions/pending/` for offline ingestion by downstream systems (knowledge graphs, analytics). Fire-and-forget — emission failure never breaks the primary operation.
+- **Workflow enforcement:** `buildlog verify` checks your setup (CLAUDE.md workflow section, MCP registration, branch protection hooks) and `--fix` repairs it. `buildlog init` installs pre-commit hooks that prevent direct commits to main and nudge toward `buildlog commit`.
 - **MCP server:** buildlog exposes itself as an MCP server so agents can query seeds, skills, and build history programmatically during sessions.
 - **npm wrapper:** `npx @peleke.s/buildlog` for JS/TS projects. Thin shim that finds and invokes the Python CLI.
 
