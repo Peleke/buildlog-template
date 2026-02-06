@@ -1245,13 +1245,19 @@ class MistakeDict(TypedDict, total=False):
     semantic_hash: str  # Simplified from embedding - hash of description
     was_repeat: bool
     corrected_by_rule: str | None
+    related_concepts: list[str] | None
+    relation_to_prior: dict | None  # {"id": str, "type": str}
+    resolution_action: str | None
+    context: str | None
+    severity: str | None
 
 
 @dataclass
 class Mistake:
     """A logged mistake during a session.
 
-    Tracks mistakes to measure repeated-mistake rate.
+    Tracks mistakes to measure repeated-mistake rate. Carries graph-ready
+    metadata for emission to downstream consumers (e.g. qortex).
 
     Attributes:
         id: Unique identifier for this mistake.
@@ -1262,6 +1268,11 @@ class Mistake:
         semantic_hash: Hash of description for similarity matching.
         was_repeat: Whether this was a repeat of a prior mistake.
         corrected_by_rule: Rule ID that should have prevented this, if any.
+        related_concepts: Concept names involved in this mistake.
+        relation_to_prior: Link to a prior mistake (id + type).
+        resolution_action: What fixed the mistake.
+        context: What the agent was doing when it made the mistake.
+        severity: low|medium|high|critical.
     """
 
     id: str
@@ -1272,6 +1283,11 @@ class Mistake:
     semantic_hash: str
     was_repeat: bool = False
     corrected_by_rule: str | None = None
+    related_concepts: list[str] | None = None
+    relation_to_prior: dict | None = None
+    resolution_action: str | None = None
+    context: str | None = None
+    severity: str | None = None
 
     def to_dict(self) -> MistakeDict:
         """Convert to serializable dictionary."""
@@ -1286,6 +1302,16 @@ class Mistake:
         }
         if self.corrected_by_rule is not None:
             result["corrected_by_rule"] = self.corrected_by_rule
+        if self.related_concepts is not None:
+            result["related_concepts"] = self.related_concepts
+        if self.relation_to_prior is not None:
+            result["relation_to_prior"] = self.relation_to_prior
+        if self.resolution_action is not None:
+            result["resolution_action"] = self.resolution_action
+        if self.context is not None:
+            result["context"] = self.context
+        if self.severity is not None:
+            result["severity"] = self.severity
         return result
 
     @classmethod
@@ -1294,6 +1320,15 @@ class Mistake:
         timestamp = datetime.fromisoformat(data["timestamp"])
         if timestamp.tzinfo is None:
             timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        # Deserialize JSON strings from SQLite if needed
+        related_concepts = data.get("related_concepts")
+        if isinstance(related_concepts, str):
+            related_concepts = json.loads(related_concepts)
+
+        relation_to_prior = data.get("relation_to_prior")
+        if isinstance(relation_to_prior, str):
+            relation_to_prior = json.loads(relation_to_prior)
 
         return cls(
             id=data["id"],
@@ -1304,6 +1339,11 @@ class Mistake:
             semantic_hash=data["semantic_hash"],
             was_repeat=data.get("was_repeat", False),
             corrected_by_rule=data.get("corrected_by_rule"),
+            related_concepts=related_concepts,
+            relation_to_prior=relation_to_prior,
+            resolution_action=data.get("resolution_action"),
+            context=data.get("context"),
+            severity=data.get("severity"),
         )
 
 
@@ -1686,6 +1726,11 @@ def log_mistake(
     error_class: str,
     description: str,
     corrected_by_rule: str | None = None,
+    related_concepts: list[str] | None = None,
+    relation_to_prior: dict | None = None,
+    resolution_action: str | None = None,
+    context: str | None = None,
+    severity: str | None = None,
 ) -> LogMistakeResult:
     """Log a mistake during an experiment session.
 
@@ -1704,6 +1749,11 @@ def log_mistake(
         error_class: Category of error (e.g., "missing_test").
         description: Description of the mistake.
         corrected_by_rule: Rule ID that should have prevented this.
+        related_concepts: Concept names involved in the mistake.
+        relation_to_prior: Link to prior mistake {"id": str, "type": str}.
+        resolution_action: What fixed the mistake.
+        context: What the agent was doing when the mistake occurred.
+        severity: low|medium|high|critical.
 
     Returns:
         LogMistakeResult indicating if this was a repeat.
@@ -1738,6 +1788,11 @@ def log_mistake(
         semantic_hash=_compute_semantic_hash(description),
         was_repeat=similar is not None,
         corrected_by_rule=corrected_by_rule,
+        related_concepts=related_concepts,
+        relation_to_prior=relation_to_prior,
+        resolution_action=resolution_action,
+        context=context,
+        severity=severity,
     )
 
     # Append to mistakes log
@@ -1763,13 +1818,35 @@ def log_mistake(
 
         # Use session's error_class as context, not the mistake's
         # (they should match, but session context is authoritative)
-        context = session_data.get("error_class") or "general"
+        bandit_context = session_data.get("error_class") or "general"
 
         bandit.batch_update(
             rule_ids=selected_rules,
             reward=0.0,  # Failure: rules didn't prevent mistake
-            context=context,
+            context=bandit_context,
         )
+
+    # =========================================================================
+    # AMBIENT EMISSION: Fire-and-forget artifact for downstream consumers
+    # =========================================================================
+    try:
+        from buildlog.emissions import emit_artifact
+        from buildlog.emissions.mappers import DEFAULT_REGISTRY, _mistake_to_manifest
+
+        manifest = _mistake_to_manifest(
+            mistake=mistake,
+            session_data=session_data,
+            selected_rules=selected_rules,
+            project_id=project_id,
+            registry=DEFAULT_REGISTRY,
+        )
+        emit_artifact(
+            artifact=manifest,
+            artifact_type="mistake_manifest",
+            project_id=project_id,
+        )
+    except Exception:
+        pass  # Fire-and-forget: emission failure must never break primary op
 
     message = f"Logged mistake: {error_class}"
     if similar:

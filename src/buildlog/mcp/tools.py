@@ -444,17 +444,30 @@ def buildlog_log_mistake(
     error_class: str,
     description: str,
     corrected_by_rule: str | None = None,
+    related_concepts: list[str] | None = None,
+    relation_to_prior: dict | None = None,
+    resolution_action: str | None = None,
+    context: str | None = None,
+    severity: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Log a mistake during the current session for RMR tracking.
 
     Records the mistake and checks if it's a repeat of a prior mistake
-    (from earlier sessions). This enables measuring repeated-mistake rates.
+    (from earlier sessions). Enriched fields carry graph-ready metadata
+    that gets emitted as artifacts for downstream consumers like qortex.
 
     Args:
         error_class: Category of error (e.g., "missing_test")
         description: Description of the mistake
         corrected_by_rule: Rule ID that should have prevented this
+        related_concepts: Concept names involved in this mistake
+            (e.g., ["schema_migration", "backwards_compat"])
+        relation_to_prior: Link to a prior mistake:
+            {"id": "mistake-xxx", "type": "escalation|same_pattern|regression|caused_by|part_of"}
+        resolution_action: What fixed the mistake (free text)
+        context: What the agent was doing (free text)
+        severity: Severity level: "low", "medium", "high", or "critical"
         buildlog_dir: Path to buildlog directory
 
     Returns:
@@ -463,7 +476,10 @@ def buildlog_log_mistake(
     Example:
         buildlog_log_mistake(
             error_class="missing_test",
-            description="Forgot to add unit tests for new helper function"
+            description="Forgot to add unit tests for new helper function",
+            related_concepts=["testing", "helper_functions"],
+            severity="medium",
+            resolution_action="Added pytest tests for all helper functions",
         )
     """
     result = log_mistake(
@@ -471,6 +487,11 @@ def buildlog_log_mistake(
         error_class=error_class,
         description=description,
         corrected_by_rule=corrected_by_rule,
+        related_concepts=related_concepts,
+        relation_to_prior=relation_to_prior,
+        resolution_action=resolution_action,
+        context=context,
+        severity=severity,
     )
     return asdict(result)
 
