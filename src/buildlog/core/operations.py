@@ -807,6 +807,54 @@ def _save_learnings(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2))
 
 
+def _learnings_to_seed(
+    new_ids: list[str],
+    data: dict,
+    issues: list[dict],
+    source: str | None,
+    project_id: str,
+) -> dict:
+    """Transform new learnings into a qortex-compatible seed dict."""
+    import importlib.metadata
+
+    try:
+        version = importlib.metadata.version("buildlog")
+    except importlib.metadata.PackageNotFoundError:
+        version = "0.0.0-dev"
+
+    rules = []
+    for lid in new_ids:
+        learning = data["learnings"].get(lid)
+        if learning is None:
+            continue
+        rules.append(
+            {
+                "rule": learning["rule"],
+                "category": learning["category"],
+                "provenance": {
+                    "id": f"bl:{lid}",
+                    "domain": "experiential",
+                    "derivation": "explicit",
+                    "confidence": min(
+                        1.0, learning.get("reinforcement_count", 1) * 0.3 + 0.4
+                    ),
+                },
+            }
+        )
+
+    return {
+        "persona": f"buildlog_{project_id}",
+        "version": 1,
+        "rules": rules,
+        "metadata": {
+            "source": "buildlog",
+            "source_version": version,
+            "projected_at": datetime.now(timezone.utc).isoformat(),
+            "rule_count": len(rules),
+        },
+    }
+
+
 def learn_from_review(
     buildlog_dir: Path,
     issues: list[dict],
@@ -907,6 +955,22 @@ def learn_from_review(
 
     # Persist
     backend.save_learnings(project_id, data)
+
+    # =========================================================================
+    # AMBIENT EMISSION: Learned rules as seed for downstream consumers
+    # =========================================================================
+    if new_ids:
+        try:
+            from buildlog.emissions import emit_artifact
+
+            seed = _learnings_to_seed(new_ids, data, issues, source, project_id)
+            emit_artifact(
+                artifact=seed,
+                artifact_type="learned_rules",
+                project_id=project_id,
+            )
+        except Exception:
+            pass  # Fire-and-forget
 
     # Build message
     msg_parts = []
