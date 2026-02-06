@@ -1821,7 +1821,38 @@ def log_mistake(
 
     Returns:
         LogMistakeResult indicating if this was a repeat.
+
+    Raises:
+        ValueError: If severity or relation_to_prior.type is invalid.
     """
+    # -- Input validation --
+    _VALID_SEVERITIES = {"low", "medium", "high", "critical"}
+    if severity is not None and severity not in _VALID_SEVERITIES:
+        raise ValueError(
+            f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}"
+        )
+
+    _VALID_CHAIN_TYPES = {
+        "escalation",
+        "same_pattern",
+        "regression",
+        "caused_by",
+        "part_of",
+    }
+    if relation_to_prior is not None:
+        if not isinstance(relation_to_prior, dict):
+            raise ValueError(
+                "relation_to_prior must be a dict with 'id' and 'type' keys"
+            )
+        if "id" not in relation_to_prior or "type" not in relation_to_prior:
+            raise ValueError("relation_to_prior must have 'id' and 'type' keys")
+        chain_type = relation_to_prior.get("type")
+        if chain_type not in _VALID_CHAIN_TYPES:
+            raise ValueError(
+                f"Invalid relation_to_prior type '{chain_type}'. "
+                f"Must be one of: {', '.join(sorted(_VALID_CHAIN_TYPES))}"
+            )
+
     backend, project_id = _get_storage(buildlog_dir)
 
     session_data = backend.load_active_session(project_id)
