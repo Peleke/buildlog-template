@@ -92,7 +92,7 @@ buildlog experiment report
 
 ## Current Limits
 
-This is v0.12, not the end state.
+This is v0.13, not the end state.
 
 - **Extraction quality is uneven.** Regex extractors miss nuance; LLM extractors are accurate but expensive. The middle ground is still being found.
 - **Feedback signals are coarse.** Repeated Mistake Rate works but requires manual tagging. Richer automatic signals (test outcomes, review results, revision distance) are on the roadmap.
