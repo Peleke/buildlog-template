@@ -2554,6 +2554,39 @@ def get_overview(
     )
 
 
+def _ensure_template(buildlog_dir: Path, template_name: str) -> Path | None:
+    """Copy a template from bundled sources if missing from buildlog_dir.
+
+    Checks editable install paths, repo root, and installed wheel shared-data.
+    Returns the target path on success, or None if no source found.
+    """
+    import shutil
+    import sysconfig
+
+    target = buildlog_dir / template_name
+
+    pkg_dir = Path(__file__).resolve().parent.parent  # src/buildlog/
+    candidates = [
+        pkg_dir.parent.parent / "template" / "buildlog" / template_name,
+        pkg_dir.parent / "template" / "buildlog" / template_name,
+    ]
+
+    data_dir = (
+        Path(sysconfig.get_path("data"))
+        / "share"
+        / "buildlog"
+        / "template"
+        / "buildlog"
+    )
+    candidates.append(data_dir / template_name)
+
+    for candidate in candidates:
+        if candidate.exists():
+            shutil.copy2(candidate, target)
+            return target
+    return None
+
+
 def create_entry(
     buildlog_dir: Path,
     slug: str,
@@ -2591,6 +2624,12 @@ def create_entry(
     if quick and not template_file.exists():
         template_file = buildlog_dir / "_TEMPLATE.md"
         template_name = "_TEMPLATE.md"
+
+    if not template_file.exists():
+        # Self-healing: copy from bundled template sources
+        provisioned = _ensure_template(buildlog_dir, template_name)
+        if provisioned is not None:
+            template_file = provisioned
 
     if not template_file.exists():
         return CreateEntryResult(
