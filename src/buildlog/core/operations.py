@@ -807,6 +807,54 @@ def _save_learnings(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2))
 
 
+def _learnings_to_seed(
+    new_ids: list[str],
+    data: dict,
+    issues: list[dict],
+    source: str | None,
+    project_id: str,
+) -> dict:
+    """Transform new learnings into a qortex-compatible seed dict."""
+    import importlib.metadata
+
+    try:
+        version = importlib.metadata.version("buildlog")
+    except importlib.metadata.PackageNotFoundError:
+        version = "0.0.0-dev"
+
+    rules = []
+    for lid in new_ids:
+        learning = data["learnings"].get(lid)
+        if learning is None:
+            continue
+        rules.append(
+            {
+                "rule": learning["rule"],
+                "category": learning["category"],
+                "provenance": {
+                    "id": f"bl:{lid}",
+                    "domain": "experiential",
+                    "derivation": "explicit",
+                    "confidence": min(
+                        1.0, learning.get("reinforcement_count", 1) * 0.3 + 0.4
+                    ),
+                },
+            }
+        )
+
+    return {
+        "persona": f"buildlog_{project_id}",
+        "version": 1,
+        "rules": rules,
+        "metadata": {
+            "source": "buildlog",
+            "source_version": version,
+            "projected_at": datetime.now(timezone.utc).isoformat(),
+            "rule_count": len(rules),
+        },
+    }
+
+
 def learn_from_review(
     buildlog_dir: Path,
     issues: list[dict],
@@ -907,6 +955,22 @@ def learn_from_review(
 
     # Persist
     backend.save_learnings(project_id, data)
+
+    # =========================================================================
+    # AMBIENT EMISSION: Learned rules as seed for downstream consumers
+    # =========================================================================
+    if new_ids:
+        try:
+            from buildlog.emissions import emit_artifact
+
+            seed = _learnings_to_seed(new_ids, data, issues, source, project_id)
+            emit_artifact(
+                artifact=seed,
+                artifact_type="learned_rules",
+                project_id=project_id,
+            )
+        except Exception:
+            pass  # Fire-and-forget
 
     # Build message
     msg_parts = []
@@ -1245,13 +1309,19 @@ class MistakeDict(TypedDict, total=False):
     semantic_hash: str  # Simplified from embedding - hash of description
     was_repeat: bool
     corrected_by_rule: str | None
+    related_concepts: list[str] | None
+    relation_to_prior: dict | None  # {"id": str, "type": str}
+    resolution_action: str | None
+    context: str | None
+    severity: str | None
 
 
 @dataclass
 class Mistake:
     """A logged mistake during a session.
 
-    Tracks mistakes to measure repeated-mistake rate.
+    Tracks mistakes to measure repeated-mistake rate. Carries graph-ready
+    metadata for emission to downstream consumers (e.g. qortex).
 
     Attributes:
         id: Unique identifier for this mistake.
@@ -1262,6 +1332,11 @@ class Mistake:
         semantic_hash: Hash of description for similarity matching.
         was_repeat: Whether this was a repeat of a prior mistake.
         corrected_by_rule: Rule ID that should have prevented this, if any.
+        related_concepts: Concept names involved in this mistake.
+        relation_to_prior: Link to a prior mistake (id + type).
+        resolution_action: What fixed the mistake.
+        context: What the agent was doing when it made the mistake.
+        severity: low|medium|high|critical.
     """
 
     id: str
@@ -1272,6 +1347,11 @@ class Mistake:
     semantic_hash: str
     was_repeat: bool = False
     corrected_by_rule: str | None = None
+    related_concepts: list[str] | None = None
+    relation_to_prior: dict | None = None
+    resolution_action: str | None = None
+    context: str | None = None
+    severity: str | None = None
 
     def to_dict(self) -> MistakeDict:
         """Convert to serializable dictionary."""
@@ -1286,6 +1366,16 @@ class Mistake:
         }
         if self.corrected_by_rule is not None:
             result["corrected_by_rule"] = self.corrected_by_rule
+        if self.related_concepts is not None:
+            result["related_concepts"] = self.related_concepts
+        if self.relation_to_prior is not None:
+            result["relation_to_prior"] = self.relation_to_prior
+        if self.resolution_action is not None:
+            result["resolution_action"] = self.resolution_action
+        if self.context is not None:
+            result["context"] = self.context
+        if self.severity is not None:
+            result["severity"] = self.severity
         return result
 
     @classmethod
@@ -1294,6 +1384,15 @@ class Mistake:
         timestamp = datetime.fromisoformat(data["timestamp"])
         if timestamp.tzinfo is None:
             timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+        # Deserialize JSON strings from SQLite if needed
+        related_concepts = data.get("related_concepts")
+        if isinstance(related_concepts, str):
+            related_concepts = json.loads(related_concepts)
+
+        relation_to_prior = data.get("relation_to_prior")
+        if isinstance(relation_to_prior, str):
+            relation_to_prior = json.loads(relation_to_prior)
 
         return cls(
             id=data["id"],
@@ -1304,6 +1403,11 @@ class Mistake:
             semantic_hash=data["semantic_hash"],
             was_repeat=data.get("was_repeat", False),
             corrected_by_rule=data.get("corrected_by_rule"),
+            related_concepts=related_concepts,
+            relation_to_prior=relation_to_prior,
+            resolution_action=data.get("resolution_action"),
+            context=data.get("context"),
+            severity=data.get("severity"),
         )
 
 
@@ -1686,6 +1790,11 @@ def log_mistake(
     error_class: str,
     description: str,
     corrected_by_rule: str | None = None,
+    related_concepts: list[str] | None = None,
+    relation_to_prior: dict | None = None,
+    resolution_action: str | None = None,
+    context: str | None = None,
+    severity: str | None = None,
 ) -> LogMistakeResult:
     """Log a mistake during an experiment session.
 
@@ -1704,10 +1813,46 @@ def log_mistake(
         error_class: Category of error (e.g., "missing_test").
         description: Description of the mistake.
         corrected_by_rule: Rule ID that should have prevented this.
+        related_concepts: Concept names involved in the mistake.
+        relation_to_prior: Link to prior mistake {"id": str, "type": str}.
+        resolution_action: What fixed the mistake.
+        context: What the agent was doing when the mistake occurred.
+        severity: low|medium|high|critical.
 
     Returns:
         LogMistakeResult indicating if this was a repeat.
+
+    Raises:
+        ValueError: If severity or relation_to_prior.type is invalid.
     """
+    # -- Input validation --
+    _VALID_SEVERITIES = {"low", "medium", "high", "critical"}
+    if severity is not None and severity not in _VALID_SEVERITIES:
+        raise ValueError(
+            f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}"
+        )
+
+    _VALID_CHAIN_TYPES = {
+        "escalation",
+        "same_pattern",
+        "regression",
+        "caused_by",
+        "part_of",
+    }
+    if relation_to_prior is not None:
+        if not isinstance(relation_to_prior, dict):
+            raise ValueError(
+                "relation_to_prior must be a dict with 'id' and 'type' keys"
+            )
+        if "id" not in relation_to_prior or "type" not in relation_to_prior:
+            raise ValueError("relation_to_prior must have 'id' and 'type' keys")
+        chain_type = relation_to_prior.get("type")
+        if chain_type not in _VALID_CHAIN_TYPES:
+            raise ValueError(
+                f"Invalid relation_to_prior type '{chain_type}'. "
+                f"Must be one of: {', '.join(sorted(_VALID_CHAIN_TYPES))}"
+            )
+
     backend, project_id = _get_storage(buildlog_dir)
 
     session_data = backend.load_active_session(project_id)
@@ -1738,6 +1883,11 @@ def log_mistake(
         semantic_hash=_compute_semantic_hash(description),
         was_repeat=similar is not None,
         corrected_by_rule=corrected_by_rule,
+        related_concepts=related_concepts,
+        relation_to_prior=relation_to_prior,
+        resolution_action=resolution_action,
+        context=context,
+        severity=severity,
     )
 
     # Append to mistakes log
@@ -1763,13 +1913,35 @@ def log_mistake(
 
         # Use session's error_class as context, not the mistake's
         # (they should match, but session context is authoritative)
-        context = session_data.get("error_class") or "general"
+        bandit_context = session_data.get("error_class") or "general"
 
         bandit.batch_update(
             rule_ids=selected_rules,
             reward=0.0,  # Failure: rules didn't prevent mistake
-            context=context,
+            context=bandit_context,
         )
+
+    # =========================================================================
+    # AMBIENT EMISSION: Fire-and-forget artifact for downstream consumers
+    # =========================================================================
+    try:
+        from buildlog.emissions import emit_artifact
+        from buildlog.emissions.mappers import DEFAULT_REGISTRY, _mistake_to_manifest
+
+        manifest = _mistake_to_manifest(
+            mistake=mistake,
+            session_data=session_data,
+            selected_rules=selected_rules,
+            project_id=project_id,
+            registry=DEFAULT_REGISTRY,
+        )
+        emit_artifact(
+            artifact=manifest,
+            artifact_type="mistake_manifest",
+            project_id=project_id,
+        )
+    except Exception:
+        pass  # Fire-and-forget: emission failure must never break primary op
 
     message = f"Logged mistake: {error_class}"
     if similar:
@@ -2413,6 +2585,39 @@ def get_overview(
     )
 
 
+def _ensure_template(buildlog_dir: Path, template_name: str) -> Path | None:
+    """Copy a template from bundled sources if missing from buildlog_dir.
+
+    Checks editable install paths, repo root, and installed wheel shared-data.
+    Returns the target path on success, or None if no source found.
+    """
+    import shutil
+    import sysconfig
+
+    target = buildlog_dir / template_name
+
+    pkg_dir = Path(__file__).resolve().parent.parent  # src/buildlog/
+    candidates = [
+        pkg_dir.parent.parent / "template" / "buildlog" / template_name,
+        pkg_dir.parent / "template" / "buildlog" / template_name,
+    ]
+
+    data_dir = (
+        Path(sysconfig.get_path("data"))
+        / "share"
+        / "buildlog"
+        / "template"
+        / "buildlog"
+    )
+    candidates.append(data_dir / template_name)
+
+    for candidate in candidates:
+        if candidate.exists():
+            shutil.copy2(candidate, target)
+            return target
+    return None
+
+
 def create_entry(
     buildlog_dir: Path,
     slug: str,
@@ -2450,6 +2655,12 @@ def create_entry(
     if quick and not template_file.exists():
         template_file = buildlog_dir / "_TEMPLATE.md"
         template_name = "_TEMPLATE.md"
+
+    if not template_file.exists():
+        # Self-healing: copy from bundled template sources
+        provisioned = _ensure_template(buildlog_dir, template_name)
+        if provisioned is not None:
+            template_file = provisioned
 
     if not template_file.exists():
         return CreateEntryResult(

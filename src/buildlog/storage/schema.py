@@ -11,7 +11,7 @@ from pathlib import Path
 
 __all__ = ["SCHEMA_VERSION", "init_schema"]
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------------------
 # DDL statements
@@ -136,6 +136,11 @@ CREATE TABLE IF NOT EXISTS mistakes (
     semantic_hash   TEXT NOT NULL,
     was_repeat      INTEGER NOT NULL DEFAULT 0,
     corrected_by_rule TEXT,
+    related_concepts TEXT,
+    relation_to_prior TEXT,
+    resolution_action TEXT,
+    context         TEXT,
+    severity        TEXT,
     PRIMARY KEY (project_id, id)
 );
 CREATE INDEX IF NOT EXISTS idx_mistakes_session
@@ -171,6 +176,18 @@ _DDL_V1: list[str] = [
     _CREATE_SESSIONS,
     _CREATE_MISTAKES,
     _CREATE_BANDIT_ARMS,
+]
+
+# ---------------------------------------------------------------------------
+# v2 migration: enrich mistakes table with graph-ready metadata
+# ---------------------------------------------------------------------------
+
+_MIGRATE_V2: list[str] = [
+    "ALTER TABLE mistakes ADD COLUMN related_concepts TEXT;",
+    "ALTER TABLE mistakes ADD COLUMN relation_to_prior TEXT;",
+    "ALTER TABLE mistakes ADD COLUMN resolution_action TEXT;",
+    "ALTER TABLE mistakes ADD COLUMN context TEXT;",
+    "ALTER TABLE mistakes ADD COLUMN severity TEXT;",
 ]
 
 
@@ -209,6 +226,21 @@ def init_schema(conn: sqlite3.Connection) -> int:
         conn.execute(
             "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
             (1,),
+        )
+        conn.commit()
+        current_version = 1
+
+    # Apply v2 migration: enrich mistakes table
+    if current_version < 2:
+        for stmt in _MIGRATE_V2:
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError:
+                # Column already exists (e.g. from a partial migration)
+                pass
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+            (2,),
         )
         conn.commit()
 

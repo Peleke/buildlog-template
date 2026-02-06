@@ -69,12 +69,12 @@ Claude Code reads `~/.claude.json` for global MCP servers. The local `.claude/se
 | `buildlog_promote` | Promote selected skills to your agent's rule files |
 | `buildlog_reject` | Mark skills as rejected so they won't be suggested again |
 | `buildlog_diff` | Show skills pending promotion or rejection |
-| `buildlog_learn_from_review` | Extract and persist learnings from code review feedback |
+| `buildlog_learn_from_review` | Extract and persist learnings from code review feedback (emits `learned_rules` artifact) |
 | `buildlog_log_reward` | Log outcome feedback for bandit learning |
 | `buildlog_rewards` | Get reward events with summary statistics |
 | `buildlog_experiment_start` | Start a tracked session with Thompson Sampling |
 | `buildlog_experiment_end` | End the current session and calculate metrics |
-| `buildlog_log_mistake` | Log a mistake during the current session for RMR tracking |
+| `buildlog_log_mistake` | Log a mistake with enriched metadata; emits `mistake_manifest` artifact (see [qortex integration](qortex-integration.md)) |
 | `buildlog_experiment_metrics` | Get per-session or aggregate mistake rates |
 | `buildlog_experiment_report` | Generate comprehensive report |
 | `buildlog_bandit_status` | Get Thompson Sampling bandit state and rule rankings |

@@ -820,6 +820,130 @@ class TestLogMistake:
             )
 
 
+class TestLogMistakeValidation:
+    """Tests for log_mistake input validation."""
+
+    def test_invalid_severity_rejected(self, tmp_path: Path):
+        """Should reject invalid severity values."""
+        from buildlog.core import log_mistake, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        start_session(buildlog_dir, error_class="test")
+
+        with pytest.raises(ValueError, match="Invalid severity"):
+            log_mistake(
+                buildlog_dir,
+                error_class="test",
+                description="test",
+                severity="urgent",
+            )
+
+    def test_valid_severities_accepted(self, tmp_path: Path):
+        """Should accept all valid severity values."""
+        from buildlog.core import end_session, log_mistake, start_session
+
+        for sev in ("low", "medium", "high", "critical"):
+            buildlog_dir = tmp_path / f"buildlog-{sev}"
+            buildlog_dir.mkdir()
+            start_session(buildlog_dir, error_class="test")
+            result = log_mistake(
+                buildlog_dir,
+                error_class="test",
+                description="test",
+                severity=sev,
+            )
+            assert result.mistake_id.startswith("mistake-")
+            end_session(buildlog_dir)
+
+    def test_none_severity_accepted(self, tmp_path: Path):
+        """Should accept None severity (backwards compat)."""
+        from buildlog.core import log_mistake, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        start_session(buildlog_dir, error_class="test")
+
+        result = log_mistake(
+            buildlog_dir,
+            error_class="test",
+            description="test",
+            severity=None,
+        )
+        assert result.mistake_id.startswith("mistake-")
+
+    def test_invalid_chain_type_rejected(self, tmp_path: Path):
+        """Should reject invalid relation_to_prior type."""
+        from buildlog.core import log_mistake, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        start_session(buildlog_dir, error_class="test")
+
+        with pytest.raises(ValueError, match="Invalid relation_to_prior type"):
+            log_mistake(
+                buildlog_dir,
+                error_class="test",
+                description="test",
+                relation_to_prior={"id": "prior-1", "type": "unknown_type"},
+            )
+
+    def test_valid_chain_types_accepted(self, tmp_path: Path):
+        """Should accept all valid chain types."""
+        from buildlog.core import end_session, log_mistake, start_session
+
+        for chain in (
+            "escalation",
+            "same_pattern",
+            "regression",
+            "caused_by",
+            "part_of",
+        ):
+            buildlog_dir = tmp_path / f"buildlog-{chain}"
+            buildlog_dir.mkdir()
+            start_session(buildlog_dir, error_class="test")
+            result = log_mistake(
+                buildlog_dir,
+                error_class="test",
+                description="test",
+                relation_to_prior={"id": "prior-1", "type": chain},
+            )
+            assert result.mistake_id.startswith("mistake-")
+            end_session(buildlog_dir)
+
+    def test_relation_to_prior_missing_keys_rejected(self, tmp_path: Path):
+        """Should reject relation_to_prior without required keys."""
+        from buildlog.core import log_mistake, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        start_session(buildlog_dir, error_class="test")
+
+        with pytest.raises(ValueError, match="must have 'id' and 'type' keys"):
+            log_mistake(
+                buildlog_dir,
+                error_class="test",
+                description="test",
+                relation_to_prior={"id": "prior-1"},  # missing 'type'
+            )
+
+    def test_relation_to_prior_not_dict_rejected(self, tmp_path: Path):
+        """Should reject non-dict relation_to_prior."""
+        from buildlog.core import log_mistake, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        start_session(buildlog_dir, error_class="test")
+
+        with pytest.raises(ValueError, match="must be a dict"):
+            log_mistake(
+                buildlog_dir,
+                error_class="test",
+                description="test",
+                relation_to_prior="not-a-dict",  # type: ignore[arg-type]
+            )
+
+
 class TestGetSessionMetrics:
     """Tests for get_session_metrics operation."""
 

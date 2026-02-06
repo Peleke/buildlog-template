@@ -7,6 +7,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- **Schema v2 enriched mistakes** — 5 new nullable columns (`related_concepts`, `relation_to_prior`, `resolution_action`, `context`, `severity`) for graph-ready mistake metadata
+- **Ambient emission protocol** — fire-and-forget artifact emission to `~/.buildlog/emissions/pending/` for downstream systems. Two artifact types: `mistake_manifest` (from `log_mistake()`) and `learned_rules` (from `learn_from_review()`)
+- **Edge mapper registry** — 6 pluggable mappers that transform mistakes into graph-compatible manifests with typed edges (`uses`, `challenges`, `supports`, `refines`, `similar_to`, `contradicts`, `requires`, `part_of`, `implements`). Configurable via `~/.buildlog/emissions.yaml`
+- **Strict input validation** — `log_mistake()` now validates `severity` (must be low/medium/high/critical) and `relation_to_prior` structure (dict with valid chain type)
+- **Self-healing template resolution** — `create_entry()` auto-provisions `_TEMPLATE.md` from bundled sources when missing
+- **Qortex integration guide** — `docs/guides/qortex-integration.md` documenting bidirectional data flow, emission protocol, and manifest schemas
+- 61 new tests across emissions, mappers, validation, and property-based testing (1061 total)
+
 ## [0.12.0] - 2026-02-05
 
 ### Added
