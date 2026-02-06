@@ -18,7 +18,7 @@ class TestCLAUDEMDConstant:
     """Tests for the CLAUDE.md constant."""
 
     def test_mentions_all_tools(self):
-        """All 33 tool names should appear in the constant."""
+        """All 34 tool names should appear in the constant."""
         tools = [
             "buildlog_status",
             "buildlog_promote",
@@ -53,6 +53,7 @@ class TestCLAUDEMDConstant:
             "buildlog_export",
             "buildlog_import_seed",
             "buildlog_ingest_seeds",
+            "buildlog_verify",
         ]
         for tool in tools:
             assert tool in CLAUDE_MD_BUILDLOG_SECTION, f"Missing tool: {tool}"
