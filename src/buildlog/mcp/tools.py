@@ -9,6 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Literal
 
+from buildlog.constants import DEFAULT_BUILDLOG_DIR
 from buildlog.core import (
     commit,
     create_entry,
@@ -34,6 +35,16 @@ from buildlog.core import (
     status,
     update_buildlog,
 )
+
+
+def _project_root(buildlog_dir: str) -> Path:
+    """Derive the project root from the buildlog directory path.
+
+    The MCP server's cwd may differ from the user's project directory.
+    Since ``buildlog_dir`` is always relative to or inside the project
+    root, we resolve it and take its parent.
+    """
+    return Path(buildlog_dir).resolve().parent
 
 
 def _validate_skill_ids(skill_ids: list[str]) -> list[str]:
@@ -107,7 +118,7 @@ def _resolve_text_file_or_inline(
 
 
 def buildlog_status(
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     min_confidence: Literal["low", "medium", "high"] = "low",
 ) -> dict:
     """Get current skills extracted from buildlog entries.
@@ -129,7 +140,7 @@ def buildlog_status(
 def buildlog_promote(
     skill_ids: list[str],
     target: str = "claude_md",
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Promote selected skills to your agent's rule files.
 
@@ -151,7 +162,7 @@ def buildlog_promote(
 
 def buildlog_reject(
     skill_ids: list[str],
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Mark skills as rejected so they won't be suggested again.
 
@@ -170,7 +181,7 @@ def buildlog_reject(
 
 
 def buildlog_diff(
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Show skills pending promotion or rejection.
 
@@ -189,7 +200,7 @@ def buildlog_diff(
 def buildlog_learn_from_review(
     issues: list[dict] | None = None,
     source: str | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     issues_file: str | None = None,
 ) -> dict:
     """Extract and persist learnings from code review feedback.
@@ -256,7 +267,7 @@ def buildlog_log_reward(
     revision_distance: float | None = None,
     error_class: str | None = None,
     notes: str | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Log outcome feedback for bandit learning (accepted/revision/rejected).
 
@@ -316,7 +327,7 @@ def buildlog_log_reward(
 
 def buildlog_rewards(
     limit: int | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Get reward events with summary statistics.
 
@@ -361,7 +372,7 @@ def buildlog_experiment_start(
     error_class: str | None = None,
     notes: str | None = None,
     select_k: int = 3,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Start a tracked session with Thompson Sampling rule selection.
 
@@ -400,7 +411,7 @@ def buildlog_experiment_start(
 def buildlog_experiment_end(
     entry_file: str | None = None,
     notes: str | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """End the current session and calculate metrics.
 
@@ -433,7 +444,7 @@ def buildlog_log_mistake(
     error_class: str,
     description: str,
     corrected_by_rule: str | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Log a mistake during the current session for RMR tracking.
 
@@ -466,7 +477,7 @@ def buildlog_log_mistake(
 
 def buildlog_experiment_metrics(
     session_id: str | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Get per-session or aggregate mistake rates and rule changes.
 
@@ -492,7 +503,7 @@ def buildlog_experiment_metrics(
 
 
 def buildlog_experiment_report(
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Generate comprehensive report: summary, sessions, error classes.
 
@@ -514,7 +525,7 @@ def buildlog_experiment_report(
 
 
 def buildlog_bandit_status(
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     context: str | None = None,
     top_k: int = 10,
 ) -> dict:
@@ -558,7 +569,7 @@ def buildlog_gauntlet_issues(
     issues: list[dict] | None = None,
     iteration: int = 1,
     source: str | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     issues_file: str | None = None,
 ) -> dict:
     """Process gauntlet issues and determine next action (fix/checkpoint/clean).
@@ -640,6 +651,7 @@ def buildlog_gauntlet_accept_risk(
     create_github_issues: bool = False,
     repo: str | None = None,
     issues_file: str | None = None,
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Accept risk for remaining issues, optionally create GitHub issues.
 
@@ -691,6 +703,7 @@ def buildlog_gauntlet_accept_risk(
         remaining_issues=resolved,
         create_github_issues=create_github_issues,
         repo=repo,
+        cwd=str(_project_root(buildlog_dir)) if buildlog_dir else None,
     )
     return asdict(result)
 
@@ -703,7 +716,7 @@ def buildlog_gauntlet_accept_risk(
 def buildlog_gauntlet_rules(
     persona: str | None = None,
     format: str = "json",
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Load gauntlet reviewer rules. Call before reviewing code to get rules.
 
@@ -723,7 +736,7 @@ def buildlog_gauntlet_rules(
 
 
 def buildlog_overview(
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Get project buildlog state at a glance. Call at session start for context.
 
@@ -743,7 +756,7 @@ def buildlog_entry_new(
     slug: str,
     entry_date: str | None = None,
     quick: bool = False,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Create a new buildlog journal entry for documenting work.
 
@@ -772,7 +785,7 @@ def buildlog_entry_new(
 
 
 def buildlog_entry_list(
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """List all buildlog journal entries, most recent first.
 
@@ -798,7 +811,7 @@ def buildlog_commit(
     slug: str | None = None,
     no_entry: bool = False,
     extra_args: list[str] | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Commit code and append commit block to today's buildlog entry.
 
@@ -825,6 +838,7 @@ def buildlog_commit(
         git_args=git_args,
         slug=slug,
         no_entry=no_entry,
+        cwd=str(_project_root(buildlog_dir)),
     )
     return asdict(result)
 
@@ -893,7 +907,7 @@ def buildlog_distill(
     since: str | None = None,
     category: str | None = None,
     llm: bool = False,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Extract patterns from all buildlog entries.
 
@@ -975,7 +989,7 @@ def buildlog_skills(
     min_frequency: int = 1,
     since: str | None = None,
     llm: bool = False,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Generate agent-consumable skills from buildlog patterns.
 
@@ -1030,7 +1044,7 @@ def buildlog_skills(
 def buildlog_stats(
     since: str | None = None,
     detailed: bool = False,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Show buildlog statistics and analytics.
 
@@ -1071,7 +1085,7 @@ def buildlog_stats(
 
 
 def buildlog_gauntlet_list_personas(
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """List available gauntlet reviewer personas and rule counts.
 
@@ -1131,7 +1145,7 @@ def buildlog_gauntlet_generate(
     persona: str = "",
     output_dir: str | None = None,
     dry_run: bool = False,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     source_file: str | None = None,
 ) -> dict:
     """Generate seed rules from source text using LLM extraction.
@@ -1177,7 +1191,7 @@ def buildlog_gauntlet_generate(
 
 def buildlog_migrate(
     dry_run: bool = False,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Migrate legacy JSON/JSONL files to the global SQLite database.
 
@@ -1211,7 +1225,7 @@ def buildlog_migrate(
 def buildlog_import_seed(
     source: str,
     target_dir: str | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Import an external seed file (e.g. from qortex) into the seeds directory.
 
@@ -1274,7 +1288,7 @@ def buildlog_export(
     output: str | None = None,
     project: str | None = None,
     tables: str | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     include_manifest: bool = True,
     include_rules_join: bool = True,
 ) -> dict:
@@ -1338,7 +1352,7 @@ def buildlog_export(
 
 def buildlog_ingest_seeds(
     source: str | None = None,
-    buildlog_dir: str = "buildlog",
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Ingest pending seed files from external producers (e.g. qortex).
 
@@ -1374,8 +1388,9 @@ def buildlog_init(
     defaults: bool = True,
     no_claude_md: bool = False,
     no_mcp: bool = False,
+    project_dir: str = ".",
 ) -> dict:
-    """Initialize buildlog in the current project directory.
+    """Initialize buildlog in a project directory.
 
     Sets up buildlog/ with templates, optionally updates CLAUDE.md,
     and registers the MCP server. Always runs non-interactively.
@@ -1384,13 +1399,14 @@ def buildlog_init(
         defaults: Use default values (always True for MCP)
         no_claude_md: Don't update CLAUDE.md
         no_mcp: Don't register MCP server
+        project_dir: Project root directory (default: current directory)
 
     Returns:
         Dict with initialized, buildlog_dir, claude_md_updated,
         mcp_registered, message, error
     """
     result = init_buildlog(
-        project_dir=Path("."),
+        project_dir=Path(project_dir).resolve(),
         defaults=True,
         no_claude_md=no_claude_md,
         no_mcp=no_mcp,
@@ -1398,14 +1414,19 @@ def buildlog_init(
     return asdict(result)
 
 
-def buildlog_update() -> dict:
+def buildlog_update(
+    project_dir: str = ".",
+) -> dict:
     """Update buildlog templates to the latest version.
 
     Runs copier update to pull the latest template changes.
     Requires buildlog to have been initialized first.
 
+    Args:
+        project_dir: Project root directory (default: current directory)
+
     Returns:
         Dict with updated, message, error
     """
-    result = update_buildlog(project_dir=Path("."))
+    result = update_buildlog(project_dir=Path(project_dir).resolve())
     return asdict(result)

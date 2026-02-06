@@ -316,6 +316,22 @@ class TestBuildlogCommitMCPTool:
         assert "entry_updated" in result
         assert "error" in result
 
+    def test_passes_cwd_from_buildlog_dir(self, tmp_path):
+        """MCP wrapper should derive cwd from buildlog_dir, not process cwd."""
+        self._init_git_repo(tmp_path)
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+        from buildlog.mcp.tools import buildlog_commit
+
+        # Call with absolute buildlog_dir — should work regardless of process cwd
+        result = buildlog_commit(
+            message="test from absolute path",
+            buildlog_dir=str(buildlog_dir),
+        )
+        assert result["error"] is None
+        assert result["commit_hash"] != ""
+        assert result["commit_message"] == "test from absolute path"
+
     def test_error_on_non_git_dir(self, tmp_path, monkeypatch):
         """Should return error dict for non-git directory."""
         monkeypatch.chdir(tmp_path)
