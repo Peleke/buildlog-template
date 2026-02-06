@@ -2106,6 +2106,7 @@ def gauntlet_accept_risk(
     remaining_issues: list[dict],
     create_github_issues: bool = False,
     repo: str | None = None,
+    cwd: str | None = None,
 ) -> GauntletAcceptRiskResult:
     """Accept risk for remaining issues, optionally creating GitHub issues.
 
@@ -2113,6 +2114,7 @@ def gauntlet_accept_risk(
         remaining_issues: Issues being accepted as risk.
         create_github_issues: Whether to create GitHub issues for tracking.
         repo: Repository for GitHub issues (uses current repo if None).
+        cwd: Working directory for subprocess calls.
 
     Returns:
         GauntletAcceptRiskResult with created issue info.
@@ -2171,9 +2173,15 @@ def gauntlet_accept_risk(
             if repo:
                 cmd.extend(["--repo", repo])
 
+            run_kwargs: dict = {"cwd": cwd} if cwd else {}
             try:
                 result = subprocess.run(
-                    cmd, capture_output=True, text=True, check=True, timeout=30
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=30,
+                    **run_kwargs,
                 )
                 # gh issue create outputs the URL
                 url = result.stdout.strip()

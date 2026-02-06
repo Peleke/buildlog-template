@@ -1,5 +1,9 @@
 """Shared constants for buildlog, including the CLAUDE.md integration section."""
 
+# Default name for the per-project buildlog directory.
+# Used as the default ``buildlog_dir`` parameter across MCP tools and CLI.
+DEFAULT_BUILDLOG_DIR = "buildlog"
+
 # Shorter version for global ~/.claude/CLAUDE.md - focused on "always on" usage
 CLAUDE_MD_GLOBAL_SECTION = """
 ## buildlog (Always On)
