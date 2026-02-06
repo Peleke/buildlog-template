@@ -38,6 +38,7 @@ Use these tools to track work, extract learnings, and feed downstream systems.
 - Reward signals: `buildlog/.buildlog/reward_events.jsonl`
 - Extracted skills: `buildlog/.buildlog/promoted.json`
 - Review learnings: `buildlog/.buildlog/review_learnings.json`
+- Emission artifacts: `~/.buildlog/emissions/pending/` (mistake manifests + learned rules for downstream systems)
 
 This data feeds automated content generation, engineering logs, and learning systems.
 """

@@ -85,12 +85,13 @@ buildlog experiment report
 - **LLM-backed extraction:** when regex isn't enough, the seed engine can use OpenAI, Anthropic, or Ollama to extract patterns from code and logs. Metered backend tracks token usage and cost.
 - **Global SQLite storage:** all buildlog data is stored in a single global database at `~/.buildlog/buildlog.db` (SQLite with WAL mode). Project isolation via hashed project IDs derived from git remote URLs. Legacy per-project JSON/JSONL files are still supported as a fallback.
 - **Migration and export:** `buildlog migrate` converts legacy JSON/JSONL files to the global database (idempotent, non-destructive). `buildlog export` dumps data back to JSONL for portability or backup.
+- **Ambient emission protocol:** mistakes and learned rules are automatically emitted as JSON artifacts to `~/.buildlog/emissions/pending/` for offline ingestion by downstream systems (knowledge graphs, analytics). Fire-and-forget — emission failure never breaks the primary operation.
 - **MCP server:** buildlog exposes itself as an MCP server so agents can query seeds, skills, and build history programmatically during sessions.
 - **npm wrapper:** `npx @peleke.s/buildlog` for JS/TS projects. Thin shim that finds and invokes the Python CLI.
 
 ## Current Limits
 
-This is v0.11, not the end state.
+This is v0.12, not the end state.
 
 - **Extraction quality is uneven.** Regex extractors miss nuance; LLM extractors are accurate but expensive. The middle ground is still being found.
 - **Feedback signals are coarse.** Repeated Mistake Rate works but requires manual tagging. Richer automatic signals (test outcomes, review results, revision distance) are on the roadmap.
@@ -119,7 +120,7 @@ pipx install buildlog         # or: uv tool install buildlog
 buildlog init-mcp --global -y # registers MCP + writes instructions to ~/.claude/CLAUDE.md
 ```
 
-That's it. Claude Code now has all 32 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
+That's it. Claude Code now has all 33 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
 
 The `--global` flag:
 - Registers the MCP server in `~/.claude.json` (Claude Code's global config)
