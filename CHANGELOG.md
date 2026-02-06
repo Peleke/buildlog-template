@@ -7,14 +7,28 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-02-06
+
 ### Added
+- **Workflow enforcement** — `verify_workflow()` with 6 checks (buildlog dir, metadata dir, CLAUDE.md workflow section, MCP registration, branch check, hook detection). Exposed as `buildlog verify` CLI (with `--fix` and `--json` flags) and `buildlog_verify` MCP tool (34th tool)
+- **Git hooks** — `install_hooks()` installs pre-commit (branch protection for main/master) and post-commit (nudge toward `buildlog commit`). Chains with existing hooks, detects `.pre-commit-config.yaml`, idempotent
+- **BUILDLOG_COMMIT env var** — `commit()` sets `BUILDLOG_COMMIT=1` so the post-commit hook suppresses the nudge when using `buildlog commit`
+- **CLAUDE_MD_WORKFLOW_SECTION** — 5-step workflow constant with markers (`<!-- buildlog:workflow:start/end -->`) for idempotent injection during `buildlog init` and `buildlog verify --fix`
+- **Symlink traversal protection** — `verify_workflow()` resolves `~/.claude.json` and verifies the path stays under `$HOME`
 - **Schema v2 enriched mistakes** — 5 new nullable columns (`related_concepts`, `relation_to_prior`, `resolution_action`, `context`, `severity`) for graph-ready mistake metadata
 - **Ambient emission protocol** — fire-and-forget artifact emission to `~/.buildlog/emissions/pending/` for downstream systems. Two artifact types: `mistake_manifest` (from `log_mistake()`) and `learned_rules` (from `learn_from_review()`)
 - **Edge mapper registry** — 6 pluggable mappers that transform mistakes into graph-compatible manifests with typed edges (`uses`, `challenges`, `supports`, `refines`, `similar_to`, `contradicts`, `requires`, `part_of`, `implements`). Configurable via `~/.buildlog/emissions.yaml`
 - **Strict input validation** — `log_mistake()` now validates `severity` (must be low/medium/high/critical) and `relation_to_prior` structure (dict with valid chain type)
 - **Self-healing template resolution** — `create_entry()` auto-provisions `_TEMPLATE.md` from bundled sources when missing
 - **Qortex integration guide** — `docs/guides/qortex-integration.md` documenting bidirectional data flow, emission protocol, and manifest schemas
-- 61 new tests across emissions, mappers, validation, and property-based testing (1061 total)
+- 6 dogfood E2E tests (real git repos, real hooks), 11 CLI integration tests, 2 traversal protection tests
+- 61 new tests across emissions, mappers, validation, and property-based testing
+- Total: 1126 tests
+
+### Changed
+- `install_hooks()` uses YAML parser (`yaml.safe_load`/`yaml.dump`) instead of string concatenation for `.pre-commit-config.yaml` modification
+- `buildlog init` now installs git hooks and runs `verify_workflow()` at end of setup. New `--no-hooks` flag to skip hook installation
+- Tool count updated from 33 to 34 across all docs, source, and tests
 
 ## [0.12.0] - 2026-02-05
 
@@ -261,7 +275,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `buildlog_status`, `buildlog_promote`, `buildlog_reject`, `buildlog_diff`
 - **Embedding Backends**: Token-based, sentence-transformers, OpenAI
 
-[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/Peleke/buildlog-template/compare/v0.12.0...v0.13.0
 [0.10.2]: https://github.com/Peleke/buildlog-template/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/Peleke/buildlog-template/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/Peleke/buildlog-template/compare/v0.9.0...v0.10.0
