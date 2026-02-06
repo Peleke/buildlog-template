@@ -403,7 +403,7 @@ class TestFlowMCPServer:
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 33
+        assert len(tools) == 34
 
     @pytest.mark.asyncio
     async def test_tool_metadata_valid(self):

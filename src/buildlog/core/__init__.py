@@ -29,6 +29,8 @@ from buildlog.core.operations import (
     StartSessionResult,
     StatusResult,
     UpdateResult,
+    VerifyCheck,
+    VerifyResult,
     commit,
     create_entry,
     diff,
@@ -55,6 +57,7 @@ from buildlog.core.operations import (
     start_session,
     status,
     update_buildlog,
+    verify_workflow,
 )
 
 __all__ = [
@@ -120,4 +123,8 @@ __all__ = [
     "gauntlet_generate",
     "init_buildlog",
     "update_buildlog",
+    # Workflow verification
+    "VerifyCheck",
+    "VerifyResult",
+    "verify_workflow",
 ]

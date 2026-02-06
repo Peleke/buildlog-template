@@ -51,12 +51,13 @@ def main():
 @main.command()
 @click.option("--no-claude-md", is_flag=True, help="Don't update CLAUDE.md")
 @click.option("--no-mcp", is_flag=True, help="Don't register MCP server")
+@click.option("--no-hooks", is_flag=True, help="Don't install git hooks")
 @click.option(
     "--defaults",
     is_flag=True,
     help="Use default values for all prompts (non-interactive)",
 )
-def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
+def init(no_claude_md: bool, no_mcp: bool, no_hooks: bool, defaults: bool):
     """Initialize buildlog in the current directory.
 
     Sets up the buildlog/ directory with templates and optionally
@@ -141,9 +142,36 @@ def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
                     f.write(section)
                 click.echo("Added buildlog Integration section to CLAUDE.md")
 
+            # Inject workflow section if not present
+            from buildlog.constants import (
+                _WORKFLOW_SECTION_START,
+                CLAUDE_MD_WORKFLOW_SECTION,
+            )
+
+            content = claude_md.read_text()
+            if _WORKFLOW_SECTION_START not in content:
+                with open(claude_md, "a") as f:
+                    f.write("\n" + CLAUDE_MD_WORKFLOW_SECTION + "\n")
+                click.echo("Added workflow section to CLAUDE.md")
+
     # Register MCP server unless opted out
     if not no_mcp:
         _init_mcp(skip_confirm=defaults)
+
+    # Install git hooks unless opted out
+    from buildlog.hooks import install_hooks
+
+    hook_result = install_hooks(Path(".").resolve(), no_hooks=no_hooks)
+    if hook_result["installed"]:
+        for hook_name in hook_result["installed"]:
+            click.echo(f"Installed git hook: {hook_name}")
+
+    # Run verify at end of init
+    from buildlog.core import verify_workflow
+
+    verify_result = verify_workflow(
+        project_dir=Path(".").resolve(), buildlog_dir=buildlog_dir
+    )
 
     click.echo("\n✓ buildlog initialized!")
     click.echo()
@@ -156,6 +184,13 @@ def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
     click.echo(
         "Targets: claude_md, cursor, copilot, windsurf, continue_dev, settings_json, skill"
     )
+
+    if verify_result.warnings:
+        click.echo()
+        click.echo("Warnings:")
+        for w in verify_result.warnings:
+            click.echo(f"  [WARN] {w.message}")
+
     click.echo()
     click.echo("Start now: buildlog new my-first-task --quick")
 
@@ -502,6 +537,77 @@ def overview(output_json: bool):
             click.echo("  buildlog promote <id> --target cursor  # Push to your agent")
         else:
             click.echo("Targets: " + ", ".join(RENDERERS.keys()))
+
+
+@main.command()
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option(
+    "--fix",
+    is_flag=True,
+    help="Attempt to fix issues (inject workflow section into CLAUDE.md)",
+)
+def verify(output_json: bool, fix: bool):
+    """Verify that the buildlog workflow is correctly set up.
+
+    Checks: buildlog/ exists, CLAUDE.md has workflow section, MCP registered,
+    not on main branch, pre-commit hooks installed.
+
+    Examples:
+
+        buildlog verify
+        buildlog verify --json
+        buildlog verify --fix
+    """
+    import json as json_module
+    from dataclasses import asdict
+
+    from buildlog.core import verify_workflow
+
+    project_dir = Path(".").resolve()
+    buildlog_dir = project_dir / "buildlog"
+
+    result = verify_workflow(project_dir=project_dir, buildlog_dir=buildlog_dir)
+
+    if fix and not result.ok:
+        _apply_workflow_fixes(project_dir, result)
+        # Re-run after fixes
+        result = verify_workflow(project_dir=project_dir, buildlog_dir=buildlog_dir)
+
+    if output_json:
+        click.echo(json_module.dumps(asdict(result), indent=2))
+    else:
+        click.echo("buildlog verify")
+        click.echo("=" * 40)
+        for check in result.passed:
+            click.echo(f"  [PASS] {check.message}")
+        for check in result.warnings:
+            click.echo(f"  [WARN] {check.message}")
+        for check in result.failed:
+            click.echo(f"  [FAIL] {check.message}")
+        click.echo()
+        click.echo(f"  {result.summary}")
+        if not result.ok:
+            click.echo()
+            click.echo("Run 'buildlog verify --fix' to attempt automatic fixes.")
+
+
+def _apply_workflow_fixes(project_dir: Path, result) -> None:
+    """Attempt to fix failed verify checks."""
+    from buildlog.constants import CLAUDE_MD_WORKFLOW_SECTION
+
+    for check in result.failed:
+        if check.name == "workflow_section":
+            claude_md = project_dir / "CLAUDE.md"
+            if claude_md.exists():
+                content = claude_md.read_text()
+                content = content.rstrip() + "\n\n" + CLAUDE_MD_WORKFLOW_SECTION + "\n"
+                claude_md.write_text(content)
+                click.echo("  [FIX] Injected workflow section into CLAUDE.md")
+            else:
+                claude_md.write_text(
+                    "# Development Guidelines\n\n" + CLAUDE_MD_WORKFLOW_SECTION + "\n"
+                )
+                click.echo("  [FIX] Created CLAUDE.md with workflow section")
 
 
 @main.command()

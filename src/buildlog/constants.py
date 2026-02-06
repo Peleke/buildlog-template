@@ -92,7 +92,7 @@ After every significant commit or feature completion:
 4. `buildlog_experiment_metrics()` — per-session or aggregate stats
 5. `buildlog_experiment_report()` — comprehensive report
 
-### Tool Reference (33 tools)
+### Tool Reference (34 tools)
 
 **Commit & Entries:**
 - `buildlog_commit(message, git_args, slug, no_entry)` — git commit with auto buildlog entry
@@ -140,6 +140,7 @@ After every significant commit or feature completion:
 - `buildlog_export(format, output, project, tables)` — export data to JSONL files
 - `buildlog_import_seed(source, target_dir, buildlog_dir)` — import external seed files with version-aware decay
 - `buildlog_ingest_seeds(source, buildlog_dir)` — ingest pending seeds from shared directory protocol
+- `buildlog_verify(buildlog_dir)` — verify workflow setup (CLAUDE.md, MCP, hooks, branch)
 
 ### When to Use Each Tool
 
@@ -167,3 +168,45 @@ After every significant commit or feature completion:
 - `buildlog/.buildlog/active_session.json` — current session
 - `buildlog/bandit_state.jsonl` — Thompson Sampling state
 """
+
+# Workflow enforcement section for CLAUDE.md
+# Injected by `buildlog init` and refreshed by `buildlog update`.
+# Uses marker-based replacement so it can be updated independently of rules.
+_WORKFLOW_SECTION_START = "<!-- buildlog:workflow:start -->"
+_WORKFLOW_SECTION_END = "<!-- buildlog:workflow:end -->"
+
+CLAUDE_MD_WORKFLOW_SECTION = f"""{_WORKFLOW_SECTION_START}
+
+## Standard Development Workflow (buildlog-enforced)
+
+Every feature, fix, or refactor follows this loop. No exceptions.
+
+### 1. Issue + Branch
+- Create or pick a GitHub issue
+- Branch from main: `git checkout -b feat/short-name` or `fix/short-name`
+- **Never commit directly to main**
+
+### 2. Implement with Ceremony
+- After every substantial change: `buildlog_commit(message="...")`
+- Create journal entries: `buildlog_entry_new(slug="what-you-built")`
+- The data matters as much as the code
+
+### 3. Gauntlet Review
+- `buildlog_gauntlet_loop()` — run the full review loop
+- Fix criticals and majors before proceeding
+- Accept or file issues for remaining minors
+
+### 4. Pull Request
+- Push branch, create PR closing the issue
+- PR body: summary, test plan, files changed
+
+### 5. Feedback Loop
+- `buildlog_log_reward(outcome="accepted")` after merge
+- Reward signal feeds Thompson Sampling for future rule selection
+
+### Key Principles
+- **Branch protection**: pre-commit hook prevents commits to main
+- **buildlog_commit > git commit**: wraps git commit with journal updates
+- **Data is the point**: every commit generates signal for learning systems
+
+{_WORKFLOW_SECTION_END}"""

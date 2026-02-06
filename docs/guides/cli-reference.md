@@ -12,6 +12,9 @@ buildlog skills                  # Generate rules
 buildlog stats                   # Usage statistics
 buildlog reward <outcome>        # Log reward signal
 buildlog overview                # Project state at a glance
+buildlog verify                  # Check workflow setup (hooks, CLAUDE.md, MCP)
+buildlog verify --fix            # Auto-fix missing workflow section
+buildlog verify --json           # Output as JSON
 ```
 
 ## MCP Registration
@@ -20,7 +23,7 @@ buildlog overview                # Project state at a glance
 buildlog init-mcp                # Register MCP in .claude/settings.json (local)
 buildlog init-mcp --global       # Register in ~/.claude.json (global)
 buildlog init-mcp --global -y    # Global, skip confirmation prompts
-buildlog mcp-test                # Verify all 33 tools are registered
+buildlog mcp-test                # Verify all 34 tools are registered
 ```
 
 ### Flags for `init-mcp`
