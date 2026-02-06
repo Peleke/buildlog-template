@@ -6,7 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from click.testing import CliRunner
 
+from buildlog.cli import main
 from buildlog.constants import (
     _WORKFLOW_SECTION_END,
     _WORKFLOW_SECTION_START,
@@ -296,3 +298,262 @@ class TestVerifyResult:
         assert len(d["passed"]) == 1
         # Should be JSON-serializable
         json.dumps(d)
+
+
+# =============================================================================
+# CLI integration tests
+# =============================================================================
+
+
+class TestVerifyCLI:
+    """CLI integration tests for `buildlog verify`."""
+
+    def test_verify_basic_output(self, tmp_path: Path, monkeypatch):
+        """Should show check results in human-readable format."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "buildlog").mkdir()
+        (tmp_path / "buildlog" / ".buildlog").mkdir()
+        (tmp_path / "CLAUDE.md").write_text(
+            f"# Dev\n\n{_WORKFLOW_SECTION_START}\nW\n{_WORKFLOW_SECTION_END}\n"
+        )
+
+        runner = CliRunner()
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="feat/test\n", stderr=""
+            )
+            result = runner.invoke(main, ["verify"])
+
+        assert result.exit_code == 0, result.output
+        assert "[PASS]" in result.output
+        assert "buildlog verify" in result.output
+
+    def test_verify_json_output(self, tmp_path: Path, monkeypatch):
+        """--json flag should produce valid JSON."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "buildlog").mkdir()
+
+        runner = CliRunner()
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="feat/test\n", stderr=""
+            )
+            result = runner.invoke(main, ["verify", "--json"])
+
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert "ok" in data
+        assert "passed" in data
+        assert "failed" in data
+
+    def test_verify_fix_injects_workflow(self, tmp_path: Path, monkeypatch):
+        """--fix should inject workflow section into CLAUDE.md."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "buildlog").mkdir()
+        (tmp_path / "buildlog" / ".buildlog").mkdir()
+        (tmp_path / "CLAUDE.md").write_text("# My Project\n")
+
+        runner = CliRunner()
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="feat/test\n", stderr=""
+            )
+            result = runner.invoke(main, ["verify", "--fix"])
+
+        assert result.exit_code == 0, result.output
+        assert "[FIX]" in result.output
+        content = (tmp_path / "CLAUDE.md").read_text()
+        assert _WORKFLOW_SECTION_START in content
+        assert _WORKFLOW_SECTION_END in content
+
+    def test_verify_fix_creates_claude_md(self, tmp_path: Path, monkeypatch):
+        """--fix should create CLAUDE.md if it doesn't exist."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "buildlog").mkdir()
+        (tmp_path / "buildlog" / ".buildlog").mkdir()
+
+        runner = CliRunner()
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="feat/test\n", stderr=""
+            )
+            result = runner.invoke(main, ["verify", "--fix"])
+
+        assert result.exit_code == 0, result.output
+        assert "[FIX]" in result.output
+        claude_md = tmp_path / "CLAUDE.md"
+        assert claude_md.exists()
+        content = claude_md.read_text()
+        assert _WORKFLOW_SECTION_START in content
+
+    def test_verify_fix_is_idempotent(self, tmp_path: Path, monkeypatch):
+        """Running --fix twice should not duplicate workflow section."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "buildlog").mkdir()
+        (tmp_path / "buildlog" / ".buildlog").mkdir()
+        (tmp_path / "CLAUDE.md").write_text("# My Project\n")
+
+        runner = CliRunner()
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="feat/test\n", stderr=""
+            )
+            runner.invoke(main, ["verify", "--fix"])
+            result = runner.invoke(main, ["verify", "--fix"])
+
+        assert result.exit_code == 0, result.output
+        content = (tmp_path / "CLAUDE.md").read_text()
+        assert content.count(_WORKFLOW_SECTION_START) == 1
+
+
+class TestInitHooksIntegration:
+    """CLI integration tests for init command's hook + verify path."""
+
+    @pytest.fixture
+    def git_project(self, tmp_path: Path, monkeypatch):
+        """Create a minimal git repo for init testing."""
+        monkeypatch.chdir(tmp_path)
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
+        # Need an initial commit so git rev-parse works
+        (tmp_path / ".gitkeep").write_text("")
+        subprocess.run(
+            ["git", "add", ".gitkeep"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "init", "--no-verify"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "-b", "feat/test"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=True,
+        )
+        (tmp_path / "CLAUDE.md").write_text("# Dev Guidelines\n")
+        return tmp_path
+
+    # Capture real subprocess.run at class definition time (before any mock)
+    _real_subprocess_run = staticmethod(subprocess.run)
+
+    def _mock_copier(self, project_dir: Path):
+        """Return a side_effect that only mocks copier, passes git through."""
+        real_run = self._real_subprocess_run
+
+        def side_effect(cmd, *args, **kwargs):
+            if isinstance(cmd, list) and any("copier" in str(c) for c in cmd):
+                (project_dir / "buildlog").mkdir(exist_ok=True)
+                (project_dir / "buildlog" / ".buildlog").mkdir(exist_ok=True)
+                return subprocess.CompletedProcess(
+                    args=cmd, returncode=0, stdout="", stderr=""
+                )
+            return real_run(cmd, *args, **kwargs)
+
+        return side_effect
+
+    def test_init_installs_hooks(self, git_project: Path):
+        """init should install git hooks."""
+        runner = CliRunner()
+        with patch("buildlog.cli.subprocess.run") as mock_run:
+            mock_run.side_effect = self._mock_copier(git_project)
+            result = runner.invoke(main, ["init", "--defaults", "--no-mcp"])
+
+        assert result.exit_code == 0, result.output
+        pre_commit = git_project / ".git" / "hooks" / "pre-commit"
+        post_commit = git_project / ".git" / "hooks" / "post-commit"
+        assert pre_commit.exists()
+        assert post_commit.exists()
+
+    def test_init_no_hooks_flag(self, git_project: Path):
+        """init --no-hooks should skip hook installation."""
+        runner = CliRunner()
+        with patch("buildlog.cli.subprocess.run") as mock_run:
+            mock_run.side_effect = self._mock_copier(git_project)
+            result = runner.invoke(
+                main, ["init", "--defaults", "--no-mcp", "--no-hooks"]
+            )
+
+        assert result.exit_code == 0, result.output
+        pre_commit = git_project / ".git" / "hooks" / "pre-commit"
+        assert not pre_commit.exists()
+
+    def test_init_runs_verify(self, git_project: Path):
+        """init should run verify_workflow and show warnings."""
+        runner = CliRunner()
+        with patch("buildlog.cli.subprocess.run") as mock_run:
+            mock_run.side_effect = self._mock_copier(git_project)
+            result = runner.invoke(main, ["init", "--defaults", "--no-mcp"])
+
+        assert result.exit_code == 0, result.output
+        assert "initialized" in result.output.lower()
+
+    def test_init_injects_workflow_section(self, git_project: Path):
+        """init should inject workflow section into CLAUDE.md."""
+        runner = CliRunner()
+        with patch("buildlog.cli.subprocess.run") as mock_run:
+            mock_run.side_effect = self._mock_copier(git_project)
+            result = runner.invoke(main, ["init", "--defaults", "--no-mcp"])
+
+        assert result.exit_code == 0, result.output
+        content = (git_project / "CLAUDE.md").read_text()
+        assert _WORKFLOW_SECTION_START in content
+
+
+class TestTraversalProtection:
+    """Tests for symlink traversal protection in verify_workflow()."""
+
+    def test_symlink_outside_home_warns(self, tmp_path: Path):
+        """Should warn when ~/.claude.json is a symlink outside home."""
+        (tmp_path / "buildlog").mkdir()
+
+        # Create a fake home with a symlink escaping to /tmp
+        fake_home = tmp_path / "fake_home"
+        fake_home.mkdir()
+        target = tmp_path / "evil" / "config.json"
+        target.parent.mkdir()
+        target.write_text('{"mcpServers": {}}')
+        (fake_home / ".claude.json").symlink_to(target)
+
+        with patch("pathlib.Path.home", return_value=fake_home):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = subprocess.CompletedProcess(
+                    args=[], returncode=0, stdout="feat/test\n", stderr=""
+                )
+                result = verify_workflow(tmp_path)
+
+        warning_messages = [w.message for w in result.warnings]
+        assert any("outside home" in m for m in warning_messages)
+
+    def test_normal_claude_json_works(self, tmp_path: Path):
+        """Should read ~/.claude.json normally when no symlink escape."""
+        (tmp_path / "buildlog").mkdir()
+
+        fake_home = tmp_path / "fake_home"
+        fake_home.mkdir()
+        (fake_home / ".claude.json").write_text('{"mcpServers": {"buildlog": {}}}')
+
+        with patch("pathlib.Path.home", return_value=fake_home):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = subprocess.CompletedProcess(
+                    args=[], returncode=0, stdout="feat/test\n", stderr=""
+                )
+                result = verify_workflow(tmp_path)
+
+        passed_names = [c.name for c in result.passed]
+        assert "mcp_registered" in passed_names

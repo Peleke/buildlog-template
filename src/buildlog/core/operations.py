@@ -3720,7 +3720,34 @@ def verify_workflow(
 
     # Check 4: MCP server registered
     mcp_settings = Path.home() / ".claude.json"
-    if mcp_settings.exists():
+    # Traversal protection: resolve symlinks, verify path stays under $HOME
+    _mcp_safe = True
+    try:
+        resolved_settings = mcp_settings.resolve()
+        resolved_home = Path.home().resolve()
+        if not (
+            resolved_settings == resolved_home / ".claude.json"
+            or resolved_settings.is_relative_to(resolved_home)
+        ):
+            _mcp_safe = False
+            warnings.append(
+                VerifyCheck(
+                    "mcp_registered",
+                    "warning",
+                    "~/.claude.json resolves outside home directory",
+                )
+            )
+    except (OSError, RuntimeError):
+        _mcp_safe = False
+        warnings.append(
+            VerifyCheck(
+                "mcp_registered",
+                "warning",
+                "Could not resolve ~/.claude.json path",
+            )
+        )
+
+    if _mcp_safe and mcp_settings.exists():
         try:
             import json
 
@@ -3746,7 +3773,7 @@ def verify_workflow(
                     "Could not read ~/.claude.json",
                 )
             )
-    else:
+    elif _mcp_safe:
         warnings.append(
             VerifyCheck(
                 "mcp_registered",

@@ -118,6 +118,8 @@ class TestInstallHooks:
 
     def test_pre_commit_config_integration(self, tmp_path: Path):
         """Should add to .pre-commit-config.yaml when it exists."""
+        import yaml
+
         project = self._setup_git_repo(tmp_path)
         config = tmp_path / ".pre-commit-config.yaml"
         config.write_text(
@@ -129,6 +131,17 @@ class TestInstallHooks:
 
         content = config.read_text()
         assert "prevent-commit-to-main" in content
+
+        # Result should be valid YAML with both repos preserved
+        parsed = yaml.safe_load(content)
+        assert len(parsed["repos"]) == 2
+        ids = [
+            h["id"]
+            for repo in parsed["repos"]
+            for h in repo.get("hooks", [])
+            if "id" in h
+        ]
+        assert "prevent-commit-to-main" in ids
 
     def test_pre_commit_config_idempotent(self, tmp_path: Path):
         """Should not double-add to .pre-commit-config.yaml."""

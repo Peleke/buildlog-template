@@ -6,6 +6,8 @@ import os
 import stat
 from pathlib import Path
 
+import yaml
+
 # Pre-commit hook: prevent commits to main/master
 PRE_COMMIT_HOOK = """\
 #!/bin/sh
@@ -32,7 +34,7 @@ fi
 # Marker to identify buildlog-managed hook sections
 _HOOK_MARKER = "# buildlog:"
 
-# pre-commit-config.yaml entry for branch protection
+# pre-commit-config.yaml entry for branch protection (string form for tests)
 PRE_COMMIT_CONFIG_ENTRY = (
     "  - repo: local\n"
     "    hooks:\n"
@@ -48,6 +50,28 @@ PRE_COMMIT_CONFIG_ENTRY = (
     "        always_run: true\n"
     "        pass_filenames: false\n"
 )
+
+# Dict form used for proper YAML manipulation in install_hooks()
+_PRE_COMMIT_HOOK_DICT: dict = {
+    "repo": "local",
+    "hooks": [
+        {
+            "id": "prevent-commit-to-main",
+            "name": "buildlog: prevent commits to main/master",
+            "entry": (
+                "bash -c '"
+                "branch=$(git branch --show-current); "
+                'if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then '
+                'echo "[buildlog] Direct commits to $branch not allowed."; '
+                "exit 1; "
+                "fi'"
+            ),
+            "language": "system",
+            "always_run": True,
+            "pass_filenames": False,
+        }
+    ],
+}
 
 
 def _make_executable(path: Path) -> None:
@@ -95,9 +119,14 @@ def install_hooks(
     if pre_commit_config.exists():
         content = pre_commit_config.read_text()
         if "prevent-commit-to-main" not in content:
-            # Append to existing config
-            with open(pre_commit_config, "a") as f:
-                f.write("\n" + PRE_COMMIT_CONFIG_ENTRY)
+            # Parse YAML, append our hook entry, write back
+            config = yaml.safe_load(content) or {}
+            repos = config.get("repos") or []
+            repos.append(_PRE_COMMIT_HOOK_DICT)
+            config["repos"] = repos
+            pre_commit_config.write_text(
+                yaml.dump(config, default_flow_style=False, sort_keys=False)
+            )
             installed.append("pre-commit-config (branch protection)")
             messages.append(
                 "Added branch protection to .pre-commit-config.yaml. "
