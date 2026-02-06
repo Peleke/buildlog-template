@@ -34,6 +34,7 @@ from buildlog.core import (
     start_session,
     status,
     update_buildlog,
+    verify_workflow,
 )
 
 
@@ -1450,4 +1451,31 @@ def buildlog_update(
         Dict with updated, message, error
     """
     result = update_buildlog(project_dir=Path(project_dir).resolve())
+    return asdict(result)
+
+
+def buildlog_verify(
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
+) -> dict:
+    """Verify that the buildlog workflow is correctly set up.
+
+    Checks buildlog/ exists, CLAUDE.md has workflow section, MCP registered,
+    not on main branch, and pre-commit hook installed.
+
+    Args:
+        buildlog_dir: Path to buildlog directory (default: "buildlog")
+
+    Returns:
+        Dict with passed, warnings, failed (lists of checks), ok (bool), summary (str).
+        Each check has: name, status ("passed"|"warning"|"failed"), message.
+
+    Example:
+        buildlog_verify()
+        # => {"ok": true, "summary": "5/6 checks passed, 1 warnings", "passed": [...], ...}
+    """
+    project_dir = _project_root(buildlog_dir)
+    result = verify_workflow(
+        project_dir=project_dir,
+        buildlog_dir=Path(buildlog_dir).resolve(),
+    )
     return asdict(result)

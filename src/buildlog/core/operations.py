@@ -2407,6 +2407,8 @@ class OverviewResult:
     skills: dict
     active_session: str | None
     render_targets: list[str]
+    workflow_ok: bool = True
+    workflow_issues: list[str] | None = None
 
 
 @dataclass
@@ -2532,6 +2534,44 @@ def get_gauntlet_rules(
     )
 
 
+def _quick_workflow_check(buildlog_dir: Path) -> dict:
+    """Lightweight workflow check for overview. Returns dict with workflow_ok and workflow_issues."""
+    from buildlog.constants import _WORKFLOW_SECTION_START
+
+    issues: list[str] = []
+    project_dir = buildlog_dir.parent
+
+    claude_md = project_dir / "CLAUDE.md"
+    if claude_md.exists():
+        content = claude_md.read_text()
+        if _WORKFLOW_SECTION_START not in content:
+            issues.append("CLAUDE.md missing workflow section")
+    else:
+        issues.append("CLAUDE.md not found")
+
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=str(project_dir),
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip() in ("main", "master"):
+            issues.append(
+                f"On branch '{result.stdout.strip()}' — create a feature branch"
+            )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    return {
+        "workflow_ok": len(issues) == 0,
+        "workflow_issues": issues if issues else None,
+    }
+
+
 def get_overview(
     buildlog_dir: Path,
 ) -> OverviewResult:
@@ -2582,6 +2622,7 @@ def get_overview(
         },
         active_session=active_session,
         render_targets=list(RENDERERS.keys()),
+        **_quick_workflow_check(buildlog_dir),
     )
 
 
@@ -3235,6 +3276,26 @@ class UpdateResult:
     error: str | None = None
 
 
+@dataclass
+class VerifyCheck:
+    """A single verification check result."""
+
+    name: str
+    status: str  # "passed" | "warning" | "failed"
+    message: str
+
+
+@dataclass
+class VerifyResult:
+    """Result of verifying buildlog workflow setup."""
+
+    passed: list[VerifyCheck]
+    warnings: list[VerifyCheck]
+    failed: list[VerifyCheck]
+    ok: bool
+    summary: str
+
+
 def gauntlet_generate(
     source_text: str,
     persona: str,
@@ -3561,4 +3622,233 @@ def update_buildlog(
     return UpdateResult(
         updated=True,
         message="buildlog templates updated successfully.",
+    )
+
+
+def verify_workflow(
+    project_dir: Path,
+    buildlog_dir: Path | None = None,
+) -> VerifyResult:
+    """Verify that the buildlog workflow is correctly set up.
+
+    Checks: buildlog/ exists, CLAUDE.md has workflow section, MCP registered,
+    not on main branch, pre-commit hook installed.
+
+    Args:
+        project_dir: Project root directory.
+        buildlog_dir: Path to buildlog directory. Defaults to project_dir / "buildlog".
+
+    Returns:
+        VerifyResult with passed/warnings/failed checks.
+    """
+    import subprocess
+
+    from buildlog.constants import _WORKFLOW_SECTION_END, _WORKFLOW_SECTION_START
+
+    if buildlog_dir is None:
+        buildlog_dir = project_dir / "buildlog"
+
+    passed: list[VerifyCheck] = []
+    warnings: list[VerifyCheck] = []
+    failed: list[VerifyCheck] = []
+
+    # Check 1: buildlog/ directory exists
+    if buildlog_dir.exists() and buildlog_dir.is_dir():
+        passed.append(VerifyCheck("buildlog_dir", "passed", f"{buildlog_dir} exists"))
+    else:
+        failed.append(
+            VerifyCheck(
+                "buildlog_dir",
+                "failed",
+                f"{buildlog_dir} not found. Run: buildlog init",
+            )
+        )
+
+    # Check 2: .buildlog/ metadata directory
+    dot_buildlog = buildlog_dir / ".buildlog"
+    if dot_buildlog.exists():
+        passed.append(
+            VerifyCheck("metadata_dir", "passed", ".buildlog/ metadata dir exists")
+        )
+    else:
+        warnings.append(
+            VerifyCheck(
+                "metadata_dir",
+                "warning",
+                ".buildlog/ metadata dir missing. Run: buildlog init",
+            )
+        )
+
+    # Check 3: CLAUDE.md has workflow section
+    claude_md = project_dir / "CLAUDE.md"
+    if claude_md.exists():
+        content = claude_md.read_text()
+        if _WORKFLOW_SECTION_START in content and _WORKFLOW_SECTION_END in content:
+            passed.append(
+                VerifyCheck(
+                    "workflow_section", "passed", "CLAUDE.md has workflow section"
+                )
+            )
+        elif "## buildlog Integration" in content:
+            warnings.append(
+                VerifyCheck(
+                    "workflow_section",
+                    "warning",
+                    "CLAUDE.md has buildlog section but missing workflow markers. "
+                    "Run: buildlog update",
+                )
+            )
+        else:
+            failed.append(
+                VerifyCheck(
+                    "workflow_section",
+                    "failed",
+                    "CLAUDE.md missing workflow section. Run: buildlog init",
+                )
+            )
+    else:
+        failed.append(
+            VerifyCheck(
+                "workflow_section",
+                "failed",
+                "CLAUDE.md not found. Run: buildlog init",
+            )
+        )
+
+    # Check 4: MCP server registered
+    mcp_settings = Path.home() / ".claude.json"
+    if mcp_settings.exists():
+        try:
+            import json
+
+            settings = json.loads(mcp_settings.read_text())
+            mcp_servers = settings.get("mcpServers", {})
+            if "buildlog" in mcp_servers:
+                passed.append(
+                    VerifyCheck("mcp_registered", "passed", "MCP server registered")
+                )
+            else:
+                warnings.append(
+                    VerifyCheck(
+                        "mcp_registered",
+                        "warning",
+                        "MCP server not registered. Run: buildlog init-mcp --global",
+                    )
+                )
+        except (json.JSONDecodeError, OSError):
+            warnings.append(
+                VerifyCheck(
+                    "mcp_registered",
+                    "warning",
+                    "Could not read ~/.claude.json",
+                )
+            )
+    else:
+        warnings.append(
+            VerifyCheck(
+                "mcp_registered",
+                "warning",
+                "~/.claude.json not found. Run: buildlog init-mcp --global",
+            )
+        )
+
+    # Check 5: Not on main branch
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=str(project_dir),
+            timeout=5,
+        )
+        if result.returncode == 0:
+            branch = result.stdout.strip()
+            if branch in ("main", "master"):
+                warnings.append(
+                    VerifyCheck(
+                        "not_on_main",
+                        "warning",
+                        f"On branch '{branch}'. Create a feature branch before committing.",
+                    )
+                )
+            else:
+                passed.append(
+                    VerifyCheck(
+                        "not_on_main", "passed", f"On branch '{branch}' (not main)"
+                    )
+                )
+        else:
+            # Not a git repo — skip this check
+            pass
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Check 6: Pre-commit hook for branch protection
+    git_hooks_dir = project_dir / ".git" / "hooks"
+    pre_commit_hook = git_hooks_dir / "pre-commit"
+    pre_commit_config = project_dir / ".pre-commit-config.yaml"
+
+    if pre_commit_config.exists():
+        # Check if config has branch protection
+        config_text = pre_commit_config.read_text()
+        if (
+            "prevent-commit-to-main" in config_text
+            or "no-commit-to-branch" in config_text
+        ):
+            passed.append(
+                VerifyCheck(
+                    "branch_protection",
+                    "passed",
+                    "Branch protection configured in .pre-commit-config.yaml",
+                )
+            )
+        else:
+            warnings.append(
+                VerifyCheck(
+                    "branch_protection",
+                    "warning",
+                    "No branch protection hook in .pre-commit-config.yaml",
+                )
+            )
+    elif pre_commit_hook.exists():
+        hook_text = pre_commit_hook.read_text()
+        if "main" in hook_text or "master" in hook_text:
+            passed.append(
+                VerifyCheck(
+                    "branch_protection",
+                    "passed",
+                    "Branch protection in .git/hooks/pre-commit",
+                )
+            )
+        else:
+            warnings.append(
+                VerifyCheck(
+                    "branch_protection",
+                    "warning",
+                    "Pre-commit hook exists but may not protect main branch",
+                )
+            )
+    else:
+        warnings.append(
+            VerifyCheck(
+                "branch_protection",
+                "warning",
+                "No pre-commit branch protection. Will be added by buildlog init (Tier 2).",
+            )
+        )
+
+    ok = len(failed) == 0
+    total = len(passed) + len(warnings) + len(failed)
+    summary = (
+        f"{len(passed)}/{total} checks passed"
+        f"{f', {len(warnings)} warnings' if warnings else ''}"
+        f"{f', {len(failed)} failed' if failed else ''}"
+    )
+
+    return VerifyResult(
+        passed=passed,
+        warnings=warnings,
+        failed=failed,
+        ok=ok,
+        summary=summary,
     )

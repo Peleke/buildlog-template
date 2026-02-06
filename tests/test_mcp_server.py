@@ -91,8 +91,8 @@ async def test_all_33_tools_registered():
 
     tools = await mcp.list_tools()
     assert (
-        len(tools) == 33
-    ), f"Expected 33 tools, got {len(tools)}: {[t.name for t in tools]}"
+        len(tools) == 34
+    ), f"Expected 34 tools, got {len(tools)}: {[t.name for t in tools]}"
 
 
 @pytest.mark.asyncio

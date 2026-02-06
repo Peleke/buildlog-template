@@ -38,6 +38,7 @@ from buildlog.mcp.tools import (
     buildlog_stats,
     buildlog_status,
     buildlog_update,
+    buildlog_verify,
 )
 
 mcp = FastMCP("buildlog")
@@ -89,6 +90,9 @@ mcp.tool()(buildlog_export)
 # Seed import / interop
 mcp.tool()(buildlog_import_seed)
 mcp.tool()(buildlog_ingest_seeds)
+
+# Workflow verification
+mcp.tool()(buildlog_verify)
 
 # P2: Nice-to-have
 mcp.tool()(buildlog_gauntlet_generate)

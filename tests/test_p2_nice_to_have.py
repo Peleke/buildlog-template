@@ -385,8 +385,8 @@ class TestAllNewToolsRegistered:
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 33, (
-            f"Expected 33 tools, got {len(tools)}: " f"{[t.name for t in tools]}"
+        assert len(tools) == 34, (
+            f"Expected 34 tools, got {len(tools)}: " f"{[t.name for t in tools]}"
         )
 
     @pytest.mark.asyncio
