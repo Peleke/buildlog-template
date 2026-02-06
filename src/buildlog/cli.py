@@ -51,12 +51,13 @@ def main():
 @main.command()
 @click.option("--no-claude-md", is_flag=True, help="Don't update CLAUDE.md")
 @click.option("--no-mcp", is_flag=True, help="Don't register MCP server")
+@click.option("--no-hooks", is_flag=True, help="Don't install git hooks")
 @click.option(
     "--defaults",
     is_flag=True,
     help="Use default values for all prompts (non-interactive)",
 )
-def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
+def init(no_claude_md: bool, no_mcp: bool, no_hooks: bool, defaults: bool):
     """Initialize buildlog in the current directory.
 
     Sets up the buildlog/ directory with templates and optionally
@@ -157,6 +158,21 @@ def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
     if not no_mcp:
         _init_mcp(skip_confirm=defaults)
 
+    # Install git hooks unless opted out
+    from buildlog.hooks import install_hooks
+
+    hook_result = install_hooks(Path(".").resolve(), no_hooks=no_hooks)
+    if hook_result["installed"]:
+        for hook_name in hook_result["installed"]:
+            click.echo(f"Installed git hook: {hook_name}")
+
+    # Run verify at end of init
+    from buildlog.core import verify_workflow
+
+    verify_result = verify_workflow(
+        project_dir=Path(".").resolve(), buildlog_dir=buildlog_dir
+    )
+
     click.echo("\n✓ buildlog initialized!")
     click.echo()
     click.echo("How it works:")
@@ -168,6 +184,13 @@ def init(no_claude_md: bool, no_mcp: bool, defaults: bool):
     click.echo(
         "Targets: claude_md, cursor, copilot, windsurf, continue_dev, settings_json, skill"
     )
+
+    if verify_result.warnings:
+        click.echo()
+        click.echo("Warnings:")
+        for w in verify_result.warnings:
+            click.echo(f"  [WARN] {w.message}")
+
     click.echo()
     click.echo("Start now: buildlog new my-first-task --quick")
 

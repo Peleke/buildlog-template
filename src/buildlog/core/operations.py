@@ -2923,7 +2923,10 @@ def commit(
     run_kwargs: dict = {"cwd": cwd} if cwd else {}
 
     git_cmd = ["git", "commit", *git_args]
-    result = subprocess.run(git_cmd, capture_output=True, text=True, **run_kwargs)
+    env = {**__import__("os").environ, "BUILDLOG_COMMIT": "1"}
+    result = subprocess.run(
+        git_cmd, capture_output=True, text=True, env=env, **run_kwargs
+    )
 
     if result.returncode != 0:
         return CommitResult(
