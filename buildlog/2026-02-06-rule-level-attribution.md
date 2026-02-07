@@ -28,3 +28,15 @@ Dogfooded the feature during its own gauntlet review — passed `valid_rule_ids`
 - `c0646f5` feat: add citable rule IDs to gauntlet prompt and config (Touch 1)
 - `3375160` feat: citation validation, aggregation, and per-rule bandit credit (Touch 2+3)
 - `0e93826` test: add 24 tests for rule-level attribution, update instruction count test
+
+### `0a74639` — docs: add buildlog entry for rule-level attribution (internal/self-ref)
+
+Files:
+- `buildlog/2026-02-06-rule-level-attribution.md`
+
+
+### `f90ff8b` — feat: compact mode for gauntlet_loop MCP response (default on)
+
+Files:
+- `src/buildlog/mcp/tools.py`
+- `tests/test_p0_gauntlet.py`
