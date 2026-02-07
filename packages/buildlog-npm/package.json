@@ -3,7 +3,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.10.2",
+  "version": "0.13.0",
   "description": "Engineering notebook for AI-assisted development. Capture your work as publishable content.",
   "license": "MIT",
   "repository": {
