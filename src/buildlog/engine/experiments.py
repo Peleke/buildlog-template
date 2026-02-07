@@ -346,6 +346,7 @@ def log_reward(
     error_class: str | None = None,
     notes: str | None = None,
     source: str | None = None,
+    session_id: str | None = None,
 ) -> LogRewardResult:
     """Log a reward event for bandit learning.
 
@@ -357,6 +358,7 @@ def log_reward(
         error_class: Category of error if applicable.
         notes: Optional notes.
         source: Where this feedback came from.
+        session_id: Session to associate with. Auto-detects active session if None.
 
     Returns:
         LogRewardResult with confirmation.
@@ -369,6 +371,8 @@ def log_reward(
 
     session_data = backend.load_active_session(project_id)
     if session_data is not None:
+        if session_id is None:
+            session_id = session_data.get("id")
         if rules_active is None:
             rules_active = session_data.get("selected_rules", [])
         if error_class is None:
@@ -384,6 +388,7 @@ def log_reward(
         error_class=error_class,
         notes=notes,
         source=source or "manual",
+        session_id=session_id,
     )
 
     backend.append_event(project_id, "rewards", event.to_dict())  # type: ignore[arg-type]
@@ -399,10 +404,25 @@ def log_reward(
 
     total_events = backend.count_events(project_id, "rewards")
 
+    # Fire-and-forget emission
+    try:
+        from buildlog.core.operations import _reward_to_emission
+        from buildlog.emissions import emit_artifact
+
+        emit_artifact(
+            artifact=_reward_to_emission(event, project_id),
+            artifact_type="reward_signal",
+            project_id=project_id,
+        )
+    except Exception:
+        pass  # Fire-and-forget
+
     rules_count = len(rules_active) if rules_active else 0
     message = f"Logged {outcome} (reward={reward_value:.2f})"
     if rules_count > 0:
         message += f" | Updated bandit: {rules_count} rules"
+    if session_id:
+        message += f" | Session: {session_id}"
 
     return LogRewardResult(
         reward_id=reward_id,
@@ -415,18 +435,24 @@ def log_reward(
 def get_rewards(
     buildlog_dir: Path,
     limit: int | None = None,
+    session_id: str | None = None,
 ) -> RewardSummary:
     """Get reward events with summary statistics.
 
     Args:
         buildlog_dir: Path to buildlog directory.
         limit: Maximum number of events to return (most recent first).
+        session_id: If provided, only return events for this session.
 
     Returns:
         RewardSummary with events and statistics.
     """
     backend, project_id = _get_storage(buildlog_dir)
     raw_events = backend.load_events(project_id, "rewards")
+
+    # Filter by session_id if requested
+    if session_id is not None:
+        raw_events = [e for e in raw_events if e.get("session_id") == session_id]
 
     if not raw_events:
         return RewardSummary(

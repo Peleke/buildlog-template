@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1149,12 +1150,12 @@ def log_reward(
         from buildlog.emissions import emit_artifact
 
         emit_artifact(
-            artifact=_reward_to_emission(event, session_data, project_id),
+            artifact=_reward_to_emission(event, project_id),
             artifact_type="reward_signal",
             project_id=project_id,
         )
     except Exception:
-        pass  # Fire-and-forget
+        logging.getLogger(__name__).debug("Reward emission failed", exc_info=True)
 
     rules_count = len(rules_active) if rules_active else 0
     message = f"Logged {outcome} (reward={reward_value:.2f})"
@@ -1173,7 +1174,6 @@ def log_reward(
 
 def _reward_to_emission(
     event: RewardEvent,
-    session_data: dict | None,
     project_id: str,
 ) -> dict:
     """Build a reward signal emission for downstream consumers."""
