@@ -169,12 +169,12 @@ class TestGauntletLoopConfig:
                     assert "antipattern" in rule
 
     def test_instructions_are_ordered(self):
-        """Instructions should be numbered 1-8."""
+        """Instructions should be numbered 1-11."""
         result = gauntlet_loop_config("src/")
         if result.error is None:
-            assert len(result.instructions) == 8
+            assert len(result.instructions) == 11
             assert result.instructions[0].startswith("1.")
-            assert result.instructions[-1].startswith("8.")
+            assert result.instructions[-1].startswith("11.")
 
     def test_issue_format_has_expected_fields(self):
         """Issue format template should have severity, category, etc."""
