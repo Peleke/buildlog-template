@@ -62,3 +62,6 @@ buildlog/.buildlog/
 buildlog/bandit_state.jsonl
 buildlog/bandit_state.jsonl.migrated
 site/
+
+# Generated docs (rebuilt by MkDocs hook)
+docs/llms-full.txt
