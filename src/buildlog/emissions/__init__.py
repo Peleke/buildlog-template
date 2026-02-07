@@ -20,6 +20,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 __all__ = [
     "EMISSIONS_DIR",
@@ -43,6 +44,23 @@ class EmissionConfig:
     processed: Path
     failed: Path
     signal_log: Path
+
+
+def _emission_json_serializer(obj: Any) -> Any:
+    """Explicit JSON serializer for emission artifacts.
+
+    Handles known types (datetime, Path) and raises TypeError for
+    truly unknown types, rather than silently converting via str().
+    """
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, Path):
+        return str(obj)
+    raise TypeError(
+        f"Object of type {type(obj).__name__} is not JSON serializable. "
+        f"Add explicit handling in _emission_json_serializer() or "
+        f"pre-serialize before calling emit_artifact()."
+    )
 
 
 def get_emission_config(base: Path | None = None) -> EmissionConfig:
@@ -87,7 +105,9 @@ def emit_artifact(
         filename = f"{artifact_type}_{project_id}_{ts_str}.json"
         path = cfg.pending / filename
 
-        path.write_text(json.dumps(artifact, indent=2, default=str))
+        path.write_text(
+            json.dumps(artifact, indent=2, default=_emission_json_serializer)
+        )
 
         # Append to signal log
         signal_entry = {

@@ -766,3 +766,152 @@ class TestMetamorphic:
         types1 = sorted(e["relation_type"] for e in man1["edges"])
         types2 = sorted(e["relation_type"] for e in man2["edges"])
         assert types1 == types2
+
+
+# ============================================================================
+# Part 9: Round-trip property test for enriched Mistake fields via SQLite
+# ============================================================================
+
+
+class TestMistakeSQLiteRoundTrip:
+    """Property test: enriched Mistake fields survive persist → load via SQLite."""
+
+    @given(m=mistake_st())
+    @settings(max_examples=50)
+    def test_round_trip_fidelity(self, m: Mistake):
+        """Persist a random Mistake via SQLite, load it back, verify all fields."""
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        init_schema(conn)
+
+        from buildlog.storage.sqlite import SQLiteBackend
+
+        backend = SQLiteBackend(conn)
+        project_id = "roundtrip-test"
+        backend.ensure_project(project_id, "test", "/tmp/test")
+
+        # Persist
+        backend.append_event(project_id, "mistakes", m.to_dict())
+
+        # Load
+        rows = backend.load_events(project_id, "mistakes")
+        assert len(rows) == 1
+        loaded = Mistake.from_dict(rows[0])
+
+        # Verify every field round-trips
+        assert loaded.id == m.id
+        assert loaded.session_id == m.session_id
+        assert loaded.error_class == m.error_class
+        assert loaded.description == m.description
+        assert loaded.semantic_hash == m.semantic_hash
+        assert loaded.was_repeat == m.was_repeat
+        assert loaded.corrected_by_rule == m.corrected_by_rule
+        assert loaded.related_concepts == m.related_concepts
+        assert loaded.relation_to_prior == m.relation_to_prior
+        assert loaded.resolution_action == m.resolution_action
+        assert loaded.context == m.context
+        assert loaded.severity == m.severity
+
+
+# ============================================================================
+# Part 10: YAML emissions config integration test (disabled_mappers)
+# ============================================================================
+
+
+class TestYAMLEmissionsConfig:
+    """Integration test: YAML config disables individual mappers."""
+
+    def test_disabled_mappers_skipped(self):
+        """Load a YAML config string and verify disabled mappers are not run."""
+        import yaml
+
+        yaml_content = """\
+disabled_mappers:
+  - resolution_edges
+  - concept_involvement
+"""
+        cfg = yaml.safe_load(yaml_content) or {}
+
+        # Build a fresh registry with all 6 mappers
+        reg = EdgeMapperRegistry()
+        reg.register("concept_involvement", concept_involvement)
+        reg.register("rule_challenge", rule_challenge)
+        reg.register("rule_support", rule_support)
+        reg.register("mistake_chain", mistake_chain)
+        reg.register("resolution_rule", resolution_rule)
+        reg.register("resolution_edges", resolution_edges)
+
+        # Apply YAML config
+        for mapper_name in cfg.get("disabled_mappers", []):
+            reg.disable(mapper_name)
+
+        # Verify disabled mappers are gone
+        enabled = reg.enabled_names()
+        assert "resolution_edges" not in enabled
+        assert "concept_involvement" not in enabled
+
+        # Verify remaining mappers still present
+        assert "rule_challenge" in enabled
+        assert "rule_support" in enabled
+        assert "mistake_chain" in enabled
+        assert "resolution_rule" in enabled
+        assert len(enabled) == 4
+
+    def test_disabled_mappers_not_executed(self):
+        """Disabled mappers should produce no output when run_all is called."""
+        import yaml
+
+        yaml_content = """\
+disabled_mappers:
+  - concept_involvement
+"""
+        cfg = yaml.safe_load(yaml_content) or {}
+
+        reg = EdgeMapperRegistry()
+        reg.register("concept_involvement", concept_involvement)
+        for mapper_name in cfg.get("disabled_mappers", []):
+            reg.disable(mapper_name)
+
+        # Run with a mistake that has related_concepts
+        m = _make_mistake(related_concepts=["schema", "migration"])
+        ctx = _make_ctx(m)
+        out = reg.run_all(ctx)
+
+        # concept_involvement is disabled, so no edges
+        assert out.edges == []
+        assert out.rules == []
+
+    def test_empty_disabled_list_keeps_all(self):
+        """An empty disabled_mappers list should keep all mappers enabled."""
+        import yaml
+
+        yaml_content = "disabled_mappers: []\n"
+        cfg = yaml.safe_load(yaml_content) or {}
+
+        reg = EdgeMapperRegistry()
+        reg.register("concept_involvement", concept_involvement)
+        reg.register("rule_challenge", rule_challenge)
+
+        for mapper_name in cfg.get("disabled_mappers", []):
+            reg.disable(mapper_name)
+
+        assert len(reg.enabled_names()) == 2
+
+    def test_unknown_mapper_name_ignored(self):
+        """Disabling a non-existent mapper should not raise."""
+        import yaml
+
+        yaml_content = """\
+disabled_mappers:
+  - nonexistent_mapper
+"""
+        cfg = yaml.safe_load(yaml_content) or {}
+
+        reg = EdgeMapperRegistry()
+        reg.register("concept_involvement", concept_involvement)
+
+        for mapper_name in cfg.get("disabled_mappers", []):
+            reg.disable(mapper_name)
+
+        # nonexistent_mapper is not in the registry, so discard is a no-op
+        assert "concept_involvement" in reg.enabled_names()
