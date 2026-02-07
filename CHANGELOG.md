@@ -7,6 +7,27 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-02-07
+
+### Added
+- **Reward-session linking** — `session_id` field on `RewardEvent`, schema v3 migration. `log_reward()` auto-detects active session. MCP `buildlog_log_reward` and `buildlog_rewards` accept `session_id`. CLI `--session` filter on `buildlog reward` and `buildlog rewards` (#28)
+- **Reward emission protocol** — new `reward_signal` artifact type emitted to `~/.buildlog/emissions/pending/`. Edges: SUPPORTS (accepted), CHALLENGES (rejected), directional for revisions. Session `part_of` edge when context available
+- **npm wrapper help** — `--help` shows command summary when Python CLI not found, `--version` shows wrapper info. Package version synced to 0.13.0 (#78)
+- 19 new tests: schema v3 migration, reward round-trip, emission structure, edge direction, boundary cases, integration
+- Total: 1150 tests
+
+### Fixed
+- SQLite backend now persists all 5 enriched Mistake fields (was silently dropping them) (#118)
+- Emission JSON serializer raises TypeError for unknown types instead of silent `default=str` (#119)
+- `engine/experiments.py` `log_reward()`/`get_rewards()` synced with `session_id` support
+- Removed dead `session_data` parameter from `_reward_to_emission()`
+- Emission failure now logs at debug level instead of bare `except: pass`
+
+### Changed
+- Schema version 2 → 3 (adds `session_id` + index on `reward_events`)
+- YAML emissions config integration tests verify disabled_mappers behavior (#120)
+- Module-level `DEFAULT_REGISTRY` singleton documented as intentional (#121)
+
 ## [0.13.0] - 2026-02-06
 
 ### Added
@@ -275,7 +296,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `buildlog_status`, `buildlog_promote`, `buildlog_reject`, `buildlog_diff`
 - **Embedding Backends**: Token-based, sentence-transformers, OpenAI
 
-[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/Peleke/buildlog-template/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/Peleke/buildlog-template/compare/v0.12.0...v0.13.0
 [0.10.2]: https://github.com/Peleke/buildlog-template/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/Peleke/buildlog-template/compare/v0.10.0...v0.10.1

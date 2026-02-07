@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "buildlog"
-version = "0.13.0"
+version = "0.13.1"
 description = "Engineering notebook for AI-assisted development"
 readme = "README.md"
 license = "MIT"
