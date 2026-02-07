@@ -255,10 +255,20 @@ class TestBuildlogGauntletLoopMCP:
         assert "personas" in result
         assert "max_iterations" in result
         assert "stop_at" in result
-        assert "rules_by_persona" in result
         assert "instructions" in result
         assert "issue_format" in result
         assert "prompt" in result
+        # Compact mode (default): rules_by_persona stripped, valid_rule_ids added
+        assert "rules_by_persona" not in result
+        assert "valid_rule_ids" in result
+
+    def test_compact_false_includes_full_rules(self):
+        from buildlog.mcp.tools import buildlog_gauntlet_loop
+
+        result = buildlog_gauntlet_loop(target="src/", compact=False)
+        assert "rules_by_persona" in result
+        assert "rule_id_index" in result
+        assert "valid_rule_ids" not in result
 
     def test_custom_params_passed(self):
         from buildlog.mcp.tools import buildlog_gauntlet_loop

@@ -911,6 +911,7 @@ def buildlog_gauntlet_loop(
     max_iterations: int = 10,
     stop_at: str = "minors",
     auto_gh_issues: bool = False,
+    compact: bool = True,
 ) -> dict:
     """Start the gauntlet review loop: get config, rules, and instructions.
 
@@ -924,10 +925,16 @@ def buildlog_gauntlet_loop(
         max_iterations: Max review-fix iterations (default: 10)
         stop_at: Stop after clearing: "criticals", "majors", or "minors"
         auto_gh_issues: Create GitHub issues for accepted risk items
+        compact: Omit bulky fields that are redundant with the prompt
+            (default: True). The prompt already contains all rules, so
+            ``rules_by_persona`` is stripped. ``rule_id_index`` is
+            replaced with ``valid_rule_ids`` (just the keys). Set to
+            False to get the full unabridged response.
 
     Returns:
-        Dict with target, personas, max_iterations, stop_at, rules_by_persona,
-        instructions, issue_format, prompt, message, error
+        Dict with target, personas, max_iterations, stop_at,
+        instructions, issue_format, prompt, valid_rule_ids, message, error.
+        When compact=False, also includes rules_by_persona and rule_id_index.
     """
     result = gauntlet_loop_config(
         target=target,
@@ -936,7 +943,19 @@ def buildlog_gauntlet_loop(
         stop_at=stop_at,
         auto_gh_issues=auto_gh_issues,
     )
-    return asdict(result)
+    d = asdict(result)
+
+    if compact:
+        # The prompt already contains all rules formatted for the LLM.
+        # rules_by_persona is redundant and massive with many personas.
+        d.pop("rules_by_persona", None)
+
+        # Caller only needs the list of valid IDs (for valid_rule_ids
+        # param on buildlog_gauntlet_issues), not per-rule metadata.
+        rule_id_index = d.pop("rule_id_index", {})
+        d["valid_rule_ids"] = sorted(rule_id_index.keys())
+
+    return d
 
 
 # =============================================================================
