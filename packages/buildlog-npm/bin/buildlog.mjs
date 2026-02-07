@@ -67,8 +67,42 @@ async function main() {
     }
   }
 
-  // Nothing worked
-  console.error(`buildlog: Python CLI not found.
+  // Nothing worked — show helpful output depending on flags
+  const wantsHelp = args.includes("--help") || args.includes("-h");
+  const wantsVersion = args.includes("--version") || args.includes("-V");
+
+  if (wantsVersion) {
+    console.log("buildlog (npm wrapper) — Python CLI not installed");
+    console.log("Install the Python CLI to see the full version.");
+  } else if (wantsHelp) {
+    console.log(`buildlog — Engineering notebook for AI-assisted development
+
+Usage: buildlog <command> [options]
+
+Commands:
+  init              Initialize buildlog in current directory
+  init-mcp          Register MCP server (--global for ~/.claude.json)
+  new <slug>        Create a new journal entry
+  commit -m "msg"   Git commit with auto buildlog entry
+  verify            Check workflow setup (--fix to auto-repair)
+  overview          Project state at a glance
+  skills            Generate rules from entries
+  status            Show extracted skills
+  promote <ids>     Promote skills to agent rules
+  distill           Extract patterns from entries
+  reward <outcome>  Log reward signal
+  export            Export data to JSONL
+  migrate           Migrate legacy files to SQLite
+
+MCP Server (34 tools):
+  buildlog exposes an MCP server for Claude Code integration.
+  Run: buildlog init-mcp --global
+
+Docs: https://github.com/Peleke/buildlog-template`);
+  }
+
+  console.error(`
+buildlog: Python CLI not found.
 
 Install buildlog (pick one):
   pip install buildlog
