@@ -2962,6 +2962,7 @@ class GauntletLoopConfigResult:
     prompt: str
     message: str
     error: str | None = None
+    rule_id_index: dict[str, dict] = field(default_factory=dict)
 
 
 def _resolve_entry_path_core(
@@ -3183,6 +3184,8 @@ def generate_gauntlet_prompt(
             )
         seeds = filtered
 
+    from buildlog.seeds import get_rule_id
+
     lines = [
         "# Review Gauntlet Prompt\n",
         "You are running the Review Gauntlet." " Apply these rules ruthlessly.\n",
@@ -3195,8 +3198,9 @@ def generate_gauntlet_prompt(
     for name, sf in seeds.items():
         persona_name = name.replace("_", " ").title()
         lines.append(f"### {persona_name}\n")
-        for r in sf.rules:
-            lines.append(f"- **{r.rule}**")
+        for i, r in enumerate(sf.rules):
+            rule_id = get_rule_id(r, name, i)
+            lines.append(f"- [{rule_id}] **{r.rule}**")
             if r.antipattern:
                 lines.append(f"  - Antipattern: {r.antipattern}")
         lines.append("")
@@ -3213,7 +3217,11 @@ def generate_gauntlet_prompt(
             '  "category": "<category>",',
             '  "location": "<file:line>",',
             '  "description": "<what is wrong>",',
-            '  "rule_learned": "<generalizable rule>"',
+            '  "rule_learned": "<generalizable rule>",',
+            '  "rules_consulted": ["<rule_id>", "..."],',
+            '  "rule_reasoning": {',
+            '    "<rule_id>": "<HOW this rule applies to the specific violation>"',
+            "  }",
             "}",
             "```\n",
             "## Instructions\n",
@@ -3221,6 +3229,10 @@ def generate_gauntlet_prompt(
             "2. Apply each rule from each reviewer",
             "3. Report ALL violations found",
             "4. Be ruthless - this is the gauntlet",
+            "5. Cite specific rule IDs you applied in `rules_consulted`",
+            "6. In `rule_reasoning`, explain HOW each cited rule applies"
+            " to the specific violation",
+            "7. Do NOT carpet-cite — only cite rules you actually applied",
             "",
         ]
     )
@@ -3257,7 +3269,12 @@ def gauntlet_loop_config(
     Returns:
         GauntletLoopConfigResult with full loop configuration.
     """
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import (
+        build_rule_id_index,
+        get_default_seeds_dir,
+        get_rule_id,
+        load_all_seeds,
+    )
 
     seeds_dir = get_default_seeds_dir()
     _empty = GauntletLoopConfigResult(
@@ -3297,9 +3314,12 @@ def gauntlet_loop_config(
                 "rule": r.rule,
                 "antipattern": r.antipattern,
                 "category": r.category,
+                "provenance_id": get_rule_id(r, name, i),
             }
-            for r in sf.rules
+            for i, r in enumerate(sf.rules)
         ]
+
+    rule_id_index = build_rule_id_index(seeds)
 
     prompt_result = generate_gauntlet_prompt(target=target, personas=list(seeds.keys()))
     prompt = prompt_result.prompt if not prompt_result.error else ""
@@ -3307,18 +3327,23 @@ def gauntlet_loop_config(
     instructions = [
         "1. Review the target code using the rules from each persona",
         "2. Report all violations as JSON issues with: severity,"
-        " category, description, rule_learned, location",
-        "3. Call `buildlog_gauntlet_issues` with the issues list"
-        " to determine next action",
-        "4. If action='fix_criticals': Fix critical+major issues,"
+        " category, description, rule_learned, location,"
+        " rules_consulted, rule_reasoning",
+        "3. In `rules_consulted`, cite the specific rule IDs"
+        " (shown in brackets in the prompt) that informed this finding",
+        "4. In `rule_reasoning`, explain HOW each cited rule applies",
+        "5. Do NOT carpet-cite — only cite rules you actually applied",
+        "6. Call `buildlog_gauntlet_issues` with the issues list"
+        " and `valid_rule_ids` to determine next action",
+        "7. If action='fix_criticals': Fix critical+major issues,"
         " then re-run gauntlet",
-        "5. If action='checkpoint_majors': Ask user whether to"
+        "8. If action='checkpoint_majors': Ask user whether to"
         " continue fixing majors",
-        "6. If action='checkpoint_minors': Ask user whether to"
+        "9. If action='checkpoint_minors': Ask user whether to"
         " accept risk or continue",
-        "7. If user accepts risk and auto_gh_issues: Call"
+        "10. If user accepts risk and auto_gh_issues: Call"
         " `buildlog_gauntlet_accept_risk` with remaining issues",
-        "8. Repeat until action='clean' or max_iterations reached",
+        "11. Repeat until action='clean' or max_iterations reached",
     ]
 
     issue_format = {
@@ -3327,6 +3352,8 @@ def gauntlet_loop_config(
         "description": "Concrete description of what's wrong",
         "rule_learned": "Generalizable rule for the future",
         "location": "file:line (optional)",
+        "rules_consulted": "[list of rule IDs from the prompt]",
+        "rule_reasoning": "{rule_id: 'HOW this rule applies'}",
     }
 
     return GauntletLoopConfigResult(
@@ -3343,6 +3370,7 @@ def gauntlet_loop_config(
             f"Gauntlet loop ready: {len(seeds)} personas,"
             f" max {max_iterations} iterations"
         ),
+        rule_id_index=rule_id_index,
     )
 
 
