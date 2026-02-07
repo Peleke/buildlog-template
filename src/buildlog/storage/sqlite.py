@@ -277,8 +277,9 @@ class SQLiteBackend:
                 """\
                 INSERT OR REPLACE INTO reward_events
                     (project_id, id, timestamp, outcome, reward_value,
-                     rules_active, revision_distance, error_class, notes, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     rules_active, revision_distance, error_class, notes, source,
+                     session_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project_id,
@@ -291,6 +292,7 @@ class SQLiteBackend:
                     record.get("error_class"),
                     record.get("notes"),
                     record.get("source"),
+                    record.get("session_id"),
                 ),
             )
         elif resolved == "sessions":

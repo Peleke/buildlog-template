@@ -268,6 +268,7 @@ def buildlog_log_reward(
     revision_distance: float | None = None,
     error_class: str | None = None,
     notes: str | None = None,
+    session_id: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Log outcome feedback for bandit learning (accepted/revision/rejected).
@@ -284,6 +285,7 @@ def buildlog_log_reward(
         revision_distance: How much correction was needed (0-1, 0=minor tweak, 1=complete redo)
         error_class: Category of error if applicable (e.g., "missing_test", "validation_boundary")
         notes: Optional notes about the feedback
+        session_id: Session to associate this reward with. Auto-detects active session if omitted.
         buildlog_dir: Path to buildlog directory
 
     Returns:
@@ -293,11 +295,12 @@ def buildlog_log_reward(
         # Work was accepted
         buildlog_log_reward(outcome="accepted", rules_active=["arch-123", "wf-456"])
 
-        # Work needed revision
+        # Work needed revision with session
         buildlog_log_reward(
             outcome="revision",
             revision_distance=0.3,
             error_class="missing_test",
+            session_id="2026-02-06-auth",
             notes="Forgot to test error path"
         )
 
@@ -322,12 +325,14 @@ def buildlog_log_reward(
         error_class=error_class,
         notes=notes,
         source="mcp",
+        session_id=session_id,
     )
     return asdict(result)
 
 
 def buildlog_rewards(
     limit: int | None = None,
+    session_id: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Get reward events with summary statistics.
@@ -337,6 +342,7 @@ def buildlog_rewards(
 
     Args:
         limit: Maximum number of events to return (most recent first)
+        session_id: Filter rewards to this session only
         buildlog_dir: Path to buildlog directory
 
     Returns:
@@ -350,8 +356,9 @@ def buildlog_rewards(
 
     Example:
         buildlog_rewards(limit=10)  # Get 10 most recent events with stats
+        buildlog_rewards(session_id="2026-02-06-auth")  # Session-specific
     """
-    result = get_rewards(Path(buildlog_dir), limit)
+    result = get_rewards(Path(buildlog_dir), limit, session_id=session_id)
 
     # Convert events to dicts
     return {
