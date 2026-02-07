@@ -2372,7 +2372,9 @@ def gauntlet_process_issues(
                         severity="minor",
                     )
                 except Exception:
-                    pass  # Fire-and-forget
+                    logging.getLogger(__name__).debug(
+                        "Failed to log citation hallucination", exc_info=True
+                    )
 
             credited_rules.update(valid_ids)
         else:
@@ -2406,7 +2408,9 @@ def gauntlet_process_issues(
             for rule_id in credited_rules:
                 bandit.update(rule_id, reward=1.0, context=context)
         except Exception:
-            pass  # Fire-and-forget: don't break the gauntlet loop
+            logging.getLogger(__name__).debug(
+                "Bandit credit update failed", exc_info=True
+            )
 
     # Determine action
     if criticals:
