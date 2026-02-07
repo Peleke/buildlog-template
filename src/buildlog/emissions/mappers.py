@@ -260,6 +260,13 @@ def resolution_edges(ctx: EdgeMapperContext) -> MapperOutput:
 # Default registry
 # ---------------------------------------------------------------------------
 
+# NOTE (issue #121): DEFAULT_REGISTRY is intentionally created at module level
+# rather than lazily. The overhead is negligible — each register() call just
+# stores a function reference in a dict and adds a name to a set. There are
+# only 6 mappers and no heavy initialization (no I/O, no network, no large
+# allocations). Lazy initialization would add complexity (thread-safety,
+# first-call latency surprises) for no measurable benefit. Evaluated and
+# accepted on 2026-02-06.
 DEFAULT_REGISTRY = EdgeMapperRegistry()
 DEFAULT_REGISTRY.register("concept_involvement", concept_involvement)
 DEFAULT_REGISTRY.register("rule_challenge", rule_challenge)

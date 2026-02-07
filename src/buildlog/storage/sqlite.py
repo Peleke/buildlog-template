@@ -316,12 +316,23 @@ class SQLiteBackend:
                 ),
             )
         elif resolved == "mistakes":
+            # Serialize list/dict fields to JSON for SQLite TEXT columns
+            related_concepts = record.get("related_concepts")
+            if related_concepts is not None and not isinstance(related_concepts, str):
+                related_concepts = json.dumps(related_concepts)
+
+            relation_to_prior = record.get("relation_to_prior")
+            if relation_to_prior is not None and not isinstance(relation_to_prior, str):
+                relation_to_prior = json.dumps(relation_to_prior)
+
             self.conn.execute(
                 """\
                 INSERT OR REPLACE INTO mistakes
                     (project_id, id, session_id, timestamp, error_class,
-                     description, semantic_hash, was_repeat, corrected_by_rule)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     description, semantic_hash, was_repeat, corrected_by_rule,
+                     related_concepts, relation_to_prior, resolution_action,
+                     context, severity)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project_id,
@@ -333,6 +344,11 @@ class SQLiteBackend:
                     record["semantic_hash"],
                     1 if record.get("was_repeat") else 0,
                     record.get("corrected_by_rule"),
+                    related_concepts,
+                    relation_to_prior,
+                    record.get("resolution_action"),
+                    record.get("context"),
+                    record.get("severity"),
                 ),
             )
 
