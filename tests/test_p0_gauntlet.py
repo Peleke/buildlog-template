@@ -257,7 +257,9 @@ class TestBuildlogGauntletLoopMCP:
         assert "stop_at" in result
         assert "instructions" in result
         assert "issue_format" in result
-        assert "prompt" in result
+        # Compact mode (default): prompt written to file, not inline
+        assert "prompt" not in result
+        assert "prompt_file" in result
         # Compact mode (default): rules_by_persona stripped, valid_rule_ids added
         assert "rules_by_persona" not in result
         assert "valid_rule_ids" in result
@@ -288,3 +290,29 @@ class TestBuildlogGauntletLoopMCP:
 
         result = buildlog_gauntlet_loop(target="src/", personas=["bogus"])
         assert result["error"] is not None
+
+    def test_compact_writes_prompt_to_file(self):
+        """Compact mode should write prompt to .buildlog/gauntlet_prompt.md."""
+        from pathlib import Path
+
+        from buildlog.mcp.tools import buildlog_gauntlet_loop
+
+        result = buildlog_gauntlet_loop(target="src/", compact=True)
+        assert "prompt_file" in result
+        assert "prompt" not in result
+
+        prompt_path = Path(result["prompt_file"])
+        assert prompt_path.exists()
+        content = prompt_path.read_text(encoding="utf-8")
+        # Prompt should have real content (not empty) when no error
+        if result.get("error") is None:
+            assert len(content) > 0
+
+    def test_compact_false_returns_prompt_inline(self):
+        """Non-compact mode should return prompt inline, no prompt_file."""
+        from buildlog.mcp.tools import buildlog_gauntlet_loop
+
+        result = buildlog_gauntlet_loop(target="src/", compact=False)
+        assert "prompt" in result
+        assert "prompt_file" not in result
+        assert isinstance(result["prompt"], str)

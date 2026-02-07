@@ -928,13 +928,16 @@ def buildlog_gauntlet_loop(
         compact: Omit bulky fields that are redundant with the prompt
             (default: True). The prompt already contains all rules, so
             ``rules_by_persona`` is stripped. ``rule_id_index`` is
-            replaced with ``valid_rule_ids`` (just the keys). Set to
-            False to get the full unabridged response.
+            replaced with ``valid_rule_ids`` (just the keys). The full
+            prompt is written to ``.buildlog/gauntlet_prompt.md`` and
+            replaced with a ``prompt_file`` path. Set to False to get
+            the full unabridged response.
 
     Returns:
         Dict with target, personas, max_iterations, stop_at,
-        instructions, issue_format, prompt, valid_rule_ids, message, error.
-        When compact=False, also includes rules_by_persona and rule_id_index.
+        instructions, issue_format, prompt_file, valid_rule_ids, message, error.
+        When compact=False, returns prompt inline instead of prompt_file,
+        and also includes rules_by_persona and rule_id_index.
     """
     result = gauntlet_loop_config(
         target=target,
@@ -954,6 +957,13 @@ def buildlog_gauntlet_loop(
         # param on buildlog_gauntlet_issues), not per-rule metadata.
         rule_id_index = d.pop("rule_id_index", {})
         d["valid_rule_ids"] = sorted(rule_id_index.keys())
+
+        # Write prompt to file instead of returning inline (~22K tokens).
+        prompt_text = d.pop("prompt", "")
+        prompt_path = Path(DEFAULT_BUILDLOG_DIR) / ".buildlog" / "gauntlet_prompt.md"
+        prompt_path.parent.mkdir(parents=True, exist_ok=True)
+        prompt_path.write_text(prompt_text, encoding="utf-8")
+        d["prompt_file"] = str(prompt_path.resolve())
 
     return d
 
