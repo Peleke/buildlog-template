@@ -1,0 +1,9 @@
+persona: test_persona
+version: 1
+rules:
+  - rule: "Always validate input"
+    category: security
+    context: "User-facing endpoints"
+    antipattern: "Trusting raw input"
+    rationale: "Prevents injection attacks"
+    tags: [security, validation]

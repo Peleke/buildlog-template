@@ -35,6 +35,8 @@ __all__ = [
     "import_seed_file",
     "get_package_seeds_dir",
     "get_default_seeds_dir",
+    "get_rule_id",
+    "build_rule_id_index",
 ]
 
 import logging
@@ -458,3 +460,47 @@ def get_rules_for_persona(all_skills: list[Skill], persona: str) -> list[Skill]:
         Skills tagged for this persona.
     """
     return [s for s in all_skills if persona in s.persona_tags]
+
+
+def get_rule_id(seed_rule: SeedRule, persona: str, index: int) -> str:
+    """Get a stable, citable ID for a seed rule.
+
+    Uses ``provenance["id"]`` if present, otherwise falls back to
+    ``{persona}:rule:{index}`` which is deterministic as long as
+    the seed file doesn't reorder rules.
+
+    Args:
+        seed_rule: The seed rule to get an ID for.
+        persona: The persona this rule belongs to.
+        index: The rule's position in the seed file (0-based).
+
+    Returns:
+        A string rule ID suitable for citation in gauntlet prompts.
+    """
+    if seed_rule.provenance and isinstance(seed_rule.provenance.get("id"), str):
+        return seed_rule.provenance["id"]
+    return f"{persona}:rule:{index}"
+
+
+def build_rule_id_index(
+    seeds: dict[str, SeedFile],
+) -> dict[str, dict[str, Any]]:
+    """Build a flat index mapping every rule ID to its metadata.
+
+    Args:
+        seeds: Dict mapping persona name to SeedFile (from ``load_all_seeds``).
+
+    Returns:
+        Dict mapping rule ID → ``{persona, rule_text, category, index}``.
+    """
+    index: dict[str, dict[str, Any]] = {}
+    for persona_name, sf in seeds.items():
+        for i, rule in enumerate(sf.rules):
+            rule_id = get_rule_id(rule, persona_name, i)
+            index[rule_id] = {
+                "persona": persona_name,
+                "rule_text": rule.rule,
+                "category": rule.category,
+                "index": i,
+            }
+    return index

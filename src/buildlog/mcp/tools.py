@@ -600,11 +600,13 @@ def buildlog_gauntlet_issues(
     source: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     issues_file: str | None = None,
+    valid_rule_ids: list[str] | None = None,
 ) -> dict:
     """Process gauntlet issues and determine next action (fix/checkpoint/clean).
 
     Call this after running a gauntlet review. It categorizes issues by
-    severity, persists learnings, and returns the appropriate next action.
+    severity, persists learnings, validates rule citations, and returns
+    the appropriate next action.
 
     Provide issues inline OR via a JSON file path (not both).
 
@@ -615,13 +617,18 @@ def buildlog_gauntlet_issues(
                 "category": "security|testing|architectural|...",
                 "description": "What's wrong",
                 "rule_learned": "Generalizable rule",
-                "location": "file:line (optional)"
+                "location": "file:line (optional)",
+                "rules_consulted": ["rule_id", ...] (optional),
+                "rule_reasoning": {"rule_id": "how it applies"} (optional)
             }
         iteration: Current iteration number (for tracking loops)
         source: Optional source identifier for learnings
         buildlog_dir: Path to buildlog directory
         issues_file: Path to a JSON file containing the issues array.
             Mutually exclusive with 'issues'.
+        valid_rule_ids: List of valid rule IDs for citation validation.
+            Pass the keys from rule_id_index (from gauntlet_loop_config).
+            Hallucinated IDs are stripped and logged as mistakes.
 
     Returns:
         Dict with:
@@ -635,20 +642,22 @@ def buildlog_gauntlet_issues(
             - minors: List of minor/nitpick issues
             - iteration: Current iteration number
             - learnings_persisted: Number of learnings saved
+            - rules_credited: Validated rule IDs cited across issues
+            - citation_stats: Citation validation statistics
             - message: Human-readable summary
 
     Example:
         # After running gauntlet review
         result = buildlog_gauntlet_issues(
             issues=[
-                {"severity": "critical", "category": "security", ...},
-                {"severity": "major", "category": "testing", ...},
+                {"severity": "critical", "category": "security",
+                 "rules_consulted": ["security_karen:rule:0"], ...},
             ],
-            iteration=1
+            iteration=1,
+            valid_rule_ids=["security_karen:rule:0", "security_karen:rule:1"]
         )
-        # Or via file:
-        result = buildlog_gauntlet_issues(issues_file="/tmp/issues.json", iteration=1)
         # result["action"] tells you what to do next
+        # result["rules_credited"] shows which rules got credit
     """
     try:
         resolved = _resolve_file_or_inline(issues, issues_file, "issues")
@@ -660,6 +669,8 @@ def buildlog_gauntlet_issues(
             "minors": [],
             "iteration": iteration,
             "learnings_persisted": 0,
+            "rules_credited": [],
+            "citation_stats": {},
             "message": "",
             "error": str(exc),
         }
@@ -671,6 +682,7 @@ def buildlog_gauntlet_issues(
         issues=resolved,
         iteration=iteration,
         source=source,
+        valid_rule_ids=set(valid_rule_ids) if valid_rule_ids else None,
     )
     return asdict(result)
 
@@ -899,6 +911,7 @@ def buildlog_gauntlet_loop(
     max_iterations: int = 10,
     stop_at: str = "minors",
     auto_gh_issues: bool = False,
+    compact: bool = True,
 ) -> dict:
     """Start the gauntlet review loop: get config, rules, and instructions.
 
@@ -912,10 +925,16 @@ def buildlog_gauntlet_loop(
         max_iterations: Max review-fix iterations (default: 10)
         stop_at: Stop after clearing: "criticals", "majors", or "minors"
         auto_gh_issues: Create GitHub issues for accepted risk items
+        compact: Omit bulky fields that are redundant with the prompt
+            (default: True). The prompt already contains all rules, so
+            ``rules_by_persona`` is stripped. ``rule_id_index`` is
+            replaced with ``valid_rule_ids`` (just the keys). Set to
+            False to get the full unabridged response.
 
     Returns:
-        Dict with target, personas, max_iterations, stop_at, rules_by_persona,
-        instructions, issue_format, prompt, message, error
+        Dict with target, personas, max_iterations, stop_at,
+        instructions, issue_format, prompt, valid_rule_ids, message, error.
+        When compact=False, also includes rules_by_persona and rule_id_index.
     """
     result = gauntlet_loop_config(
         target=target,
@@ -924,7 +943,19 @@ def buildlog_gauntlet_loop(
         stop_at=stop_at,
         auto_gh_issues=auto_gh_issues,
     )
-    return asdict(result)
+    d = asdict(result)
+
+    if compact:
+        # The prompt already contains all rules formatted for the LLM.
+        # rules_by_persona is redundant and massive with many personas.
+        d.pop("rules_by_persona", None)
+
+        # Caller only needs the list of valid IDs (for valid_rule_ids
+        # param on buildlog_gauntlet_issues), not per-rule metadata.
+        rule_id_index = d.pop("rule_id_index", {})
+        d["valid_rule_ids"] = sorted(rule_id_index.keys())
+
+    return d
 
 
 # =============================================================================

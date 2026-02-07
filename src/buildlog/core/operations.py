@@ -2268,6 +2268,8 @@ class GauntletLoopResult:
         iteration: Current iteration number
         learnings_persisted: Number of learnings persisted this iteration
         message: Human-readable summary
+        rules_credited: Validated rule IDs cited across all issues
+        citation_stats: Validation stats (total/valid/hallucinated citations)
     """
 
     action: Literal["fix_criticals", "checkpoint_majors", "checkpoint_minors", "clean"]
@@ -2277,6 +2279,8 @@ class GauntletLoopResult:
     iteration: int
     learnings_persisted: int
     message: str
+    rules_credited: list[str] = field(default_factory=list)
+    citation_stats: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -2303,21 +2307,81 @@ def gauntlet_process_issues(
     issues: list[dict],
     iteration: int = 1,
     source: str | None = None,
+    valid_rule_ids: set[str] | None = None,
 ) -> GauntletLoopResult:
     """Process gauntlet issues and determine next action.
 
-    Categorizes issues by severity, persists learnings, and returns
-    the appropriate next action for the gauntlet loop.
+    Categorizes issues by severity, persists learnings, validates
+    rule citations, and returns the appropriate next action for
+    the gauntlet loop.
 
     Args:
         buildlog_dir: Path to buildlog directory.
         issues: List of issues from the gauntlet review.
         iteration: Current iteration number (for tracking).
         source: Optional source identifier for learnings.
+        valid_rule_ids: Set of valid rule IDs for citation validation.
+            When provided, hallucinated IDs are stripped from issues
+            and logged as mistakes.
 
     Returns:
         GauntletLoopResult with categorized issues and next action.
     """
+    # --- Citation validation ---
+    credited_rules: set[str] = set()
+    citation_stats: dict = {
+        "total_citations": 0,
+        "valid_citations": 0,
+        "hallucinated_citations": 0,
+        "issues_with_citations": 0,
+        "issues_without_citations": 0,
+    }
+
+    for issue in issues:
+        consulted = issue.get("rules_consulted")
+        if not consulted or not isinstance(consulted, list):
+            citation_stats["issues_without_citations"] += 1
+            continue
+
+        citation_stats["issues_with_citations"] += 1
+        citation_stats["total_citations"] += len(consulted)
+
+        if valid_rule_ids is not None:
+            valid_ids = [rid for rid in consulted if rid in valid_rule_ids]
+            hallucinated_ids = [rid for rid in consulted if rid not in valid_rule_ids]
+
+            citation_stats["valid_citations"] += len(valid_ids)
+            citation_stats["hallucinated_citations"] += len(hallucinated_ids)
+
+            # Strip hallucinated IDs from the issue
+            issue["rules_consulted"] = valid_ids
+            if "rule_reasoning" in issue and isinstance(issue["rule_reasoning"], dict):
+                for hid in hallucinated_ids:
+                    issue["rule_reasoning"].pop(hid, None)
+
+            # Log hallucinated citations as mistakes
+            if hallucinated_ids:
+                try:
+                    log_mistake(
+                        buildlog_dir,
+                        error_class="citation_hallucination",
+                        description=(
+                            f"Hallucinated rule IDs in gauntlet review: "
+                            f"{', '.join(hallucinated_ids)}"
+                        ),
+                        severity="minor",
+                    )
+                except Exception:
+                    logging.getLogger(__name__).debug(
+                        "Failed to log citation hallucination", exc_info=True
+                    )
+
+            credited_rules.update(valid_ids)
+        else:
+            # No validation — trust all citations
+            citation_stats["valid_citations"] += len(consulted)
+            credited_rules.update(consulted)
+
     # Categorize by severity
     criticals = [i for i in issues if i.get("severity") == "critical"]
     majors = [i for i in issues if i.get("severity") == "major"]
@@ -2329,6 +2393,24 @@ def gauntlet_process_issues(
     learnings_persisted = len(learn_result.new_learnings) + len(
         learn_result.reinforced_learnings
     )
+
+    # --- Bandit update with per-rule credit (Touch 3) ---
+    if credited_rules:
+        try:
+            from buildlog.core.bandit import ThompsonSamplingBandit
+
+            bandit = ThompsonSamplingBandit(buildlog_dir / "bandit_state.jsonl")
+            # Derive context from issue categories for segmentation
+            categories = {
+                i.get("category", "general") for i in issues if i.get("rules_consulted")
+            }
+            context = ",".join(sorted(categories)) if categories else None
+            for rule_id in credited_rules:
+                bandit.update(rule_id, reward=1.0, context=context)
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "Bandit credit update failed", exc_info=True
+            )
 
     # Determine action
     if criticals:
@@ -2365,6 +2447,8 @@ def gauntlet_process_issues(
         iteration=iteration,
         learnings_persisted=learnings_persisted,
         message=message,
+        rules_credited=sorted(credited_rules),
+        citation_stats=citation_stats,
     )
 
 
@@ -2962,6 +3046,7 @@ class GauntletLoopConfigResult:
     prompt: str
     message: str
     error: str | None = None
+    rule_id_index: dict[str, dict] = field(default_factory=dict)
 
 
 def _resolve_entry_path_core(
@@ -3183,6 +3268,8 @@ def generate_gauntlet_prompt(
             )
         seeds = filtered
 
+    from buildlog.seeds import get_rule_id
+
     lines = [
         "# Review Gauntlet Prompt\n",
         "You are running the Review Gauntlet." " Apply these rules ruthlessly.\n",
@@ -3195,8 +3282,9 @@ def generate_gauntlet_prompt(
     for name, sf in seeds.items():
         persona_name = name.replace("_", " ").title()
         lines.append(f"### {persona_name}\n")
-        for r in sf.rules:
-            lines.append(f"- **{r.rule}**")
+        for i, r in enumerate(sf.rules):
+            rule_id = get_rule_id(r, name, i)
+            lines.append(f"- [{rule_id}] **{r.rule}**")
             if r.antipattern:
                 lines.append(f"  - Antipattern: {r.antipattern}")
         lines.append("")
@@ -3213,7 +3301,11 @@ def generate_gauntlet_prompt(
             '  "category": "<category>",',
             '  "location": "<file:line>",',
             '  "description": "<what is wrong>",',
-            '  "rule_learned": "<generalizable rule>"',
+            '  "rule_learned": "<generalizable rule>",',
+            '  "rules_consulted": ["<rule_id>", "..."],',
+            '  "rule_reasoning": {',
+            '    "<rule_id>": "<HOW this rule applies to the specific violation>"',
+            "  }",
             "}",
             "```\n",
             "## Instructions\n",
@@ -3221,6 +3313,10 @@ def generate_gauntlet_prompt(
             "2. Apply each rule from each reviewer",
             "3. Report ALL violations found",
             "4. Be ruthless - this is the gauntlet",
+            "5. Cite specific rule IDs you applied in `rules_consulted`",
+            "6. In `rule_reasoning`, explain HOW each cited rule applies"
+            " to the specific violation",
+            "7. Do NOT carpet-cite — only cite rules you actually applied",
             "",
         ]
     )
@@ -3257,7 +3353,12 @@ def gauntlet_loop_config(
     Returns:
         GauntletLoopConfigResult with full loop configuration.
     """
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import (
+        build_rule_id_index,
+        get_default_seeds_dir,
+        get_rule_id,
+        load_all_seeds,
+    )
 
     seeds_dir = get_default_seeds_dir()
     _empty = GauntletLoopConfigResult(
@@ -3297,9 +3398,12 @@ def gauntlet_loop_config(
                 "rule": r.rule,
                 "antipattern": r.antipattern,
                 "category": r.category,
+                "provenance_id": get_rule_id(r, name, i),
             }
-            for r in sf.rules
+            for i, r in enumerate(sf.rules)
         ]
+
+    rule_id_index = build_rule_id_index(seeds)
 
     prompt_result = generate_gauntlet_prompt(target=target, personas=list(seeds.keys()))
     prompt = prompt_result.prompt if not prompt_result.error else ""
@@ -3307,18 +3411,23 @@ def gauntlet_loop_config(
     instructions = [
         "1. Review the target code using the rules from each persona",
         "2. Report all violations as JSON issues with: severity,"
-        " category, description, rule_learned, location",
-        "3. Call `buildlog_gauntlet_issues` with the issues list"
-        " to determine next action",
-        "4. If action='fix_criticals': Fix critical+major issues,"
+        " category, description, rule_learned, location,"
+        " rules_consulted, rule_reasoning",
+        "3. In `rules_consulted`, cite the specific rule IDs"
+        " (shown in brackets in the prompt) that informed this finding",
+        "4. In `rule_reasoning`, explain HOW each cited rule applies",
+        "5. Do NOT carpet-cite — only cite rules you actually applied",
+        "6. Call `buildlog_gauntlet_issues` with the issues list"
+        " and `valid_rule_ids` to determine next action",
+        "7. If action='fix_criticals': Fix critical+major issues,"
         " then re-run gauntlet",
-        "5. If action='checkpoint_majors': Ask user whether to"
+        "8. If action='checkpoint_majors': Ask user whether to"
         " continue fixing majors",
-        "6. If action='checkpoint_minors': Ask user whether to"
+        "9. If action='checkpoint_minors': Ask user whether to"
         " accept risk or continue",
-        "7. If user accepts risk and auto_gh_issues: Call"
+        "10. If user accepts risk and auto_gh_issues: Call"
         " `buildlog_gauntlet_accept_risk` with remaining issues",
-        "8. Repeat until action='clean' or max_iterations reached",
+        "11. Repeat until action='clean' or max_iterations reached",
     ]
 
     issue_format = {
@@ -3327,6 +3436,8 @@ def gauntlet_loop_config(
         "description": "Concrete description of what's wrong",
         "rule_learned": "Generalizable rule for the future",
         "location": "file:line (optional)",
+        "rules_consulted": "[list of rule IDs from the prompt]",
+        "rule_reasoning": "{rule_id: 'HOW this rule applies'}",
     }
 
     return GauntletLoopConfigResult(
@@ -3343,6 +3454,7 @@ def gauntlet_loop_config(
             f"Gauntlet loop ready: {len(seeds)} personas,"
             f" max {max_iterations} iterations"
         ),
+        rule_id_index=rule_id_index,
     )
 
 

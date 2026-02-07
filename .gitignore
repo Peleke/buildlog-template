@@ -50,7 +50,15 @@ CHAT.txt
 results/
 sketches/
 
+# Session / tool artifacts
+.bmad/
+_bmad/
+.hypothesis/
+.serena/
+.env.local
+
 # buildlog runtime data (in project root, not in src/)
 buildlog/.buildlog/
 buildlog/bandit_state.jsonl
+buildlog/bandit_state.jsonl.migrated
 site/

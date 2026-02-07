@@ -1,0 +1,741 @@
+persona: qortex_impl_hiding
+version: 1
+rules:
+- rule: Make every instance variable and method private (or protected) except those
+    that must be public to enable other code to use the class.
+  category: best_practice
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Make every instance variable and method private (or protected) except
+    those that must be public to enable other code to use the class.
+  tags:
+  - implementation_hiding
+  - best_practice
+  provenance:
+    id: implementation_hiding:rule:0
+    domain: implementation_hiding
+    derivation: explicit
+    source_concepts:
+    - implementation_hiding:Private Attributes
+    - implementation_hiding:Public Interface
+    - implementation_hiding:Implementation Hiding
+    confidence: 0.95
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: Once public, always public - if you make an instance variable or method public,
+    you might not be able to change it to private later without forcing code rewrites.
+  category: warning
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Once public, always public - if you make an instance variable or method
+    public, you might not be able to change it to private later without forcing code
+    rewrites.
+  tags:
+  - implementation_hiding
+  - warning
+  provenance:
+    id: implementation_hiding:rule:1
+    domain: implementation_hiding
+    derivation: explicit
+    source_concepts:
+    - implementation_hiding:Once Public Always Public
+    - implementation_hiding:Public Interface
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: Hide implementation by starting names of instance variables and methods with
+    an underscore (_) to specify that they're private.
+  category: guideline
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Hide implementation by starting names of instance variables and methods
+    with an underscore (_) to specify that they're private.
+  tags:
+  - implementation_hiding
+  - guideline
+  provenance:
+    id: implementation_hiding:rule:2
+    domain: implementation_hiding
+    derivation: explicit
+    source_concepts:
+    - implementation_hiding:Python Naming Convention
+    - implementation_hiding:Private Instance Variable
+    - implementation_hiding:Privacy Convention
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: Code outside a class should not reference private variables or call private
+    methods (those starting with underscore), nor depend on their particular implementations.
+  category: principle
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Code outside a class should not reference private variables or call private
+    methods (those starting with underscore), nor depend on their particular implementations.
+  tags:
+  - implementation_hiding
+  - principle
+  provenance:
+    id: implementation_hiding:rule:3
+    domain: implementation_hiding
+    derivation: explicit
+    source_concepts:
+    - implementation_hiding:Privacy Convention
+    - implementation_hiding:Implementation Dependency
+    - implementation_hiding:Hidden Implementation
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: Class A should know as little as possible about the implementation of class
+    B to minimize dependencies.
+  category: principle
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Class A should know as little as possible about the implementation of
+    class B to minimize dependencies.
+  tags:
+  - implementation_hiding
+  - principle
+  provenance:
+    id: implementation_hiding:rule:4
+    domain: implementation_hiding
+    derivation: explicit
+    source_concepts:
+    - implementation_hiding:Principle Of Least Knowledge
+    - implementation_hiding:Class Dependencies
+    - implementation_hiding:Loose Coupling
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: A class should expose only as much of itself as necessary for other code to
+    use the class, hiding the rest.
+  category: principle
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: A class should expose only as much of itself as necessary for other code
+    to use the class, hiding the rest.
+  tags:
+  - implementation_hiding
+  - principle
+  provenance:
+    id: implementation_hiding:rule:5
+    domain: implementation_hiding
+    derivation: explicit
+    source_concepts:
+    - implementation_hiding:Implementation Hiding
+    - implementation_hiding:Public Interface
+    - implementation_hiding:Encapsulation
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: Use public getter and setter methods to provide access to private instance
+    variables while maintaining encapsulation.
+  category: best_practice
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Use public getter and setter methods to provide access to private instance
+    variables while maintaining encapsulation.
+  tags:
+  - implementation_hiding
+  - best_practice
+  provenance:
+    id: implementation_hiding:rule:6
+    domain: implementation_hiding
+    derivation: explicit
+    source_concepts:
+    - implementation_hiding:Getter And Setter Methods
+    - implementation_hiding:Private Instance Variable
+    - implementation_hiding:Public Interface
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: Implementation Hiding is a component of Encapsulation; changes to Implementation
+    Hiding affect Encapsulation
+  category: architectural
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Implementation Hiding is a component of Encapsulation; changes to Implementation
+    Hiding affect Encapsulation
+  tags:
+  - implementation_hiding
+  - architectural
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Implementation Hiding->implementation_hiding:Encapsulation:composition
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Implementation Hiding
+    - implementation_hiding:Encapsulation
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Implementation Hiding uses Private Instance Variables, creating coupling;
+    changes to Private Instance Variables may require updates to Implementation Hiding
+  category: architectural
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Implementation Hiding uses Private Instance Variables, creating coupling;
+    changes to Private Instance Variables may require updates to Implementation Hiding
+  tags:
+  - implementation_hiding
+  - architectural
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Implementation Hiding->implementation_hiding:Private
+      Instance Variables:coupling
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Implementation Hiding
+    - implementation_hiding:Private Instance Variables
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Implementation Hiding uses Public Interface, creating coupling; changes to
+    Public Interface may require updates to Implementation Hiding
+  category: architectural
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Implementation Hiding uses Public Interface, creating coupling; changes
+    to Public Interface may require updates to Implementation Hiding
+  tags:
+  - implementation_hiding
+  - architectural
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Implementation Hiding->implementation_hiding:Public
+      Interface:coupling
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Implementation Hiding
+    - implementation_hiding:Public Interface
+    confidence: 0.8
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Principle Of Least Knowledge and Law Of Demeter are analogous; patterns from
+    one may transfer to the other
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Principle Of Least Knowledge and Law Of Demeter are analogous; patterns
+    from one may transfer to the other
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Principle Of Least Knowledge->implementation_hiding:Law
+      Of Demeter:analogy
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Principle Of Least Knowledge
+    - implementation_hiding:Law Of Demeter
+    confidence: 1.0
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Principle Of Least Knowledge provides evidence supporting the use of Loose
+    Coupling
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Principle Of Least Knowledge provides evidence supporting the use of
+    Loose Coupling
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Principle Of Least Knowledge->implementation_hiding:Loose
+      Coupling:evidence
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Principle Of Least Knowledge
+    - implementation_hiding:Loose Coupling
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Principle Of Least Knowledge provides counter-evidence to Class Dependencies;
+    consider before committing
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Principle Of Least Knowledge provides counter-evidence to Class Dependencies;
+    consider before committing
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Principle Of Least Knowledge->implementation_hiding:Class
+      Dependencies:counter_evidence
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Principle Of Least Knowledge
+    - implementation_hiding:Class Dependencies
+    confidence: 0.8
+    relevance: 0.0
+    relation_type: challenges
+    template_id: challenges:counter_evidence
+    template_variant: counter_evidence
+    template_severity: warning
+- rule: Loose Coupling provides counter-evidence to Class Dependencies; consider before
+    committing
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Loose Coupling provides counter-evidence to Class Dependencies; consider
+    before committing
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Loose Coupling->implementation_hiding:Class
+      Dependencies:counter_evidence
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Loose Coupling
+    - implementation_hiding:Class Dependencies
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: challenges
+    template_id: challenges:counter_evidence
+    template_variant: counter_evidence
+    template_severity: warning
+- rule: Object State is a concrete way to achieve Instance Variables
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Object State is a concrete way to achieve Instance Variables
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Instance Variables->implementation_hiding:Object
+      State:realization
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Instance Variables
+    - implementation_hiding:Object State
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Runtime Behavior is a component of Class Implementation; changes to Runtime
+    Behavior affect Class Implementation
+  category: architectural
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Runtime Behavior is a component of Class Implementation; changes to Runtime
+    Behavior affect Class Implementation
+  tags:
+  - implementation_hiding
+  - architectural
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Runtime Behavior->implementation_hiding:Class
+      Implementation:composition
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Runtime Behavior
+    - implementation_hiding:Class Implementation
+    confidence: 0.8
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Design Principles provides evidence supporting the use of Design Patterns
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Design Principles provides evidence supporting the use of Design Patterns
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Design Principles->implementation_hiding:Design
+      Patterns:evidence
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Design Principles
+    - implementation_hiding:Design Patterns
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Helper Methods and Private Attributes are analogous; patterns from one may
+    transfer to the other
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Helper Methods and Private Attributes are analogous; patterns from one
+    may transfer to the other
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Helper Methods->implementation_hiding:Private
+      Attributes:analogy
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Helper Methods
+    - implementation_hiding:Private Attributes
+    confidence: 0.7
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Python Naming Convention and Privacy Convention are analogous; patterns from
+    one may transfer to the other
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Python Naming Convention and Privacy Convention are analogous; patterns
+    from one may transfer to the other
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Python Naming Convention->implementation_hiding:Privacy
+      Convention:analogy
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Python Naming Convention
+    - implementation_hiding:Privacy Convention
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Hidden Implementation and Implementation Hiding are analogous; patterns from
+    one may transfer to the other
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Hidden Implementation and Implementation Hiding are analogous; patterns
+    from one may transfer to the other
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Hidden Implementation->implementation_hiding:Implementation
+      Hiding:analogy
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Hidden Implementation
+    - implementation_hiding:Implementation Hiding
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Getter And Setter Methods is a component of Public Interface; changes to Getter
+    And Setter Methods affect Public Interface
+  category: architectural
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Getter And Setter Methods is a component of Public Interface; changes
+    to Getter And Setter Methods affect Public Interface
+  tags:
+  - implementation_hiding
+  - architectural
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Getter And Setter Methods->implementation_hiding:Public
+      Interface:composition
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Getter And Setter Methods
+    - implementation_hiding:Public Interface
+    confidence: 0.8
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Getter Method is a concrete way to achieve Property Decorator
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Getter Method is a concrete way to achieve Property Decorator
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Property Decorator->implementation_hiding:Getter
+      Method:realization
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Property Decorator
+    - implementation_hiding:Getter Method
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Access Control Design provides evidence supporting the use of Once Public
+    Always Public
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Access Control Design provides evidence supporting the use of Once Public
+    Always Public
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Access Control Design->implementation_hiding:Once
+      Public Always Public:evidence
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Access Control Design
+    - implementation_hiding:Once Public Always Public
+    confidence: 0.8
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: When applying Implementation Dependency, avoid Loose Coupling; they are fundamentally
+    incompatible
+  category: antipattern
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: When applying Implementation Dependency, avoid Loose Coupling; they are
+    fundamentally incompatible
+  tags:
+  - implementation_hiding
+  - antipattern
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Implementation Dependency->implementation_hiding:Loose
+      Coupling:avoidance
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Implementation Dependency
+    - implementation_hiding:Loose Coupling
+    confidence: 0.8
+    relevance: 0.0
+    relation_type: contradicts
+    template_id: contradicts:avoidance
+    template_variant: avoidance
+    template_severity: warning
+- rule: Setter Method is a concrete way to achieve Property Setter
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Setter Method is a concrete way to achieve Property Setter
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Property Setter->implementation_hiding:Setter
+      Method:realization
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Property Setter
+    - implementation_hiding:Setter Method
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Getter Method is a component of Getter And Setter Methods; changes to Getter
+    Method affect Getter And Setter Methods
+  category: architectural
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Getter Method is a component of Getter And Setter Methods; changes to
+    Getter Method affect Getter And Setter Methods
+  tags:
+  - implementation_hiding
+  - architectural
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Getter Method->implementation_hiding:Getter
+      And Setter Methods:composition
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Getter Method
+    - implementation_hiding:Getter And Setter Methods
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Setter Method is a component of Getter And Setter Methods; changes to Setter
+    Method affect Getter And Setter Methods
+  category: architectural
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Setter Method is a component of Getter And Setter Methods; changes to
+    Setter Method affect Getter And Setter Methods
+  tags:
+  - implementation_hiding
+  - architectural
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Setter Method->implementation_hiding:Getter
+      And Setter Methods:composition
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Setter Method
+    - implementation_hiding:Getter And Setter Methods
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Value Validation is a component of Setter Method; changes to Value Validation
+    affect Setter Method
+  category: architectural
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Value Validation is a component of Setter Method; changes to Value Validation
+    affect Setter Method
+  tags:
+  - implementation_hiding
+  - architectural
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Value Validation->implementation_hiding:Setter
+      Method:composition
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Value Validation
+    - implementation_hiding:Setter Method
+    confidence: 0.8
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Encapsulation is a more specific form of State Encapsulation; prefer when
+    context demands precision
+  category: general
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Encapsulation is a more specific form of State Encapsulation; prefer
+    when context demands precision
+  tags:
+  - implementation_hiding
+  - general
+  - derived
+  provenance:
+    id: derived:implementation_hiding:State Encapsulation->implementation_hiding:Encapsulation:specialization
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:State Encapsulation
+    - implementation_hiding:Encapsulation
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: refines
+    template_id: refines:specialization
+    template_variant: specialization
+    template_severity: info
+- rule: Private Instance Variables uses Python Naming Convention, creating coupling;
+    changes to Python Naming Convention may require updates to Private Instance Variables
+  category: architectural
+  context: When working in the implementation_hiding domain
+  antipattern: Violating this rule
+  rationale: Private Instance Variables uses Python Naming Convention, creating coupling;
+    changes to Python Naming Convention may require updates to Private Instance Variables
+  tags:
+  - implementation_hiding
+  - architectural
+  - derived
+  provenance:
+    id: derived:implementation_hiding:Private Instance Variables->implementation_hiding:Python
+      Naming Convention:coupling
+    domain: implementation_hiding
+    derivation: derived
+    source_concepts:
+    - implementation_hiding:Private Instance Variables
+    - implementation_hiding:Python Naming Convention
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+metadata:
+  source: qortex
+  source_version: 0.1.0
+  projected_at: '2026-02-06T23:55:30.371630+00:00'
+  rule_count: 30
