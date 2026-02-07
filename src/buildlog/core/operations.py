@@ -2268,6 +2268,8 @@ class GauntletLoopResult:
         iteration: Current iteration number
         learnings_persisted: Number of learnings persisted this iteration
         message: Human-readable summary
+        rules_credited: Validated rule IDs cited across all issues
+        citation_stats: Validation stats (total/valid/hallucinated citations)
     """
 
     action: Literal["fix_criticals", "checkpoint_majors", "checkpoint_minors", "clean"]
@@ -2277,6 +2279,8 @@ class GauntletLoopResult:
     iteration: int
     learnings_persisted: int
     message: str
+    rules_credited: list[str] = field(default_factory=list)
+    citation_stats: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -2303,21 +2307,79 @@ def gauntlet_process_issues(
     issues: list[dict],
     iteration: int = 1,
     source: str | None = None,
+    valid_rule_ids: set[str] | None = None,
 ) -> GauntletLoopResult:
     """Process gauntlet issues and determine next action.
 
-    Categorizes issues by severity, persists learnings, and returns
-    the appropriate next action for the gauntlet loop.
+    Categorizes issues by severity, persists learnings, validates
+    rule citations, and returns the appropriate next action for
+    the gauntlet loop.
 
     Args:
         buildlog_dir: Path to buildlog directory.
         issues: List of issues from the gauntlet review.
         iteration: Current iteration number (for tracking).
         source: Optional source identifier for learnings.
+        valid_rule_ids: Set of valid rule IDs for citation validation.
+            When provided, hallucinated IDs are stripped from issues
+            and logged as mistakes.
 
     Returns:
         GauntletLoopResult with categorized issues and next action.
     """
+    # --- Citation validation ---
+    credited_rules: set[str] = set()
+    citation_stats: dict = {
+        "total_citations": 0,
+        "valid_citations": 0,
+        "hallucinated_citations": 0,
+        "issues_with_citations": 0,
+        "issues_without_citations": 0,
+    }
+
+    for issue in issues:
+        consulted = issue.get("rules_consulted")
+        if not consulted or not isinstance(consulted, list):
+            citation_stats["issues_without_citations"] += 1
+            continue
+
+        citation_stats["issues_with_citations"] += 1
+        citation_stats["total_citations"] += len(consulted)
+
+        if valid_rule_ids is not None:
+            valid_ids = [rid for rid in consulted if rid in valid_rule_ids]
+            hallucinated_ids = [rid for rid in consulted if rid not in valid_rule_ids]
+
+            citation_stats["valid_citations"] += len(valid_ids)
+            citation_stats["hallucinated_citations"] += len(hallucinated_ids)
+
+            # Strip hallucinated IDs from the issue
+            issue["rules_consulted"] = valid_ids
+            if "rule_reasoning" in issue and isinstance(issue["rule_reasoning"], dict):
+                for hid in hallucinated_ids:
+                    issue["rule_reasoning"].pop(hid, None)
+
+            # Log hallucinated citations as mistakes
+            if hallucinated_ids:
+                try:
+                    log_mistake(
+                        buildlog_dir,
+                        error_class="citation_hallucination",
+                        description=(
+                            f"Hallucinated rule IDs in gauntlet review: "
+                            f"{', '.join(hallucinated_ids)}"
+                        ),
+                        severity="minor",
+                    )
+                except Exception:
+                    pass  # Fire-and-forget
+
+            credited_rules.update(valid_ids)
+        else:
+            # No validation — trust all citations
+            citation_stats["valid_citations"] += len(consulted)
+            credited_rules.update(consulted)
+
     # Categorize by severity
     criticals = [i for i in issues if i.get("severity") == "critical"]
     majors = [i for i in issues if i.get("severity") == "major"]
@@ -2329,6 +2391,22 @@ def gauntlet_process_issues(
     learnings_persisted = len(learn_result.new_learnings) + len(
         learn_result.reinforced_learnings
     )
+
+    # --- Bandit update with per-rule credit (Touch 3) ---
+    if credited_rules:
+        try:
+            from buildlog.core.bandit import ThompsonSamplingBandit
+
+            bandit = ThompsonSamplingBandit(buildlog_dir / "bandit_state.jsonl")
+            # Derive context from issue categories for segmentation
+            categories = {
+                i.get("category", "general") for i in issues if i.get("rules_consulted")
+            }
+            context = ",".join(sorted(categories)) if categories else None
+            for rule_id in credited_rules:
+                bandit.update(rule_id, reward=1.0, context=context)
+        except Exception:
+            pass  # Fire-and-forget: don't break the gauntlet loop
 
     # Determine action
     if criticals:
@@ -2365,6 +2443,8 @@ def gauntlet_process_issues(
         iteration=iteration,
         learnings_persisted=learnings_persisted,
         message=message,
+        rules_credited=sorted(credited_rules),
+        citation_stats=citation_stats,
     )
 
 
