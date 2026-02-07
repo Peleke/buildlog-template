@@ -7,6 +7,9 @@ repo_name: Peleke/buildlog-template
 theme:
   name: readthedocs
 
+hooks:
+  - hooks/generate_llms_full.py
+
 markdown_extensions:
   - admonition
   - attr_list

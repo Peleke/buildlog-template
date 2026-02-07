@@ -1,0 +1,34 @@
+# buildlog
+
+> Engineering notebook that extracts decision patterns from AI-assisted work and uses Thompson Sampling to surface rules that reduce repeated mistakes — then measures whether they did.
+
+buildlog captures structured journal entries from work sessions, distills them into reusable engineering rules, and uses a contextual bandit (Beta-Bernoulli Thompson Sampling) to automatically select which rules to surface per context. The core metric is Repeated Mistake Rate (RMR): the fraction of mistakes that match previous mistakes. The claim is falsifiable — if buildlog doesn't help, the numbers show it.
+
+Works with Claude Code, Cursor, GitHub Copilot, Windsurf, and Continue.dev via 34 MCP tools.
+
+## Getting Started
+
+- [Installation](https://peleke.github.io/buildlog-template/getting-started/installation/): Requirements, install methods (pip/pipx/uv), optional extras, global always-on mode, per-project setup
+- [Quick Start](https://peleke.github.io/buildlog-template/getting-started/quick-start/): Full pipeline walkthrough — capture, extract, promote, measure, learn
+- [Core Concepts](https://peleke.github.io/buildlog-template/getting-started/concepts/): The problem (nobody measures agent learning), the claim (falsifiable hypothesis), the metric (RMR), Thompson Sampling bandit mechanics
+
+## Guides
+
+- [CLI Reference](https://peleke.github.io/buildlog-template/guides/cli-reference/): All commands — init, entries, skills, experiments, gauntlet, storage, MCP registration
+- [MCP Integration](https://peleke.github.io/buildlog-template/guides/mcp-integration/): Global/local setup, all 34 MCP tools, always-on workflow
+- [Storage Architecture](https://peleke.github.io/buildlog-template/guides/storage-architecture/): Global SQLite backend, StorageBackend protocol, backend resolution, migration from legacy JSON/JSONL
+- [Interop & Seed Ingestion](https://peleke.github.io/buildlog-template/guides/interop/): Directory protocol for external producers, seed file format, 7-layer security validation, version-aware bandit decay
+- [Experiments](https://peleke.github.io/buildlog-template/guides/experiments/): Running tracked sessions, RMR measurement, the falsification protocol, bandit integration
+- [Review Gauntlet](https://peleke.github.io/buildlog-template/guides/review-gauntlet/): Reviewer personas (Security Karen, Test Terrorist, Bragi), gauntlet loop with HITL checkpoints
+- [Multi-Agent Setup](https://peleke.github.io/buildlog-template/guides/multi-agent/): Rendering rules to Claude Code, Cursor, Copilot, Windsurf, Continue.dev
+
+## Optional
+
+- [Theory: The Restaurant Problem](https://peleke.github.io/buildlog-template/theory/intuition/): Exploration vs exploitation through restaurant analogy
+- [Theory: The Price of Learning](https://peleke.github.io/buildlog-template/theory/regret/): Regret bounds and why sublinear regret matters
+- [Theory: Keeping Score](https://peleke.github.io/buildlog-template/theory/beta-distributions/): Beta distributions for representing uncertainty with binary feedback
+- [Theory: Making Decisions](https://peleke.github.io/buildlog-template/theory/thompson-sampling/): Thompson Sampling algorithm — sample, select, observe, update
+- [Theory: Context Changes Everything](https://peleke.github.io/buildlog-template/theory/contextual-bandits/): Per-context posteriors and why the best rule depends on the situation
+- [Philosophy](https://peleke.github.io/buildlog-template/philosophy/): Falsifiability over impressiveness, honest limitations, hard open problems
+- [Roadmap](https://peleke.github.io/buildlog-template/roadmap/): Embedding persistence, cross-project convergence, emergent rule graphs
+- [Contributing](https://peleke.github.io/buildlog-template/development/contributing/): Setup, areas of interest (credit assignment, context representations, statistical methodology)
