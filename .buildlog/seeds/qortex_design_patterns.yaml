@@ -1,0 +1,267 @@
+persona: qortex_design_patterns
+version: 1
+rules:
+- rule: Make every instance variable and method private (or protected) except those
+    that must be public to enable other code to use the class.
+  category: implementation_hiding
+  provenance:
+    id: implementation_hiding:rule:0
+    domain: implementation_hiding
+    derivation: explicit
+    confidence: 0.9
+- rule: Once public, always public - if you make an instance variable or method public,
+    you might not be able to change it to private later without forcing code rewrites.
+  category: implementation_hiding
+  provenance:
+    id: implementation_hiding:rule:1
+    domain: implementation_hiding
+    derivation: explicit
+    confidence: 0.9
+- rule: Hide implementation by starting names of instance variables and methods with
+    an underscore (_) to specify that they're private.
+  category: implementation_hiding
+  provenance:
+    id: implementation_hiding:rule:2
+    domain: implementation_hiding
+    derivation: explicit
+    confidence: 0.9
+- rule: Code outside a class should not reference private variables or call private
+    methods (those starting with underscore), nor depend on their particular implementations.
+  category: implementation_hiding
+  provenance:
+    id: implementation_hiding:rule:3
+    domain: implementation_hiding
+    derivation: explicit
+    confidence: 0.9
+- rule: Class A should know as little as possible about the implementation of class
+    B to minimize dependencies.
+  category: implementation_hiding
+  provenance:
+    id: implementation_hiding:rule:4
+    domain: implementation_hiding
+    derivation: explicit
+    confidence: 0.9
+- rule: A class should expose only as much of itself as necessary for other code to
+    use the class, hiding the rest.
+  category: implementation_hiding
+  provenance:
+    id: implementation_hiding:rule:5
+    domain: implementation_hiding
+    derivation: explicit
+    confidence: 0.9
+- rule: Use public getter and setter methods to provide access to private instance
+    variables while maintaining encapsulation.
+  category: implementation_hiding
+  provenance:
+    id: implementation_hiding:rule:6
+    domain: implementation_hiding
+    derivation: explicit
+    confidence: 0.9
+- rule: A design pattern is only a model because it is rarely a solution we can use
+    directly—we use it as the basis to create a custom solution to an architecture
+    problem in our application.
+  category: template_strategy_patterns
+  provenance:
+    id: template_strategy_patterns:rule:0
+    domain: template_strategy_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: When using an algorithm with several steps in a fixed order where some steps
+    are common but others vary, use the Template Method Design Pattern where common
+    steps are implemented by a superclass and variable steps are implemented by subclasses.
+  category: template_strategy_patterns
+  provenance:
+    id: template_strategy_patterns:rule:1
+    domain: template_strategy_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: The Template Method Design Pattern defines an algorithm that has several steps
+    in a fixed order, where some steps may be common and implemented by a superclass,
+    but other steps may vary and are implemented by subclasses.
+  category: template_strategy_patterns
+  provenance:
+    id: template_strategy_patterns:rule:2
+    domain: template_strategy_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Report generation steps should be executed in a fixed order for consistent
+    structure.
+  category: template_strategy_patterns
+  provenance:
+    id: template_strategy_patterns:rule:3
+    domain: template_strategy_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Use the Strategy Design Pattern when you need interchangeable strategies that
+    can be selected and deployed at runtime depending on conditions.
+  category: template_strategy_patterns
+  provenance:
+    id: template_strategy_patterns:rule:4
+    domain: template_strategy_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: When creating a group of related objects, encapsulate object creation by delegating
+    their creation to subclasses using the Factory Method Design Pattern.
+  category: factory_patterns
+  provenance:
+    id: factory_patterns:rule:0
+    domain: factory_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Use the Abstract Factory Design Pattern to create families of objects and
+    prevent mixing objects from different families.
+  category: factory_patterns
+  provenance:
+    id: factory_patterns:rule:1
+    domain: factory_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Deploy software factories to create objects during run time to make applications
+    more flexible.
+  category: factory_patterns
+  provenance:
+    id: factory_patterns:rule:2
+    domain: factory_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Develop applications incrementally, adapting appropriate patterns one at a
+    time to model solutions to architecture design problems as you encounter them.
+  category: factory_patterns
+  provenance:
+    id: factory_patterns:rule:3
+    domain: factory_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Separate responsibilities between different categories of objects to avoid
+    accidentally mixing up responsibilities.
+  category: factory_patterns
+  provenance:
+    id: factory_patterns:rule:4
+    domain: factory_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Each concrete class that implements an interface must implement all required
+    methods defined by that interface.
+  category: factory_patterns
+  provenance:
+    id: factory_patterns:rule:5
+    domain: factory_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: You should not need to modify your application code or the external code to
+    make them work together.
+  category: adapter_facade_patterns
+  provenance:
+    id: adapter_facade_patterns:rule:0
+    domain: adapter_facade_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Your application code should be isolated from any interface changes by the
+    external code.
+  category: adapter_facade_patterns
+  provenance:
+    id: adapter_facade_patterns:rule:1
+    domain: adapter_facade_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: It should be straightforward to add another sport to the report when using
+    proper design patterns.
+  category: adapter_facade_patterns
+  provenance:
+    id: adapter_facade_patterns:rule:2
+    domain: adapter_facade_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Use the Adapter Design Pattern when you need to integrate external code that
+    has an incompatible interface with your application.
+  category: adapter_facade_patterns
+  provenance:
+    id: adapter_facade_patterns:rule:3
+    domain: adapter_facade_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Use the Façade Design Pattern to provide a simpler, higher-level interface
+    that makes complex code easier to use.
+  category: adapter_facade_patterns
+  provenance:
+    id: adapter_facade_patterns:rule:4
+    domain: adapter_facade_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: The Adapter Design Pattern provides a model for solving the architecture problem
+    of integrating multiple pieces of code that were never designed to work together.
+  category: adapter_facade_patterns
+  provenance:
+    id: adapter_facade_patterns:rule:5
+    domain: adapter_facade_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: When working with legacy software, you often cannot modify library code or
+    external code that you don't have access to.
+  category: adapter_facade_patterns
+  provenance:
+    id: adapter_facade_patterns:rule:6
+    domain: adapter_facade_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: The Iterator Design Pattern is appropriate for applications that have a single
+    algorithm that must work on different types of sequential data collections.
+  category: iterator_visitor_patterns
+  provenance:
+    id: iterator_visitor_patterns:rule:0
+    domain: iterator_visitor_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: The Visitor Design Pattern is appropriate for applications that have different
+    algorithms that must work on a single data collection.
+  category: iterator_visitor_patterns
+  provenance:
+    id: iterator_visitor_patterns:rule:1
+    domain: iterator_visitor_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: A sequential collection of objects must either be empty or have one first
+    object and one last object, with each object except the last followed by a unique
+    next object.
+  category: iterator_visitor_patterns
+  provenance:
+    id: iterator_visitor_patterns:rule:2
+    domain: iterator_visitor_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Sequential collections must allow access to objects one at a time in order
+    from first to last, and provide a way to detect when all objects have been accessed.
+  category: iterator_visitor_patterns
+  provenance:
+    id: iterator_visitor_patterns:rule:3
+    domain: iterator_visitor_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Applications should be able to execute algorithms that process objects without
+    knowing how the sequential collections are implemented.
+  category: iterator_visitor_patterns
+  provenance:
+    id: iterator_visitor_patterns:rule:4
+    domain: iterator_visitor_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: Collections should be independent of one another when using the Iterator pattern.
+  category: iterator_visitor_patterns
+  provenance:
+    id: iterator_visitor_patterns:rule:5
+    domain: iterator_visitor_patterns
+    derivation: explicit
+    confidence: 0.9
+- rule: It should be possible to add new sequential collections without modifying
+    the application's algorithm code.
+  category: iterator_visitor_patterns
+  provenance:
+    id: iterator_visitor_patterns:rule:6
+    domain: iterator_visitor_patterns
+    derivation: explicit
+    confidence: 0.9
+metadata:
+  source: qortex
+  source_version: 0.1.0
+  projected_at: '2026-02-06T23:52:38.771074+00:00'
+  rule_count: 32

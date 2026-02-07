@@ -1,0 +1,3203 @@
+persona: qortex_observer
+version: 1
+rules:
+- rule: The publisher component doesn't know how the subscriber components are implemented,
+    nor does it care what the subscribers do with the data.
+  category: principle
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: The publisher component doesn't know how the subscriber components are
+    implemented, nor does it care what the subscribers do with the data.
+  tags:
+  - observer_pattern
+  - principle
+  provenance:
+    id: observer_pattern:rule:0
+    domain: observer_pattern
+    derivation: explicit
+    source_concepts:
+    - observer_pattern:Publisher Component
+    - observer_pattern:Subscriber Component
+    - observer_pattern:Loose Coupling
+    - observer_pattern:Content Decoupling
+    confidence: 0.95
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: The streaming service only needs to keep track of who is currently subscribed,
+    notify each subscriber when a story becomes available, and provide the means to
+    obtain the story.
+  category: guideline
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: The streaming service only needs to keep track of who is currently subscribed,
+    notify each subscriber when a story becomes available, and provide the means to
+    obtain the story.
+  tags:
+  - observer_pattern
+  - guideline
+  provenance:
+    id: observer_pattern:rule:1
+    domain: observer_pattern
+    derivation: explicit
+    source_concepts:
+    - observer_pattern:Publisher
+    - observer_pattern:Subscription Management
+    - observer_pattern:Event Notification
+    - observer_pattern:Event Publishing
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: Different people can subscribe and unsubscribe at any time.
+  category: principle
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Different people can subscribe and unsubscribe at any time.
+  tags:
+  - observer_pattern
+  - principle
+  provenance:
+    id: observer_pattern:rule:2
+    domain: observer_pattern
+    derivation: explicit
+    source_concepts:
+    - observer_pattern:Dynamic Subscription
+    - observer_pattern:Subscription Management
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: Each subscriber can decide independently whether to request the story from
+    the service and can do whatever they wish with the stories.
+  category: principle
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Each subscriber can decide independently whether to request the story
+    from the service and can do whatever they wish with the stories.
+  tags:
+  - observer_pattern
+  - principle
+  provenance:
+    id: observer_pattern:rule:3
+    domain: observer_pattern
+    derivation: explicit
+    source_concepts:
+    - observer_pattern:Independent Processing
+    - observer_pattern:Loose Coupling
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: The logger updates its log report immediately after it consumes each event.
+  category: best_practice
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: The logger updates its log report immediately after it consumes each
+    event.
+  tags:
+  - observer_pattern
+  - best_practice
+  provenance:
+    id: observer_pattern:rule:4
+    domain: observer_pattern
+    derivation: explicit
+    source_concepts:
+    - observer_pattern:Real Time Processing
+    - observer_pattern:Immediate Notification
+    - observer_pattern:Event Consumption
+    confidence: 0.8
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: The table and graph generators must accumulate the event data that they consume,
+    and then each generates its report after the game is over.
+  category: guideline
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: The table and graph generators must accumulate the event data that they
+    consume, and then each generates its report after the game is over.
+  tags:
+  - observer_pattern
+  - guideline
+  provenance:
+    id: observer_pattern:rule:5
+    domain: observer_pattern
+    derivation: explicit
+    source_concepts:
+    - observer_pattern:Event Accumulation
+    - observer_pattern:Batch Processing
+    - observer_pattern:Data Aggregation
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: null
+    template_id: null
+    template_variant: null
+    template_severity: null
+- rule: Publisher Subscriber Model is a concrete way to achieve Observer Design Pattern
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Subscriber Model is a concrete way to achieve Observer Design
+    Pattern
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Design Pattern->observer_pattern:Publisher
+      Subscriber Model:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Design Pattern
+    - observer_pattern:Publisher Subscriber Model
+    confidence: 0.95
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Observer Design Pattern and Poor Design Pattern are alternatives; choose based
+    on context
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Design Pattern and Poor Design Pattern are alternatives; choose
+    based on context
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Design Pattern->observer_pattern:Poor Design
+      Pattern:selection
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Design Pattern
+    - observer_pattern:Poor Design Pattern
+    confidence: 0.93
+    relevance: 0.0
+    relation_type: alternative_to
+    template_id: alternative_to:selection
+    template_variant: selection
+    template_severity: info
+- rule: Observer Design Pattern provides evidence supporting the use of Loose Coupling
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Design Pattern provides evidence supporting the use of Loose
+    Coupling
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Design Pattern->observer_pattern:Loose Coupling:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Design Pattern
+    - observer_pattern:Loose Coupling
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Observer Design Pattern provides evidence supporting the use of Subscription
+    Management
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Design Pattern provides evidence supporting the use of Subscription
+    Management
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Design Pattern->observer_pattern:Subscription
+      Management:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Design Pattern
+    - observer_pattern:Subscription Management
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Observer Design Pattern uses Subject, creating coupling; changes to Subject
+    may require updates to Observer Design Pattern
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Design Pattern uses Subject, creating coupling; changes to Subject
+    may require updates to Observer Design Pattern
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Design Pattern->observer_pattern:Subject:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Design Pattern
+    - observer_pattern:Subject
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Observer Design Pattern uses Observers, creating coupling; changes to Observers
+    may require updates to Observer Design Pattern
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Design Pattern uses Observers, creating coupling; changes to
+    Observers may require updates to Observer Design Pattern
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Design Pattern->observer_pattern:Observers:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Design Pattern
+    - observer_pattern:Observers
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Loose Coupling is a concrete way to achieve Publisher Subscriber Model
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Loose Coupling is a concrete way to achieve Publisher Subscriber Model
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher Subscriber Model->observer_pattern:Loose
+      Coupling:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher Subscriber Model
+    - observer_pattern:Loose Coupling
+    confidence: 0.93
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Publisher Subscriber Model and Producer Consumer Model are alternatives; choose
+    based on context
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Subscriber Model and Producer Consumer Model are alternatives;
+    choose based on context
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher Subscriber Model->observer_pattern:Producer
+      Consumer Model:selection
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher Subscriber Model
+    - observer_pattern:Producer Consumer Model
+    confidence: 0.98
+    relevance: 0.0
+    relation_type: alternative_to
+    template_id: alternative_to:selection
+    template_variant: selection
+    template_severity: info
+- rule: Publisher Component uses Data Objects, creating coupling; changes to Data
+    Objects may require updates to Publisher Component
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Component uses Data Objects, creating coupling; changes to
+    Data Objects may require updates to Publisher Component
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher Component->observer_pattern:Data Objects:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher Component
+    - observer_pattern:Data Objects
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Publisher Component uses Subscriber Component, creating coupling; changes
+    to Subscriber Component may require updates to Publisher Component
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Component uses Subscriber Component, creating coupling; changes
+    to Subscriber Component may require updates to Publisher Component
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher Component->observer_pattern:Subscriber
+      Component:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher Component
+    - observer_pattern:Subscriber Component
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Publisher Component uses Subscription Management, creating coupling; changes
+    to Subscription Management may require updates to Publisher Component
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Component uses Subscription Management, creating coupling;
+    changes to Subscription Management may require updates to Publisher Component
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher Component->observer_pattern:Subscription
+      Management:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher Component
+    - observer_pattern:Subscription Management
+    confidence: 0.91
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Notification System is a concrete way to achieve Publisher Component
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Notification System is a concrete way to achieve Publisher Component
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher Component->observer_pattern:Notification
+      System:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher Component
+    - observer_pattern:Notification System
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Publisher Component provides evidence supporting the use of Loose Coupling
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Component provides evidence supporting the use of Loose Coupling
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher Component->observer_pattern:Loose Coupling:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher Component
+    - observer_pattern:Loose Coupling
+    confidence: 0.93
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Publisher Component uses Hit Events, creating coupling; changes to Hit Events
+    may require updates to Publisher Component
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Component uses Hit Events, creating coupling; changes to Hit
+    Events may require updates to Publisher Component
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher Component->observer_pattern:Hit Events:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher Component
+    - observer_pattern:Hit Events
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Subscriber Component uses Data Objects, creating coupling; changes to Data
+    Objects may require updates to Subscriber Component
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subscriber Component uses Data Objects, creating coupling; changes to
+    Data Objects may require updates to Subscriber Component
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subscriber Component->observer_pattern:Data Objects:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subscriber Component
+    - observer_pattern:Data Objects
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Independent Processing is a concrete way to achieve Subscriber Component
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Independent Processing is a concrete way to achieve Subscriber Component
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subscriber Component->observer_pattern:Independent
+      Processing:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subscriber Component
+    - observer_pattern:Independent Processing
+    confidence: 0.91
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Subscriber Component uses Hit Events, creating coupling; changes to Hit Events
+    may require updates to Subscriber Component
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subscriber Component uses Hit Events, creating coupling; changes to Hit
+    Events may require updates to Subscriber Component
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subscriber Component->observer_pattern:Hit Events:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subscriber Component
+    - observer_pattern:Hit Events
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Subscriber Component provides counter-evidence to Design Flaw Violation; consider
+    before committing
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subscriber Component provides counter-evidence to Design Flaw Violation;
+    consider before committing
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subscriber Component->observer_pattern:Design Flaw
+      Violation:counter_evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subscriber Component
+    - observer_pattern:Design Flaw Violation
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: challenges
+    template_id: challenges:counter_evidence
+    template_variant: counter_evidence
+    template_severity: warning
+- rule: Subscriber Component uses Event Object, creating coupling; changes to Event
+    Object may require updates to Subscriber Component
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subscriber Component uses Event Object, creating coupling; changes to
+    Event Object may require updates to Subscriber Component
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subscriber Component->observer_pattern:Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subscriber Component
+    - observer_pattern:Event Object
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Dynamic Subscription is a concrete way to achieve Subscription Management
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Dynamic Subscription is a concrete way to achieve Subscription Management
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subscription Management->observer_pattern:Dynamic
+      Subscription:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subscription Management
+    - observer_pattern:Dynamic Subscription
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Notification System is a component of Observer Pattern; changes to Notification
+    System affect Observer Pattern
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Notification System is a component of Observer Pattern; changes to Notification
+    System affect Observer Pattern
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Notification System->observer_pattern:Observer Pattern:composition
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Notification System
+    - observer_pattern:Observer Pattern
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Subscription Management is a concrete way to achieve News Streaming Service
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subscription Management is a concrete way to achieve News Streaming Service
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:News Streaming Service->observer_pattern:Subscription
+      Management:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:News Streaming Service
+    - observer_pattern:Subscription Management
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Notification System is a concrete way to achieve News Streaming Service
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Notification System is a concrete way to achieve News Streaming Service
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:News Streaming Service->observer_pattern:Notification
+      System:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:News Streaming Service
+    - observer_pattern:Notification System
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Publisher Subscriber Model is a concrete way to achieve Baseball Game Monitoring
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Subscriber Model is a concrete way to achieve Baseball Game
+    Monitoring
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Baseball Game Monitoring->observer_pattern:Publisher
+      Subscriber Model:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Baseball Game Monitoring
+    - observer_pattern:Publisher Subscriber Model
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Subject and Publisher are analogous; patterns from one may transfer to the
+    other
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subject and Publisher are analogous; patterns from one may transfer to
+    the other
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subject->observer_pattern:Publisher:analogy
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subject
+    - observer_pattern:Publisher
+    confidence: 0.86
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Event Notification is a concrete way to achieve Subject
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Notification is a concrete way to achieve Subject
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subject->observer_pattern:Event Notification:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subject
+    - observer_pattern:Event Notification
+    confidence: 0.91
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Subscription Management is a concrete way to achieve Subject
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subscription Management is a concrete way to achieve Subject
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subject->observer_pattern:Subscription Management:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subject
+    - observer_pattern:Subscription Management
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Subject uses Observers, creating coupling; changes to Observers may require
+    updates to Subject
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subject uses Observers, creating coupling; changes to Observers may require
+    updates to Subject
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subject->observer_pattern:Observers:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subject
+    - observer_pattern:Observers
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Subject provides evidence supporting the use of Loose Coupling
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subject provides evidence supporting the use of Loose Coupling
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subject->observer_pattern:Loose Coupling:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subject
+    - observer_pattern:Loose Coupling
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Subject and Publisher Component are analogous; patterns from one may transfer
+    to the other
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subject and Publisher Component are analogous; patterns from one may
+    transfer to the other
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subject->observer_pattern:Publisher Component:analogy
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subject
+    - observer_pattern:Publisher Component
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Observers and Subscriber are analogous; patterns from one may transfer to
+    the other
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observers and Subscriber are analogous; patterns from one may transfer
+    to the other
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observers->observer_pattern:Subscriber:analogy
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observers
+    - observer_pattern:Subscriber
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Observers provides evidence supporting the use of Independent Processing
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observers provides evidence supporting the use of Independent Processing
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observers->observer_pattern:Independent Processing:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observers
+    - observer_pattern:Independent Processing
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Notification System is a concrete way to achieve Event Publishing
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Notification System is a concrete way to achieve Event Publishing
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Publishing->observer_pattern:Notification System:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Publishing
+    - observer_pattern:Notification System
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Independent Processing is a concrete way to achieve Event Consumption
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Independent Processing is a concrete way to achieve Event Consumption
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Consumption->observer_pattern:Independent Processing:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Consumption
+    - observer_pattern:Independent Processing
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Game Log Report is a concrete way to achieve Real Time Processing
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Game Log Report is a concrete way to achieve Real Time Processing
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Real Time Processing->observer_pattern:Game Log Report:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Real Time Processing
+    - observer_pattern:Game Log Report
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Real Time Processing and Batch Processing are alternatives; choose based on
+    context
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Real Time Processing and Batch Processing are alternatives; choose based
+    on context
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Real Time Processing->observer_pattern:Batch Processing:selection
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Real Time Processing
+    - observer_pattern:Batch Processing
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: alternative_to
+    template_id: alternative_to:selection
+    template_variant: selection
+    template_severity: info
+- rule: Event Accumulation is a component of Batch Processing; changes to Event Accumulation
+    affect Batch Processing
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Accumulation is a component of Batch Processing; changes to Event
+    Accumulation affect Batch Processing
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Accumulation->observer_pattern:Batch Processing:composition
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Accumulation
+    - observer_pattern:Batch Processing
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Data Objects is a more specific form of Hit Events; prefer when context demands
+    precision
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Data Objects is a more specific form of Hit Events; prefer when context
+    demands precision
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Hit Events->observer_pattern:Data Objects:specialization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Hit Events
+    - observer_pattern:Data Objects
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: refines
+    template_id: refines:specialization
+    template_variant: specialization
+    template_severity: info
+- rule: Multiple Report Types provides evidence supporting the use of Independent
+    Processing
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Multiple Report Types provides evidence supporting the use of Independent
+    Processing
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Multiple Report Types->observer_pattern:Independent
+      Processing:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Multiple Report Types
+    - observer_pattern:Independent Processing
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Multiple Report Types is a component of Game Log Report; changes to Multiple
+    Report Types affect Game Log Report
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Multiple Report Types is a component of Game Log Report; changes to Multiple
+    Report Types affect Game Log Report
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Multiple Report Types->observer_pattern:Game Log
+      Report:composition
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Multiple Report Types
+    - observer_pattern:Game Log Report
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Multiple Report Types is a component of Table Report Format; changes to Multiple
+    Report Types affect Table Report Format
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Multiple Report Types is a component of Table Report Format; changes
+    to Multiple Report Types affect Table Report Format
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Multiple Report Types->observer_pattern:Table Report
+      Format:composition
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Multiple Report Types
+    - observer_pattern:Table Report Format
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Multiple Report Types is a component of Graph Report Visualization; changes
+    to Multiple Report Types affect Graph Report Visualization
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Multiple Report Types is a component of Graph Report Visualization; changes
+    to Multiple Report Types affect Graph Report Visualization
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Multiple Report Types->observer_pattern:Graph Report
+      Visualization:composition
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Multiple Report Types
+    - observer_pattern:Graph Report Visualization
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Game Log Report uses Hit Events, creating coupling; changes to Hit Events
+    may require updates to Game Log Report
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Game Log Report uses Hit Events, creating coupling; changes to Hit Events
+    may require updates to Game Log Report
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Game Log Report->observer_pattern:Hit Events:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Game Log Report
+    - observer_pattern:Hit Events
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Real Time Processing is a concrete way to achieve Game Log Report
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Real Time Processing is a concrete way to achieve Game Log Report
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Game Log Report->observer_pattern:Real Time Processing:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Game Log Report
+    - observer_pattern:Real Time Processing
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Table Report Format uses Hit Events, creating coupling; changes to Hit Events
+    may require updates to Table Report Format
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Table Report Format uses Hit Events, creating coupling; changes to Hit
+    Events may require updates to Table Report Format
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Table Report Format->observer_pattern:Hit Events:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Table Report Format
+    - observer_pattern:Hit Events
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Batch Processing is a concrete way to achieve Table Report Format
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Batch Processing is a concrete way to achieve Table Report Format
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Table Report Format->observer_pattern:Batch Processing:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Table Report Format
+    - observer_pattern:Batch Processing
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Data Aggregation is a concrete way to achieve Table Report Format
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Data Aggregation is a concrete way to achieve Table Report Format
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Table Report Format->observer_pattern:Data Aggregation:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Table Report Format
+    - observer_pattern:Data Aggregation
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Table Report Format is a component of BaseballReporter Publisher; changes
+    to Table Report Format affect BaseballReporter Publisher
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Table Report Format is a component of BaseballReporter Publisher; changes
+    to Table Report Format affect BaseballReporter Publisher
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Table Report Format->observer_pattern:BaseballReporter
+      Publisher:composition
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Table Report Format
+    - observer_pattern:BaseballReporter Publisher
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Graph Report Visualization uses Hit Events, creating coupling; changes to
+    Hit Events may require updates to Graph Report Visualization
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Graph Report Visualization uses Hit Events, creating coupling; changes
+    to Hit Events may require updates to Graph Report Visualization
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Graph Report Visualization->observer_pattern:Hit
+      Events:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Graph Report Visualization
+    - observer_pattern:Hit Events
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Batch Processing is a concrete way to achieve Graph Report Visualization
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Batch Processing is a concrete way to achieve Graph Report Visualization
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Graph Report Visualization->observer_pattern:Batch
+      Processing:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Graph Report Visualization
+    - observer_pattern:Batch Processing
+    confidence: 0.86
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Data Visualization is a concrete way to achieve Graph Report Visualization
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Data Visualization is a concrete way to achieve Graph Report Visualization
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Graph Report Visualization->observer_pattern:Data
+      Visualization:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Graph Report Visualization
+    - observer_pattern:Data Visualization
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Graph Report Visualization is a component of BaseballReporter Publisher; changes
+    to Graph Report Visualization affect BaseballReporter Publisher
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Graph Report Visualization is a component of BaseballReporter Publisher;
+    changes to Graph Report Visualization affect BaseballReporter Publisher
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Graph Report Visualization->observer_pattern:BaseballReporter
+      Publisher:composition
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Graph Report Visualization
+    - observer_pattern:BaseballReporter Publisher
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Subscriber Components uses Hit Event, creating coupling; changes to Hit Event
+    may require updates to Subscriber Components
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subscriber Components uses Hit Event, creating coupling; changes to Hit
+    Event may require updates to Subscriber Components
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Subscriber Components->observer_pattern:Hit Event:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Subscriber Components
+    - observer_pattern:Hit Event
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Report Generator uses Hit Event Object, creating coupling; changes to Hit
+    Event Object may require updates to Report Generator
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Report Generator uses Hit Event Object, creating coupling; changes to
+    Hit Event Object may require updates to Report Generator
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Report Generator->observer_pattern:Hit Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Report Generator
+    - observer_pattern:Hit Event Object
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Event Consumption is a concrete way to achieve Report Generator
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Consumption is a concrete way to achieve Report Generator
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Report Generator->observer_pattern:Event Consumption:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Report Generator
+    - observer_pattern:Event Consumption
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Event Object is a more specific form of Hit Event; prefer when context demands
+    precision
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Object is a more specific form of Hit Event; prefer when context
+    demands precision
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Hit Event->observer_pattern:Event Object:specialization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Hit Event
+    - observer_pattern:Event Object
+    confidence: 0.91
+    relevance: 0.0
+    relation_type: refines
+    template_id: refines:specialization
+    template_variant: specialization
+    template_severity: info
+- rule: Event Object uses Hit Classification, creating coupling; changes to Hit Classification
+    may require updates to Event Object
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Object uses Hit Classification, creating coupling; changes to Hit
+    Classification may require updates to Event Object
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Object->observer_pattern:Hit Classification:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Object
+    - observer_pattern:Hit Classification
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Hit Event Object is a more specific form of Event Object; prefer when context
+    demands precision
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Hit Event Object is a more specific form of Event Object; prefer when
+    context demands precision
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Object->observer_pattern:Hit Event Object:specialization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Object
+    - observer_pattern:Hit Event Object
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: refines
+    template_id: refines:specialization
+    template_variant: specialization
+    template_severity: info
+- rule: Event Object provides evidence supporting the use of Hit Statistics Tracking
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Object provides evidence supporting the use of Hit Statistics Tracking
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Object->observer_pattern:Hit Statistics Tracking:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Object
+    - observer_pattern:Hit Statistics Tracking
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Data Objects is a more specific form of Event Object; prefer when context
+    demands precision
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Data Objects is a more specific form of Event Object; prefer when context
+    demands precision
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Object->observer_pattern:Data Objects:specialization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Object
+    - observer_pattern:Data Objects
+    confidence: 0.86
+    relevance: 0.0
+    relation_type: refines
+    template_id: refines:specialization
+    template_variant: specialization
+    template_severity: info
+- rule: Dynamic Subscription provides evidence supporting the use of Loose Coupling
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Dynamic Subscription provides evidence supporting the use of Loose Coupling
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Dynamic Subscription->observer_pattern:Loose Coupling:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Dynamic Subscription
+    - observer_pattern:Loose Coupling
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Dynamic Subscription provides evidence supporting the use of Publisher
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Dynamic Subscription provides evidence supporting the use of Publisher
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Dynamic Subscription->observer_pattern:Publisher:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Dynamic Subscription
+    - observer_pattern:Publisher
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Data Visualization provides evidence supporting the use of Multiple Report
+    Types
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Data Visualization provides evidence supporting the use of Multiple Report
+    Types
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Data Visualization->observer_pattern:Multiple Report
+      Types:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Data Visualization
+    - observer_pattern:Multiple Report Types
+    confidence: 0.86
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Random Data Generation is a concrete way to achieve EventMaker Class
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Random Data Generation is a concrete way to achieve EventMaker Class
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:EventMaker Class->observer_pattern:Random Data Generation:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:EventMaker Class
+    - observer_pattern:Random Data Generation
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Observer Pattern provides evidence supporting the use of Loose Coupling
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Pattern provides evidence supporting the use of Loose Coupling
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Pattern->observer_pattern:Loose Coupling:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Pattern
+    - observer_pattern:Loose Coupling
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Event Notification is a concrete way to achieve Observer Pattern
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Notification is a concrete way to achieve Observer Pattern
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Pattern->observer_pattern:Event Notification:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Pattern
+    - observer_pattern:Event Notification
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Observer Pattern uses Polymorphism, creating coupling; changes to Polymorphism
+    may require updates to Observer Pattern
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Pattern uses Polymorphism, creating coupling; changes to Polymorphism
+    may require updates to Observer Pattern
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Pattern->observer_pattern:Polymorphism:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Pattern
+    - observer_pattern:Polymorphism
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Observer Pattern and Observer Design Pattern are analogous; patterns from
+    one may transfer to the other
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Pattern and Observer Design Pattern are analogous; patterns
+    from one may transfer to the other
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Pattern->observer_pattern:Observer Design
+      Pattern:analogy
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Pattern
+    - observer_pattern:Observer Design Pattern
+    confidence: 0.95
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Publisher Subscriber Model is a concrete way to achieve Observer Pattern
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Subscriber Model is a concrete way to achieve Observer Pattern
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Pattern->observer_pattern:Publisher Subscriber
+      Model:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Pattern
+    - observer_pattern:Publisher Subscriber Model
+    confidence: 0.86
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Event Receiver depends on Observer Pattern; omitting Observer Pattern will
+    cause Event Receiver to fail
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Receiver depends on Observer Pattern; omitting Observer Pattern
+    will cause Event Receiver to fail
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Pattern->observer_pattern:Event Receiver:dependency
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Pattern
+    - observer_pattern:Event Receiver
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: requires
+    template_id: requires:dependency
+    template_variant: dependency
+    template_severity: error
+- rule: Observer Pattern provides evidence supporting the use of Event-Driven Architecture
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Pattern provides evidence supporting the use of Event-Driven
+    Architecture
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Observer Pattern->observer_pattern:Event-Driven Architecture:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Observer Pattern
+    - observer_pattern:Event-Driven Architecture
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Immediate Notification is a concrete way to achieve Publisher
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Immediate Notification is a concrete way to achieve Publisher
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher->observer_pattern:Immediate Notification:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher
+    - observer_pattern:Immediate Notification
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Publisher provides evidence supporting the use of Independent Processing
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher provides evidence supporting the use of Independent Processing
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher->observer_pattern:Independent Processing:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher
+    - observer_pattern:Independent Processing
+    confidence: 0.84
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Publisher provides evidence supporting the use of Loose Coupling
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher provides evidence supporting the use of Loose Coupling
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher->observer_pattern:Loose Coupling:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher
+    - observer_pattern:Loose Coupling
+    confidence: 0.93
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Publisher uses Subscriber, creating coupling; changes to Subscriber may require
+    updates to Publisher
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher uses Subscriber, creating coupling; changes to Subscriber may
+    require updates to Publisher
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Publisher->observer_pattern:Subscriber:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Publisher
+    - observer_pattern:Subscriber
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: BaseballReporter Class uses Event Object, creating coupling; changes to Event
+    Object may require updates to BaseballReporter Class
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Class uses Event Object, creating coupling; changes
+    to Event Object may require updates to BaseballReporter Class
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Class->observer_pattern:Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Class
+    - observer_pattern:Event Object
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: BaseballReporter Class uses EventMaker, creating coupling; changes to EventMaker
+    may require updates to BaseballReporter Class
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Class uses EventMaker, creating coupling; changes to
+    EventMaker may require updates to BaseballReporter Class
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Class->observer_pattern:EventMaker:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Class
+    - observer_pattern:EventMaker
+    confidence: 0.93
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: BaseballReporter Class uses Subscriber Classes, creating coupling; changes
+    to Subscriber Classes may require updates to BaseballReporter Class
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Class uses Subscriber Classes, creating coupling; changes
+    to Subscriber Classes may require updates to BaseballReporter Class
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Class->observer_pattern:Subscriber
+      Classes:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Class
+    - observer_pattern:Subscriber Classes
+    confidence: 0.91
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Event Publishing is a concrete way to achieve BaseballReporter Class
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Publishing is a concrete way to achieve BaseballReporter Class
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Class->observer_pattern:Event Publishing:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Class
+    - observer_pattern:Event Publishing
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: BaseballReporter Class provides evidence supporting the use of Multiple Report
+    Types
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Class provides evidence supporting the use of Multiple
+    Report Types
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Class->observer_pattern:Multiple
+      Report Types:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Class
+    - observer_pattern:Multiple Report Types
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Report Generation uses Event Object, creating coupling; changes to Event Object
+    may require updates to Report Generation
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Report Generation uses Event Object, creating coupling; changes to Event
+    Object may require updates to Report Generation
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Report Generation->observer_pattern:Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Report Generation
+    - observer_pattern:Event Object
+    confidence: 0.84
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Design Flaw Violation is a concrete way to achieve Method Name Inconsistency
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Design Flaw Violation is a concrete way to achieve Method Name Inconsistency
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Method Name Inconsistency->observer_pattern:Design
+      Flaw Violation:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Method Name Inconsistency
+    - observer_pattern:Design Flaw Violation
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Event Loop and Event Distribution Loop are analogous; patterns from one may
+    transfer to the other
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Loop and Event Distribution Loop are analogous; patterns from one
+    may transfer to the other
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Loop->observer_pattern:Event Distribution Loop:analogy
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Loop
+    - observer_pattern:Event Distribution Loop
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: BaseballReporter Publisher uses Event Loop, creating coupling; changes to
+    Event Loop may require updates to BaseballReporter Publisher
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Publisher uses Event Loop, creating coupling; changes
+    to Event Loop may require updates to BaseballReporter Publisher
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Event
+      Loop:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Event Loop
+    confidence: 0.86
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: BaseballReporter Publisher uses EventMaker, creating coupling; changes to
+    EventMaker may require updates to BaseballReporter Publisher
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Publisher uses EventMaker, creating coupling; changes
+    to EventMaker may require updates to BaseballReporter Publisher
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:EventMaker:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:EventMaker
+    confidence: 0.95
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Aggregation Relationship is a concrete way to achieve BaseballReporter Publisher
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Aggregation Relationship is a concrete way to achieve BaseballReporter
+    Publisher
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Aggregation
+      Relationship:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Aggregation Relationship
+    confidence: 0.86
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Method Name Dependency depends on BaseballReporter Publisher; omitting BaseballReporter
+    Publisher will cause Method Name Dependency to fail
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Method Name Dependency depends on BaseballReporter Publisher; omitting
+    BaseballReporter Publisher will cause Method Name Dependency to fail
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Method
+      Name Dependency:dependency
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Method Name Dependency
+    confidence: 0.91
+    relevance: 0.0
+    relation_type: requires
+    template_id: requires:dependency
+    template_variant: dependency
+    template_severity: error
+- rule: Publisher is a more specific form of BaseballReporter Publisher; prefer when
+    context demands precision
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher is a more specific form of BaseballReporter Publisher; prefer
+    when context demands precision
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Publisher:specialization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Publisher
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: refines
+    template_id: refines:specialization
+    template_variant: specialization
+    template_severity: info
+- rule: Subject is a more specific form of BaseballReporter Publisher; prefer when
+    context demands precision
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Subject is a more specific form of BaseballReporter Publisher; prefer
+    when context demands precision
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Subject:specialization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Subject
+    confidence: 0.95
+    relevance: 0.0
+    relation_type: refines
+    template_id: refines:specialization
+    template_variant: specialization
+    template_severity: info
+- rule: Event Object depends on BaseballReporter Publisher; omitting BaseballReporter
+    Publisher will cause Event Object to fail
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Object depends on BaseballReporter Publisher; omitting BaseballReporter
+    Publisher will cause Event Object to fail
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Event
+      Object:dependency
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Event Object
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: requires
+    template_id: requires:dependency
+    template_variant: dependency
+    template_severity: error
+- rule: Observer Pattern is a concrete way to achieve BaseballReporter Publisher
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Pattern is a concrete way to achieve BaseballReporter Publisher
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Observer
+      Pattern:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Observer Pattern
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: BaseballReporter Publisher uses Event Receiver, creating coupling; changes
+    to Event Receiver may require updates to BaseballReporter Publisher
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Publisher uses Event Receiver, creating coupling; changes
+    to Event Receiver may require updates to BaseballReporter Publisher
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Event
+      Receiver:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Event Receiver
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Event Notification is a concrete way to achieve BaseballReporter Publisher
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Notification is a concrete way to achieve BaseballReporter Publisher
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Event
+      Notification:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Event Notification
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Notification System is a concrete way to achieve BaseballReporter Publisher
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Notification System is a concrete way to achieve BaseballReporter Publisher
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Notification
+      System:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Notification System
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Observer Design Pattern is a concrete way to achieve BaseballReporter Publisher
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Design Pattern is a concrete way to achieve BaseballReporter
+    Publisher
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Observer
+      Design Pattern:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Observer Design Pattern
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: BaseballReporter Publisher uses Hit Event Object, creating coupling; changes
+    to Hit Event Object may require updates to BaseballReporter Publisher
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Publisher uses Hit Event Object, creating coupling;
+    changes to Hit Event Object may require updates to BaseballReporter Publisher
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Hit
+      Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Hit Event Object
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: BaseballReporter Publisher provides evidence supporting the use of Loose Coupling
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Publisher provides evidence supporting the use of Loose
+    Coupling
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Loose
+      Coupling:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Loose Coupling
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: BaseballReporter Publisher provides evidence supporting the use of Report
+    Generator
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: BaseballReporter Publisher provides evidence supporting the use of Report
+    Generator
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Report
+      Generator:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Report Generator
+    confidence: 0.83
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Publisher Component is a more specific form of BaseballReporter Publisher;
+    prefer when context demands precision
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Publisher Component is a more specific form of BaseballReporter Publisher;
+    prefer when context demands precision
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:BaseballReporter Publisher->observer_pattern:Publisher
+      Component:specialization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:BaseballReporter Publisher
+    - observer_pattern:Publisher Component
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: refines
+    template_id: refines:specialization
+    template_variant: specialization
+    template_severity: info
+- rule: EventMaker uses Event Object, creating coupling; changes to Event Object may
+    require updates to EventMaker
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: EventMaker uses Event Object, creating coupling; changes to Event Object
+    may require updates to EventMaker
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:EventMaker->observer_pattern:Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:EventMaker
+    - observer_pattern:Event Object
+    confidence: 0.95
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Random Data Generator provides evidence supporting the use of Publisher Subscriber
+    Model
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Random Data Generator provides evidence supporting the use of Publisher
+    Subscriber Model
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Random Data Generator->observer_pattern:Publisher
+      Subscriber Model:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Random Data Generator
+    - observer_pattern:Publisher Subscriber Model
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Aggregation Relationship provides evidence supporting the use of BaseballReporter
+    Publisher
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Aggregation Relationship provides evidence supporting the use of BaseballReporter
+    Publisher
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Aggregation Relationship->observer_pattern:BaseballReporter
+      Publisher:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Aggregation Relationship
+    - observer_pattern:BaseballReporter Publisher
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Gaussian Distribution is a component of Random Data Generator; changes to
+    Gaussian Distribution affect Random Data Generator
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Gaussian Distribution is a component of Random Data Generator; changes
+    to Gaussian Distribution affect Random Data Generator
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Gaussian Distribution->observer_pattern:Random Data
+      Generator:composition
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Gaussian Distribution
+    - observer_pattern:Random Data Generator
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Poor Design Pattern provides evidence supporting the use of Tight Coupling
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Poor Design Pattern provides evidence supporting the use of Tight Coupling
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Poor Design Pattern->observer_pattern:Tight Coupling:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Poor Design Pattern
+    - observer_pattern:Tight Coupling
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: Game Completion Signal is a concrete way to achieve End Sentinel
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Game Completion Signal is a concrete way to achieve End Sentinel
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:End Sentinel->observer_pattern:Game Completion Signal:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:End Sentinel
+    - observer_pattern:Game Completion Signal
+    confidence: 0.96
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: When applying Tight Coupling, avoid Loose Coupling; they are fundamentally
+    incompatible
+  category: antipattern
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: When applying Tight Coupling, avoid Loose Coupling; they are fundamentally
+    incompatible
+  tags:
+  - observer_pattern
+  - antipattern
+  - derived
+  provenance:
+    id: derived:observer_pattern:Tight Coupling->observer_pattern:Loose Coupling:avoidance
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Tight Coupling
+    - observer_pattern:Loose Coupling
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: contradicts
+    template_id: contradicts:avoidance
+    template_variant: avoidance
+    template_severity: warning
+- rule: Design Flaw Violation is a concrete way to achieve Method Name Dependency
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Design Flaw Violation is a concrete way to achieve Method Name Dependency
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Method Name Dependency->observer_pattern:Design Flaw
+      Violation:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Method Name Dependency
+    - observer_pattern:Design Flaw Violation
+    confidence: 0.94
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Event Distribution Loop uses Event Object, creating coupling; changes to Event
+    Object may require updates to Event Distribution Loop
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Distribution Loop uses Event Object, creating coupling; changes
+    to Event Object may require updates to Event Distribution Loop
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Distribution Loop->observer_pattern:Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Distribution Loop
+    - observer_pattern:Event Object
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Event Distribution Loop and Event Loop are analogous; patterns from one may
+    transfer to the other
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Distribution Loop and Event Loop are analogous; patterns from one
+    may transfer to the other
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Distribution Loop->observer_pattern:Event Loop:analogy
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Distribution Loop
+    - observer_pattern:Event Loop
+    confidence: 0.84
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Log Report uses BaseballReporter Publisher, creating coupling; changes to
+    BaseballReporter Publisher may require updates to Log Report
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Log Report uses BaseballReporter Publisher, creating coupling; changes
+    to BaseballReporter Publisher may require updates to Log Report
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Log Report->observer_pattern:BaseballReporter Publisher:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Log Report
+    - observer_pattern:BaseballReporter Publisher
+    confidence: 0.91
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Event Logging is a concrete way to achieve Log Report
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Logging is a concrete way to achieve Log Report
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Log Report->observer_pattern:Event Logging:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Log Report
+    - observer_pattern:Event Logging
+    confidence: 0.94
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Real Time Processing is a concrete way to achieve Log Report
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Real Time Processing is a concrete way to achieve Log Report
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Log Report->observer_pattern:Real Time Processing:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Log Report
+    - observer_pattern:Real Time Processing
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Event Receiver is a concrete way to achieve Log Report
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Receiver is a concrete way to achieve Log Report
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Log Report->observer_pattern:Event Receiver:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Log Report
+    - observer_pattern:Event Receiver
+    confidence: 0.93
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Dynamic Subscription is a concrete way to achieve Log Report
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Dynamic Subscription is a concrete way to achieve Log Report
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Log Report->observer_pattern:Dynamic Subscription:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Log Report
+    - observer_pattern:Dynamic Subscription
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Log Report uses Event Object, creating coupling; changes to Event Object may
+    require updates to Log Report
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Log Report uses Event Object, creating coupling; changes to Event Object
+    may require updates to Log Report
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Log Report->observer_pattern:Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Log Report
+    - observer_pattern:Event Object
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Event Processing is a more specific form of Event Logging; prefer when context
+    demands precision
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Processing is a more specific form of Event Logging; prefer when
+    context demands precision
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Logging->observer_pattern:Event Processing:specialization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Logging
+    - observer_pattern:Event Processing
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: refines
+    template_id: refines:specialization
+    template_variant: specialization
+    template_severity: info
+- rule: Null Event Handling is a concrete way to achieve Game Completion Signal
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Null Event Handling is a concrete way to achieve Game Completion Signal
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Game Completion Signal->observer_pattern:Null Event
+      Handling:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Game Completion Signal
+    - observer_pattern:Null Event Handling
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Hit Classification is a component of Event Processing; changes to Hit Classification
+    affect Event Processing
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Hit Classification is a component of Event Processing; changes to Hit
+    Classification affect Event Processing
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Hit Classification->observer_pattern:Event Processing:composition
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Hit Classification
+    - observer_pattern:Event Processing
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: part_of
+    template_id: part_of:composition
+    template_variant: composition
+    template_severity: info
+- rule: Event Processing uses Event Object, creating coupling; changes to Event Object
+    may require updates to Event Processing
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Processing uses Event Object, creating coupling; changes to Event
+    Object may require updates to Event Processing
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Processing->observer_pattern:Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Processing
+    - observer_pattern:Event Object
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Event Processing uses Hit Event Object, creating coupling; changes to Hit
+    Event Object may require updates to Event Processing
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Event Processing uses Hit Event Object, creating coupling; changes to
+    Hit Event Object may require updates to Event Processing
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event Processing->observer_pattern:Hit Event Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event Processing
+    - observer_pattern:Hit Event Object
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Hit Statistics Tracking uses Player Statistics Dictionary, creating coupling;
+    changes to Player Statistics Dictionary may require updates to Hit Statistics
+    Tracking
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Hit Statistics Tracking uses Player Statistics Dictionary, creating coupling;
+    changes to Player Statistics Dictionary may require updates to Hit Statistics
+    Tracking
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Hit Statistics Tracking->observer_pattern:Player
+      Statistics Dictionary:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Hit Statistics Tracking
+    - observer_pattern:Player Statistics Dictionary
+    confidence: 0.92
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Statistical Aggregation is a concrete way to achieve Data Visualization Report
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Statistical Aggregation is a concrete way to achieve Data Visualization
+    Report
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Data Visualization Report->observer_pattern:Statistical
+      Aggregation:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Data Visualization Report
+    - observer_pattern:Statistical Aggregation
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Data Visualization Report uses Event Object, creating coupling; changes to
+    Event Object may require updates to Data Visualization Report
+  category: architectural
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Data Visualization Report uses Event Object, creating coupling; changes
+    to Event Object may require updates to Data Visualization Report
+  tags:
+  - observer_pattern
+  - architectural
+  - derived
+  provenance:
+    id: derived:observer_pattern:Data Visualization Report->observer_pattern:Event
+      Object:coupling
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Data Visualization Report
+    - observer_pattern:Event Object
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: uses
+    template_id: uses:coupling
+    template_variant: coupling
+    template_severity: warning
+- rule: Data Visualization Report and Graph Report Visualization are analogous; patterns
+    from one may transfer to the other
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Data Visualization Report and Graph Report Visualization are analogous;
+    patterns from one may transfer to the other
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Data Visualization Report->observer_pattern:Graph
+      Report Visualization:analogy
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Data Visualization Report
+    - observer_pattern:Graph Report Visualization
+    confidence: 0.89
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+- rule: Player Statistics Dictionary provides evidence supporting the use of Hit Statistics
+    Tracking
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Player Statistics Dictionary provides evidence supporting the use of
+    Hit Statistics Tracking
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Player Statistics Dictionary->observer_pattern:Hit
+      Statistics Tracking:evidence
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Player Statistics Dictionary
+    - observer_pattern:Hit Statistics Tracking
+    confidence: 0.85
+    relevance: 0.0
+    relation_type: supports
+    template_id: supports:evidence
+    template_variant: evidence
+    template_severity: info
+- rule: State Tracking is a concrete way to achieve Player Statistics Dictionary
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: State Tracking is a concrete way to achieve Player Statistics Dictionary
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Player Statistics Dictionary->observer_pattern:State
+      Tracking:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Player Statistics Dictionary
+    - observer_pattern:State Tracking
+    confidence: 0.88
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Observer Pattern is a concrete way to achieve Event-Driven Architecture
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Observer Pattern is a concrete way to achieve Event-Driven Architecture
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Event-Driven Architecture->observer_pattern:Observer
+      Pattern:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Event-Driven Architecture
+    - observer_pattern:Observer Pattern
+    confidence: 0.87
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: End Sentinel is a concrete way to achieve Null Event Handling
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: End Sentinel is a concrete way to achieve Null Event Handling
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Null Event Handling->observer_pattern:End Sentinel:realization
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Null Event Handling
+    - observer_pattern:End Sentinel
+    confidence: 0.9
+    relevance: 0.0
+    relation_type: implements
+    template_id: implements:realization
+    template_variant: realization
+    template_severity: info
+- rule: Statistical Aggregation and Data Aggregation are analogous; patterns from
+    one may transfer to the other
+  category: general
+  context: When working in the observer_pattern domain
+  antipattern: Violating this rule
+  rationale: Statistical Aggregation and Data Aggregation are analogous; patterns
+    from one may transfer to the other
+  tags:
+  - observer_pattern
+  - general
+  - derived
+  provenance:
+    id: derived:observer_pattern:Statistical Aggregation->observer_pattern:Data Aggregation:analogy
+    domain: observer_pattern
+    derivation: derived
+    source_concepts:
+    - observer_pattern:Statistical Aggregation
+    - observer_pattern:Data Aggregation
+    confidence: 0.86
+    relevance: 0.0
+    relation_type: similar_to
+    template_id: similar_to:analogy
+    template_variant: analogy
+    template_severity: info
+metadata:
+  source: qortex
+  source_version: 0.1.0
+  projected_at: '2026-02-07T00:19:20.186821+00:00'
+  rule_count: 135
