@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -362,6 +363,7 @@ class RewardEventDict(TypedDict, total=False):
     error_class: str | None
     notes: str | None
     source: str | None
+    session_id: str | None
 
 
 @dataclass
@@ -392,6 +394,7 @@ class RewardEvent:
     error_class: str | None = None
     notes: str | None = None
     source: str | None = None
+    session_id: str | None = None
 
     def to_dict(self) -> RewardEventDict:
         """Convert to serializable dictionary."""
@@ -410,6 +413,8 @@ class RewardEvent:
             result["notes"] = self.notes
         if self.source is not None:
             result["source"] = self.source
+        if self.session_id is not None:
+            result["session_id"] = self.session_id
         return result
 
     @classmethod
@@ -429,6 +434,7 @@ class RewardEvent:
             error_class=data.get("error_class"),
             notes=data.get("notes"),
             source=data.get("source"),
+            session_id=data.get("session_id"),
         )
 
 
@@ -1044,6 +1050,7 @@ def log_reward(
     error_class: str | None = None,
     notes: str | None = None,
     source: str | None = None,
+    session_id: str | None = None,
 ) -> LogRewardResult:
     """Log a reward event for bandit learning.
 
@@ -1058,7 +1065,7 @@ def log_reward(
     direct positive feedback when rules DO help. This is crucial for learning
     which rules are genuinely effective, not just which ones don't fail.
 
-    Appends to reward_events.jsonl for analysis AND updates the bandit.
+    Appends to reward_events table for analysis AND updates the bandit.
 
     Args:
         buildlog_dir: Path to buildlog directory.
@@ -1070,6 +1077,7 @@ def log_reward(
                     If None, tries to use session's error_class.
         notes: Optional notes about the feedback.
         source: Where this feedback came from.
+        session_id: Session to associate with. If None, auto-detects active session.
 
     Returns:
         LogRewardResult with confirmation.
@@ -1083,6 +1091,8 @@ def log_reward(
     # Try to get rules and context from active session if not provided
     session_data = backend.load_active_session(project_id)
     if session_data is not None:
+        if session_id is None:
+            session_id = session_data.get("id")
         if rules_active is None:
             rules_active = session_data.get("selected_rules", [])
         if error_class is None:
@@ -1098,6 +1108,7 @@ def log_reward(
         error_class=error_class,
         notes=notes,
         source=source or "manual",
+        session_id=session_id,
     )
 
     # Append reward event
@@ -1132,10 +1143,26 @@ def log_reward(
     # Count total events
     total_events = backend.count_events(project_id, "rewards")
 
+    # =========================================================================
+    # EMISSION: Fire-and-forget reward signal for downstream consumers
+    # =========================================================================
+    try:
+        from buildlog.emissions import emit_artifact
+
+        emit_artifact(
+            artifact=_reward_to_emission(event, project_id),
+            artifact_type="reward_signal",
+            project_id=project_id,
+        )
+    except Exception:
+        logging.getLogger(__name__).debug("Reward emission failed", exc_info=True)
+
     rules_count = len(rules_active) if rules_active else 0
     message = f"Logged {outcome} (reward={reward_value:.2f})"
     if rules_count > 0:
         message += f" | Updated bandit: {rules_count} rules"
+    if session_id:
+        message += f" | Session: {session_id}"
 
     return LogRewardResult(
         reward_id=reward_id,
@@ -1145,15 +1172,90 @@ def log_reward(
     )
 
 
+def _reward_to_emission(
+    event: RewardEvent,
+    project_id: str,
+) -> dict:
+    """Build a reward signal emission for downstream consumers."""
+    source_id = f"buildlog:{project_id}"
+    reward_node_id = f"reward:{event.id}"
+
+    edges: list[dict] = []
+    for rule_id in event.rules_active:
+        # SUPPORTS if accepted (rule helped), CHALLENGES if rejected (rule failed)
+        relation = "supports" if event.outcome == "accepted" else "challenges"
+        if event.outcome == "revision":
+            # Partial: supports if reward > 0.5, challenges otherwise
+            relation = "supports" if event.reward_value > 0.5 else "challenges"
+        edges.append(
+            {
+                "source_id": reward_node_id,
+                "target_id": rule_id,
+                "relation_type": relation,
+                "properties": {
+                    "outcome": event.outcome,
+                    "reward_value": event.reward_value,
+                },
+                "confidence": abs(event.reward_value - 0.5) * 2,  # 0-1 scale
+            }
+        )
+
+    # Link reward to session if available
+    if event.session_id:
+        edges.append(
+            {
+                "source_id": reward_node_id,
+                "target_id": f"session:{event.session_id}",
+                "relation_type": "part_of",
+                "properties": {"type": "reward_in_session"},
+                "confidence": 1.0,
+            }
+        )
+
+    props: dict = {
+        "outcome": event.outcome,
+        "reward_value": event.reward_value,
+        "timestamp": event.timestamp.isoformat(),
+    }
+    if event.error_class:
+        props["error_class"] = event.error_class
+    if event.session_id:
+        props["session_id"] = event.session_id
+
+    return {
+        "source_id": source_id,
+        "domain": "experiential",
+        "concepts": [
+            {
+                "name": reward_node_id,
+                "domain": "experiential",
+                "properties": props,
+                "source_id": source_id,
+            }
+        ],
+        "edges": edges,
+        "rules": [],
+        "metadata": {
+            "source": "buildlog",
+            "emitted_at": event.timestamp.isoformat(),
+            "project_id": project_id,
+            "reward_id": event.id,
+            "session_id": event.session_id,
+        },
+    }
+
+
 def get_rewards(
     buildlog_dir: Path,
     limit: int | None = None,
+    session_id: str | None = None,
 ) -> RewardSummary:
     """Get reward events with summary statistics.
 
     Args:
         buildlog_dir: Path to buildlog directory.
         limit: Maximum number of events to return (most recent first).
+        session_id: If provided, only return events for this session.
 
     Returns:
         RewardSummary with events and statistics.
@@ -1162,6 +1264,10 @@ def get_rewards(
 
     # Load all events via backend
     raw_events = backend.load_events(project_id, "rewards")
+
+    # Filter by session_id if requested
+    if session_id is not None:
+        raw_events = [e for e in raw_events if e.get("session_id") == session_id]
 
     if not raw_events:
         return RewardSummary(

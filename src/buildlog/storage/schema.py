@@ -11,7 +11,7 @@ from pathlib import Path
 
 __all__ = ["SCHEMA_VERSION", "init_schema"]
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # ---------------------------------------------------------------------------
 # DDL statements
@@ -101,10 +101,13 @@ CREATE TABLE IF NOT EXISTS reward_events (
     error_class     TEXT,
     notes           TEXT,
     source          TEXT,
+    session_id      TEXT,
     PRIMARY KEY (project_id, id)
 );
 CREATE INDEX IF NOT EXISTS idx_reward_events_ts
     ON reward_events(project_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_reward_events_session
+    ON reward_events(project_id, session_id);
 """
 
 _CREATE_SESSIONS = """\
@@ -190,6 +193,15 @@ _MIGRATE_V2: list[str] = [
     "ALTER TABLE mistakes ADD COLUMN severity TEXT;",
 ]
 
+# ---------------------------------------------------------------------------
+# v3 migration: add session_id to reward_events for session linking
+# ---------------------------------------------------------------------------
+
+_MIGRATE_V3: list[str] = [
+    "ALTER TABLE reward_events ADD COLUMN session_id TEXT;",
+    "CREATE INDEX IF NOT EXISTS idx_reward_events_session ON reward_events(project_id, session_id);",
+]
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -241,6 +253,21 @@ def init_schema(conn: sqlite3.Connection) -> int:
         conn.execute(
             "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
             (2,),
+        )
+        conn.commit()
+        current_version = 2
+
+    # Apply v3 migration: add session_id to reward_events
+    if current_version < 3:
+        for stmt in _MIGRATE_V3:
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError:
+                # Column/index already exists (e.g. from a partial migration)
+                pass
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+            (3,),
         )
         conn.commit()
 

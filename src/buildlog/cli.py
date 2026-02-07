@@ -1210,6 +1210,7 @@ def skills(
 @click.option("--error-class", "-e", help="Category of error (e.g., missing_test)")
 @click.option("--notes", "-n", help="Additional notes about the feedback")
 @click.option("--rules", "-r", multiple=True, help="Active rule IDs")
+@click.option("--session", "-s", help="Session ID to associate with")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
 def reward(
     outcome: str,
@@ -1217,6 +1218,7 @@ def reward(
     error_class: str | None,
     notes: str | None,
     rules: tuple[str, ...],
+    session: str | None,
     output_json: bool,
 ):
     """Log a reward signal for the learning loop.
@@ -1252,6 +1254,7 @@ def reward(
         error_class=error_class,
         notes=notes,
         source="cli",
+        session_id=session,
     )
 
     if output_json:
@@ -1264,8 +1267,9 @@ def reward(
 
 @main.command()
 @click.option("--limit", "-n", type=int, help="Limit number of events to show")
+@click.option("--session", "-s", help="Filter to events from this session")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-def rewards(limit: int | None, output_json: bool):
+def rewards(limit: int | None, session: str | None, output_json: bool):
     """List reward events and summary statistics.
 
     Shows recent reward events and aggregate statistics useful for
@@ -1285,7 +1289,7 @@ def rewards(limit: int | None, output_json: bool):
         click.echo("No buildlog/ directory found. Run 'buildlog init' first.", err=True)
         raise SystemExit(1)
 
-    summary = get_rewards(buildlog_dir, limit=limit)
+    summary = get_rewards(buildlog_dir, limit=limit, session_id=session)
 
     if output_json:
         data = {
