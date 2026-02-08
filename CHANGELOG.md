@@ -7,6 +7,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-02-07
+
+### Added
+- **Bragi v2** — 11 new prose anti-pattern rules from Wikipedia's "Signs of AI writing" field guide: inflated significance framing, superficial participle analysis, puffery language, AI vocabulary blocklist, copula avoidance, challenges-and-future-prospects formula, weasel words, synonym cycling, false ranges, hedging-then-inflating, notability assertion sections (#139)
+- Anti-pattern catalog with tiered triage (must-fix / should-fix / ignore) and example rewrites at `bragi/anti-patterns/catalog.md`
+- Wikipedia source references on new rules and 3 existing v1 rules
+
 ## [0.13.1] - 2026-02-07
 
 ### Added
