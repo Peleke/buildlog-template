@@ -1,16 +1,24 @@
 # Bragi - LLM Prose Pattern Detection (named for the skald of the Aesir)
 # Detect and flag synthetic-sounding prose patterns common in LLM-generated text
 # These patterns aren't inherently wrong, but their overuse signals machine authorship
+#
+# v2: Expanded with Wikipedia "Signs of AI writing" catalog (2026-02-07)
+# Source: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
 
 persona: bragi
-version: 1
+version: 2
 
 rules:
-  - rule: "Em-dash usage"
+  # ── Original v1 rules ──────────────────────────────────────────────
+
+  - rule: "Em-dash overuse"
     category: prose
     context: "Anywhere: headlines, parentheticals, contrasts, asides"
     antipattern: "Any use of em dashes (—). Includes 'Not X — Y' pivots, parenthetical asides, and dramatic pauses."
     rationale: "LLMs deploy em dashes constantly and poorly. Ban them outright. Use colons, semicolons, commas, parentheses, or separate sentences instead."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Overuse_of_em_dashes"
+        title: "Wikipedia: Signs of AI writing — Em dashes"
 
   - rule: "Dismissive 'with' framing"
     category: prose
@@ -23,6 +31,9 @@ rules:
     context: "Value propositions, team descriptions, capability lists"
     antipattern: "'They execute, improvise, and forget' or 'fast, reliable, scalable, secure, and observable' — rhythmic clause lists"
     rationale: "LLMs default to tricolons and pentalogies for rhetorical rhythm. Real technical writing itemizes what matters, not what sounds balanced."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Rule_of_three"
+        title: "Wikipedia: Signs of AI writing — Rule of three"
 
   - rule: "Performative honesty"
     category: prose
@@ -59,3 +70,104 @@ rules:
     context: "Definitions, scope statements, positioning"
     antipattern: "'This is not X. Not Y. Not Z.' — defining something entirely by what it isn't, in staccato negation"
     rationale: "Negative definition is evasive. Say what the thing is. Reserve negation for genuine disambiguation."
+
+  # ── New v2 rules (from Wikipedia catalog) ───────────────────────────
+
+  - rule: "Inflated significance framing"
+    category: prose
+    context: "Introductions, historical descriptions, feature announcements, any sentence describing impact"
+    antipattern: "'marking a pivotal moment', 'represented a significant shift', 'setting the stage for', 'reflects broader trends', 'indelible mark', 'key turning point', 'evolving landscape' — generic grandeur that says nothing specific"
+    rationale: "Replace abstract significance claims with the concrete thing that happened and why it mattered to the people involved. If you can't name a specific consequence, the significance claim is filler."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Undue_emphasis_on_significance,_legacy,_and_broader_trends"
+        title: "Wikipedia: Signs of AI writing — Inflated significance"
+
+  - rule: "Superficial analysis via participle phrases"
+    category: prose
+    context: "Any sentence that appends an '-ing' clause to analyze the preceding fact"
+    antipattern: "'...creating a lively community', '...further enhancing its significance', '...highlighting their historical importance', '...ensuring continued relevance', '...contributing to the broader discourse' — gerund phrases tacked onto facts as pseudo-analysis"
+    rationale: "If you've stated a fact, stop. Don't append a clause that 'analyzes' it with a vague gerund. If there's a genuine implication, state it as its own sentence with specifics."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Superficial_analyses"
+        title: "Wikipedia: Signs of AI writing — Superficial analyses"
+
+  - rule: "Promotional and puffery language"
+    category: prose
+    context: "Descriptions of places, organizations, products, cultural heritage, natural features"
+    antipattern: "'nestled in the heart of', 'vibrant town with a rich cultural heritage', 'breathtaking region', 'natural beauty', 'renowned', 'groundbreaking', 'boasts a', 'showcasing', 'exemplifies', 'commitment to', 'profound' — travel-brochure adjectives that apply to anything"
+    rationale: "Cut every adjective that doesn't help the reader distinguish this subject from any other. Replace evaluative language (vibrant, rich, breathtaking) with observable specifics (location, function, relationship to surroundings)."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Promotional_and_advertisement-like_language"
+        title: "Wikipedia: Signs of AI writing — Puffery"
+
+  - rule: "AI vocabulary blocklist"
+    category: prose
+    context: "Anywhere. One is coincidence; a cluster is a bingo card."
+    antipattern: "Additionally (sentence-initial), align with, crucial, delve, emphasizing, enduring, enhance, fostering, garner, highlight (as verb), interplay, intricate/intricacies, key (as adjective), landscape (abstract), pivotal, showcase, tapestry (abstract), testament, underscore (as verb), valuable, vibrant"
+    rationale: "Treat these as a blocklist. Each has a more specific, less inflated replacement. 'Pivotal' means name the actual pivot. 'Tapestry' means name the threads. 'Showcase' means describe what you actually see."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Overused_%22AI_vocabulary%22_words"
+        title: "Wikipedia: Signs of AI writing — AI vocabulary"
+
+  - rule: "Copula avoidance"
+    category: prose
+    context: "Descriptions, definitions, any sentence that could use 'is', 'are', 'has', 'was'"
+    antipattern: "'serves as', 'stands as', 'marks', 'represents [a]', 'boasts', 'features', 'offers [a]', 'holds the distinction of being' — substituting simple copulas with inflated verbs"
+    rationale: "Default to 'is', 'are', 'has', 'was'. Use 'serves as' only when something literally performs a function it wasn't designed for. Otherwise, just say what it is."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Avoidance_of_basic_copulatives"
+        title: "Wikipedia: Signs of AI writing — Copula avoidance"
+
+  - rule: "Challenges-and-future-prospects formula"
+    category: prose
+    context: "Concluding sections, summaries, any passage about obstacles or outlook"
+    antipattern: "'Despite its [positive words], [subject] faces challenges including...' followed by 'Despite these challenges, [vague optimism]' — the despite-challenges-despite sandwich"
+    rationale: "Name the specific problems. Skip the 'despite' sandwich. Don't end with vague optimism unless you can cite a specific initiative with a timeline."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Outline-like_conclusions_about_challenges_and_future_prospects"
+        title: "Wikipedia: Signs of AI writing — Challenges formula"
+
+  - rule: "Vague attribution and weasel words"
+    category: prose
+    context: "Any claim attributed to unnamed authorities or exaggerated source breadth"
+    antipattern: "'Experts argue', 'Observers have noted', 'Industry reports suggest', 'has been described as', 'several publications' (when only one or two exist) — attributing claims to unnamed or inflated authorities"
+    rationale: "Name the source. If the only source is the subject themselves, say so. If no one has actually said the thing, don't pretend someone has."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Vague_attributions_and_overgeneralization_of_opinions"
+        title: "Wikipedia: Signs of AI writing — Weasel words"
+
+  - rule: "Elegant variation (synonym cycling)"
+    category: prose
+    context: "Any passage that refers to the same concept repeatedly"
+    antipattern: "Cycling through synonyms to avoid repeating a word: 'the protagonist' then 'the key figure' then 'the eponymous character'; or 'Soviet artistic constraints' then 'non-conformist artists' then 'artistic norms' — repetition penalty made visible"
+    rationale: "Repeat the same word if you mean the same thing. If you're cycling through synonyms to avoid repetition, you're probably also padding. Cut the sentence count instead."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Elegant_variation"
+        title: "Wikipedia: Signs of AI writing — Elegant variation"
+
+  - rule: "False ranges"
+    category: prose
+    context: "'From X to Y' constructions listing examples"
+    antipattern: "'From problem-solving and tool-making to scientific discovery, artistic expression, and technological innovation' — 'from...to' where X and Y aren't endpoints of a real scale"
+    rationale: "Only use 'from X to Y' when there's an actual spectrum or progression. If they're just examples, list them."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#False_ranges"
+        title: "Wikipedia: Signs of AI writing — False ranges"
+
+  - rule: "Hedging then inflating"
+    category: prose
+    context: "Descriptions of minor subjects, species with unknown status, topics with limited sources"
+    antipattern: "'Though it saw only limited application, it contributes to the broader history of...' or 'While specific details are limited, the general health of the ecosystem is crucial...' — acknowledging insignificance then inflating anyway"
+    rationale: "If the thing is minor, say it's minor and move on. Don't hedge and then inflate. 'No assessment exists' is a complete sentence."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Undue_emphasis_on_significance,_legacy,_and_broader_trends"
+        title: "Wikipedia: Signs of AI writing — Hedging"
+
+  - rule: "Notability assertion sections"
+    category: prose
+    context: "Sections about media coverage, reception, or recognition"
+    antipattern: "Entire sections whose purpose is listing coverage sources to argue the subject is notable: 'featured in Wired, profiled in the New York Times, independent coverage in...' — arguing for importance rather than conveying information"
+    rationale: "Summarize what sources say. Cite them as footnotes. Don't build a section whose purpose is to argue the subject deserves attention."
+    references:
+      - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Undue_emphasis_on_notability,_attribution,_and_media_coverage"
+        title: "Wikipedia: Signs of AI writing — Notability assertions"
