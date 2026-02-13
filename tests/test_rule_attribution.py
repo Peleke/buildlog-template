@@ -482,9 +482,9 @@ class TestGauntletProcessIssuesBanditCredit:
         )
 
         # Verify bandit state was updated
-        # Context is derived from issue categories: "security"
+        # Context is None → "general" (shared pool for all gauntlet rules)
         bandit = ThompsonSamplingBandit(buildlog_dir / "bandit_state.jsonl")
-        params = bandit.state.get_params("security", "karen:rule:0")
+        params = bandit.state.get_params("general", "karen:rule:0")
         assert params is not None
         # After reward=1.0: alpha should be > 1.0 (prior is 1.0)
         assert params.alpha > 1.0

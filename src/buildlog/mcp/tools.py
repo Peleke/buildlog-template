@@ -887,6 +887,8 @@ def buildlog_commit(
 def buildlog_gauntlet_prompt(
     target: str,
     personas: list[str] | None = None,
+    select_k: int | None = None,
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Generate a gauntlet review prompt for target code.
 
@@ -897,11 +899,18 @@ def buildlog_gauntlet_prompt(
     Args:
         target: Path to target code (file or directory, e.g., "src/")
         personas: Persona names to include (default: all)
+        select_k: Max rules per persona via learning backend (None = all)
+        buildlog_dir: Path to buildlog directory
 
     Returns:
         Dict with prompt, target, personas, total_rules, message, error
     """
-    result = generate_gauntlet_prompt(target=target, personas=personas)
+    result = generate_gauntlet_prompt(
+        target=target,
+        personas=personas,
+        buildlog_dir=Path(buildlog_dir) if select_k is not None else None,
+        select_k=select_k,
+    )
     return asdict(result)
 
 
@@ -912,6 +921,8 @@ def buildlog_gauntlet_loop(
     stop_at: str = "minors",
     auto_gh_issues: bool = False,
     compact: bool = True,
+    select_k: int | None = None,
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Start the gauntlet review loop: get config, rules, and instructions.
 
@@ -930,6 +941,8 @@ def buildlog_gauntlet_loop(
             ``rules_by_persona`` is stripped. ``rule_id_index`` is
             replaced with ``valid_rule_ids`` (just the keys). Set to
             False to get the full unabridged response.
+        select_k: Max rules per persona via learning backend (None = all)
+        buildlog_dir: Path to buildlog directory
 
     Returns:
         Dict with target, personas, max_iterations, stop_at,
@@ -942,6 +955,8 @@ def buildlog_gauntlet_loop(
         max_iterations=max_iterations,
         stop_at=stop_at,
         auto_gh_issues=auto_gh_issues,
+        buildlog_dir=Path(buildlog_dir) if select_k is not None else None,
+        select_k=select_k,
     )
     d = asdict(result)
 
