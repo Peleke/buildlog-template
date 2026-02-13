@@ -7,6 +7,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-02-13
+
+### Added
+- **LearningBackend protocol** — pluggable backend abstraction with `BuiltinBandit` (Thompson Sampling) and `QortexLearner` (qortex 0.4.0) adapters. `get_learning_backend()` factory reads `BUILDLOG_LEARNING_BACKEND` env var (#145-#150)
+- **BanditPersistence protocol** — bandit state persists to SQLite (auto-detected) or JSONL (fallback). `JsonlPersistence`, `SqlitePersistence`, `resolve_bandit_persistence()` factory (#153)
+- **Closed-loop gauntlet learning** — Thompson Sampling rule selection integrated into gauntlet loop with per-rule credit attribution from issue citations (#138)
+- **qortex optional dependency** — `pip install buildlog[qortex]` for graph-enhanced rule retrieval
+- 47 new tests (LearningBackend protocol, BanditPersistence, E2E interop)
+- Total: 1239 tests
+
 ## [0.14.1] - 2026-02-07
 
 ### Added
