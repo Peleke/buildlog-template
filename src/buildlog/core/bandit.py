@@ -598,6 +598,11 @@ class ThompsonSamplingBandit:
         self.default_context = default_context
         self.state = self._persistence.load()
 
+    @property
+    def persistence_name(self) -> str:
+        """Name of the active persistence backend ('jsonl' or 'sqlite')."""
+        return self._persistence.name
+
     def select(
         self,
         candidates: list[str],
