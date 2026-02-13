@@ -8,7 +8,46 @@
 
 ## The Goal
 
-Ship buildlog as a product. This session covered the marketing surface (landing page), documentation polish, and GitHub hygiene — the last mile before the next engineering push (#155 rules→SQLite).
+Ship buildlog as a product. This session covered the marketing surface (landing page), documentation polish, and GitHub hygiene — the last mile before the next engineering push (#165 rules→SQLite).
+
+---
+
+## Product Delta: What Changed and Why It Matters
+
+**Before today**: buildlog was an engineering tool with a GitHub README. If you found it, you read source code to figure out what it did. The docs had gaps. The issue tracker was cluttered. There was no marketing surface. No landing page. No self-service path from "what is this?" to "I'm using it."
+
+**After today**: buildlog is a product.
+
+### What shipped
+
+| Change | Before | After | Why it matters |
+|--------|--------|-------|----------------|
+| **Landing page** | None | [Live on Vercel](https://launchpad-git-buildlog-kwayet-fs-projects.vercel.app) | A stranger can understand the value prop, install it, and start using it in under 2 minutes. The animated SVG diagram shows the full loop. The flip cards explain each component. The FAQ handles objections. This is the difference between "cool GitHub project" and "thing people actually try." |
+| **Docs site** | Missing troubleshooting, config ref, learning backends guide | Complete self-service documentation | A user who hits a problem can fix it without opening an issue. `buildlog mcp-test` fails? There's a troubleshooting page. Want to switch to qortex backend? There's a decision tree. This is support cost → $0. |
+| **README** | v0.13 reference, no landing page link, stale roadmap | v0.15, landing page linked, roadmap corrected | The README now reflects reality. Embedding persistence isn't "future" — it shipped via qortex. The landing page link gives the README a place to send people who want the marketing pitch instead of the technical deep dive. |
+| **GH issues** | 14 open (5 stale/superseded) | 9 open (all actionable) | A contributor looking at the issue tracker sees a focused backlog, not a graveyard. Signal-to-noise ratio matters for open source adoption. |
+| **#165 plan** | "rules are stuck in YAML" (known problem, no plan) | Full implementation spec with schema, migration, 6 commits, 20 tests | The last engineering blocker before release has a plan. Content-hash IDs fix the positional ID corruption bug that would silently destroy bandit learning history. This is the difference between "the bandit works in theory" and "the bandit works in production." |
+
+### The product story
+
+The arc is: **capture → extract → select → render → measure**.
+
+Before today, the *engineering* of that arc was complete (PRs #138, #159-#162). What was missing was the *product surface* — the thing that makes the engineering usable by someone who isn't me.
+
+Now the surface exists:
+- **Discovery**: Landing page (Vercel) → README (GitHub) → Docs site (GitHub Pages)
+- **Install**: `uv tool install buildlog && buildlog init-mcp --global -y` (two commands, in the hero)
+- **Learn**: Quickstart → How it works → Stack → Agent targets → Limits → FAQ
+- **Troubleshoot**: Self-service docs for every failure mode
+- **Contribute**: Focused issue tracker with actionable items
+
+### What's left for product ship
+
+1. **#165 (rules→SQLite)**: The bandit currently tracks rules by fragile positional IDs. This is a silent data corruption bug. Content-hash IDs fix it. This is the last engineering prerequisite.
+2. **Release**: Cut v0.16 after #165 merges.
+3. **Content**: Landing page needs a hero image (ComfyUI or commission). Content seeds for launch (Reddit, LinkedIn, Twitter) come from the pitch skill.
+
+After those three, buildlog is a shippable product with a marketing surface, complete docs, a working learning loop, and stable data.
 
 ---
 
