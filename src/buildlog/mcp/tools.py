@@ -39,12 +39,16 @@ from buildlog.core import (
 
 
 def _ensure_message(d: dict) -> dict:
-    """Ensure the result dict has a non-empty ``message`` for MCP display.
+    """Return a copy of *d* with a non-empty ``message`` for MCP display.
 
     Falls back to ``error`` when ``message`` is empty/missing.
+    The error string is used as-is since MCP consumers are local agents
+    (not end-user UIs), so path information is acceptable.
     """
     if not d.get("message") and d.get("error"):
-        d["message"] = d["error"]
+        out = dict(d)
+        out["message"] = out["error"]
+        return out
     return d
 
 
@@ -371,14 +375,17 @@ def buildlog_rewards(
     result = get_rewards(Path(buildlog_dir), limit, session_id=session_id)
 
     # Convert events to dicts
-    return {
-        "total_events": result.total_events,
-        "accepted": result.accepted,
-        "revisions": result.revisions,
-        "rejected": result.rejected,
-        "mean_reward": result.mean_reward,
-        "events": [e.to_dict() for e in result.events],
-    }
+    return _ensure_message(
+        {
+            "total_events": result.total_events,
+            "accepted": result.accepted,
+            "revisions": result.revisions,
+            "rejected": result.rejected,
+            "mean_reward": result.mean_reward,
+            "events": [e.to_dict() for e in result.events],
+            "message": f"{result.total_events} events (mean reward: {result.mean_reward:.2f})",
+        }
+    )
 
 
 # -----------------------------------------------------------------------------

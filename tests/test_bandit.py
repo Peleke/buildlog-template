@@ -1057,6 +1057,129 @@ class TestBanditWithSqlitePersistence:
         bandit2 = ThompsonSamplingBandit(SqlitePersistence(backend, project_id))
         assert bandit2.state.get_params("ctx", "r1") is None
 
+
+# ---------------------------------------------------------------------------
+# get_bandit_status health summary tests
+# ---------------------------------------------------------------------------
+
+
+class TestBanditStatusHealth:
+    """Tests for the health summary in get_bandit_status()."""
+
+    def test_no_observations_message(self, tmp_path):
+        """Empty bandit → 'no observations yet'."""
+        from buildlog.core.operations import get_bandit_status
+
+        bd = tmp_path / "buildlog" / ".buildlog"
+        bd.mkdir(parents=True)
+        result = get_bandit_status(bd)
+        assert result["message"] == "no observations yet"
+        assert result["summary"]["total_observations"] == 0
+
+    def test_observations_without_converging(self, tmp_path):
+        """Arms with wide CIs → obs count but no converging."""
+        from unittest.mock import patch
+
+        from buildlog.core.bandit import JsonlPersistence, ThompsonSamplingBandit
+        from buildlog.core.learning import BuiltinBandit
+        from buildlog.core.operations import get_bandit_status
+
+        bd = tmp_path / "buildlog" / ".buildlog"
+        bd.mkdir(parents=True)
+        p = JsonlPersistence(bd / "bandit_state.jsonl")
+        bandit = ThompsonSamplingBandit(p)
+        bandit.select(candidates=["r1", "r2"], context="ctx", k=2)
+        bandit.update("r1", 1.0, "ctx")
+        bandit.update("r2", 0.0, "ctx")
+
+        with patch(
+            "buildlog.core.operations.get_learning_backend",
+            return_value=BuiltinBandit(bandit),
+        ):
+            result = get_bandit_status(bd)
+        assert "obs across" in result["message"]
+        assert "converging" not in result["message"]
+
+    def test_converging_arm_detected(self, tmp_path):
+        """Arms with many observations develop narrow CIs → converging count."""
+        from unittest.mock import patch
+
+        from buildlog.core.bandit import JsonlPersistence, ThompsonSamplingBandit
+        from buildlog.core.learning import BuiltinBandit
+        from buildlog.core.operations import get_bandit_status
+
+        bd = tmp_path / "buildlog" / ".buildlog"
+        bd.mkdir(parents=True)
+        p = JsonlPersistence(bd / "bandit_state.jsonl")
+        bandit = ThompsonSamplingBandit(p)
+        bandit.select(candidates=["r1"], context="ctx", k=1)
+        for _ in range(50):
+            bandit.update("r1", 1.0, "ctx")
+
+        with patch(
+            "buildlog.core.operations.get_learning_backend",
+            return_value=BuiltinBandit(bandit),
+        ):
+            result = get_bandit_status(bd)
+        assert "converging" in result["message"]
+
+    def test_malformed_ci_does_not_crash(self, tmp_path):
+        """Arms with missing/malformed confidence_interval → no crash."""
+        from unittest.mock import patch
+
+        from buildlog.core.operations import get_bandit_status
+
+        bd = tmp_path / "buildlog" / ".buildlog"
+        bd.mkdir(parents=True)
+
+        # Mock get_learning_backend to return stats with bad CI data
+        class FakeBackend:
+            backend_name = "test"
+
+            def get_stats(self, context=None):
+                return {
+                    "r1": {
+                        "context": "ctx",
+                        "mean": 0.5,
+                        "confidence_interval": None,
+                        "total_observations": 5,
+                    },
+                    "r2": {
+                        "context": "ctx",
+                        "mean": 0.7,
+                        "confidence_interval": (0.6,),  # too short
+                        "total_observations": 3,
+                    },
+                    "r3": {
+                        "context": "ctx",
+                        "mean": 0.8,
+                        "confidence_interval": "bad",  # wrong type
+                        "total_observations": 2,
+                    },
+                }
+
+            def get_top_rules(self, context, k=10):
+                return []
+
+        with patch(
+            "buildlog.core.operations.get_learning_backend",
+            return_value=FakeBackend(),
+        ):
+            result = get_bandit_status(bd)
+        # Should not crash, and should count 0 converging
+        assert "obs across" in result["message"]
+        assert "converging" not in result["message"]
+
+    def test_health_message_key_always_present(self, tmp_path):
+        """Result dict always has 'message' key."""
+        from buildlog.core.operations import get_bandit_status
+
+        bd = tmp_path / "buildlog" / ".buildlog"
+        bd.mkdir(parents=True)
+        result = get_bandit_status(bd)
+        assert "message" in result
+        assert isinstance(result["message"], str)
+
     def test_decay_persists_via_sqlite(self, sqlite_backend):
         backend, project_id = sqlite_backend
         persistence = SqlitePersistence(backend, project_id)
