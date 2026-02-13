@@ -85,6 +85,12 @@ __all__ = [
 ]
 
 
+# CI width below which a bandit arm is considered "converging".
+# With Beta(a, b), 95% CI width ≈ 3.92 * sqrt(ab / ((a+b)^2 * (a+b+1))).
+# 0.2 corresponds to roughly 25+ observations with moderate success rate.
+_CONVERGENCE_CI_WIDTH = 0.2
+
+
 def _get_storage(buildlog_dir: Path) -> tuple[StorageBackend, str]:
     """Resolve the storage backend for the project containing *buildlog_dir*.
 
@@ -2250,11 +2256,14 @@ def get_bandit_status(
 
     # Health: count arms with narrow confidence intervals (converging)
     converging = 0
-    ci_threshold = 0.2  # CI width below which an arm is "converging"
-    for rules in contexts.values():
-        for rule in rules:
-            ci = rule.get("confidence_interval")
-            if ci and (ci[1] - ci[0]) < ci_threshold:
+    for ctx_rules in contexts.values():
+        for arm in ctx_rules:
+            ci = arm.get("confidence_interval")
+            if (
+                isinstance(ci, (list, tuple))
+                and len(ci) >= 2
+                and (ci[1] - ci[0]) < _CONVERGENCE_CI_WIDTH
+            ):
                 converging += 1
 
     # Human-readable health summary
@@ -2648,7 +2657,7 @@ class ListEntriesResult:
 
     entries: list[dict]
     count: int
-    message: str | None = None
+    message: str = ""
 
 
 def get_gauntlet_rules(
@@ -3026,9 +3035,11 @@ def list_entries(
             title = "(unreadable)"
         entries.append({"name": ep.name, "title": title})
 
-    message = None
+    message = ""
     if not entries:
         message = "No entries yet. Create one with: buildlog new my-feature"
+    else:
+        message = f"{len(entries)} entries"
 
     return ListEntriesResult(
         entries=entries,

@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from buildlog.mcp.tools import (
+    _ensure_message,
     _resolve_file_or_inline,
     _resolve_text_file_or_inline,
     buildlog_diff,
@@ -768,3 +769,73 @@ class TestBuildlogImportSeed:
 
         assert result["error"] is not None
         assert "within working directory" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# _ensure_message tests
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureMessage:
+    """Tests for _ensure_message() MCP helper."""
+
+    def test_message_present_unchanged(self):
+        """When message is already set, return as-is."""
+        d = {"message": "hello", "error": None}
+        result = _ensure_message(d)
+        assert result["message"] == "hello"
+
+    def test_empty_message_falls_back_to_error(self):
+        """Empty message + error present → message = error."""
+        d = {"message": "", "error": "something broke"}
+        result = _ensure_message(d)
+        assert result["message"] == "something broke"
+
+    def test_missing_message_falls_back_to_error(self):
+        """No message key + error present → message = error."""
+        d = {"error": "not found"}
+        result = _ensure_message(d)
+        assert result["message"] == "not found"
+
+    def test_none_message_falls_back_to_error(self):
+        """message=None + error present → message = error."""
+        d = {"message": None, "error": "null case"}
+        result = _ensure_message(d)
+        assert result["message"] == "null case"
+
+    def test_both_empty_no_crash(self):
+        """Both message and error empty → no change."""
+        d = {"message": "", "error": ""}
+        result = _ensure_message(d)
+        assert result["message"] == ""
+
+    def test_neither_present_no_crash(self):
+        """No message, no error → no crash, no message added."""
+        d = {"data": 42}
+        result = _ensure_message(d)
+        assert "message" not in result
+
+    def test_does_not_mutate_input(self):
+        """Must not mutate the input dict when fallback is applied."""
+        d = {"message": "", "error": "fallback"}
+        result = _ensure_message(d)
+        assert result["message"] == "fallback"
+        assert d["message"] == ""  # original unchanged
+
+    def test_no_copy_when_message_present(self):
+        """When no fallback needed, may return same object (no copy needed)."""
+        d = {"message": "ok", "error": None}
+        result = _ensure_message(d)
+        assert result is d  # no copy overhead
+
+    def test_mcp_tools_have_message_in_response(self):
+        """Status tool (representative) should include message in output."""
+        result = buildlog_status(buildlog_dir=str(FIXTURES_DIR))
+        assert "message" in result
+        assert isinstance(result["message"], str)
+
+    def test_error_path_has_message_via_fallback(self, tmp_path):
+        """Error path should get message populated via _ensure_message."""
+        result = buildlog_status(buildlog_dir=str(tmp_path / "nope"))
+        assert result["error"] is not None
+        assert result["message"]  # non-empty
