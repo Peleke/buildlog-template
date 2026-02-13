@@ -66,7 +66,7 @@ llm = [
 mcp = []
 # qortex learning backend (pluggable Thompson Sampling with OTEL, credit propagation)
 qortex = [
-    "qortex>=0.3.6",
+    "qortex>=0.3.6; python_version>='3.11'",
 ]
 # All optional features
 all = [
@@ -74,7 +74,7 @@ all = [
     "openai>=1.0.0",
     "ollama>=0.4.0",
     "anthropic>=0.40.0",
-    "qortex>=0.3.6",
+    "qortex>=0.3.6; python_version>='3.11'",
 ]
 # Development dependencies
 dev = [
