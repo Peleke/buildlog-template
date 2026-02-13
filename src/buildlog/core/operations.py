@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from buildlog.confidence import ConfidenceMetrics, merge_confidence_metrics
-from buildlog.core.bandit import ThompsonSamplingBandit
+from buildlog.core.learning import get_learning_backend
 from buildlog.render import get_renderer
 from buildlog.skills import Skill, SkillSet, generate_skills
 from buildlog.storage import StorageBackend, get_backend
@@ -1131,8 +1131,7 @@ def log_reward(
     # =========================================================================
 
     if rules_active:
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit = get_learning_backend(buildlog_dir)
 
         bandit.batch_update(
             rule_ids=rules_active,
@@ -1792,8 +1791,7 @@ def start_session(
 
     if current_rules:
         # Initialize bandit
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit = get_learning_backend(buildlog_dir)
 
         # Identify seed rules (those with persona_tags from gauntlet)
         # Seeds get boosted priors - we believe curated rules are good
@@ -2014,8 +2012,7 @@ def log_mistake(
 
     selected_rules = session_data.get("selected_rules", [])
     if selected_rules:
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit = get_learning_backend(buildlog_dir)
 
         # Use session's error_class as context, not the mistake's
         # (they should match, but session context is authoritative)
@@ -2203,8 +2200,7 @@ def get_bandit_status(
             - contexts: Per-context rule rankings
             - top_rules: Top rules by expected value per context
     """
-    bandit_path = buildlog_dir / "bandit_state.jsonl"
-    bandit = ThompsonSamplingBandit(bandit_path)
+    bandit = get_learning_backend(buildlog_dir)
 
     stats = bandit.get_stats(context)
 
@@ -2240,7 +2236,7 @@ def get_bandit_status(
             "total_contexts": len(contexts),
             "total_arms": total_arms,
             "total_observations": total_observations,
-            "state_file": str(bandit_path),
+            "backend": bandit.backend_name,
         },
         "top_rules": top_rules,
         "all_rules": contexts if context else None,  # Only include all if filtering
@@ -2395,18 +2391,13 @@ def gauntlet_process_issues(
     )
 
     # --- Bandit update with per-rule credit (Touch 3) ---
+    # Context=None → bandit default ("general"). Selection also uses None,
+    # so credits and selections always hit the same arm partition.
     if credited_rules:
         try:
-            from buildlog.core.bandit import ThompsonSamplingBandit
-
-            bandit = ThompsonSamplingBandit(buildlog_dir / "bandit_state.jsonl")
-            # Derive context from issue categories for segmentation
-            categories = {
-                i.get("category", "general") for i in issues if i.get("rules_consulted")
-            }
-            context = ",".join(sorted(categories)) if categories else None
+            bandit = get_learning_backend(buildlog_dir)
             for rule_id in credited_rules:
-                bandit.update(rule_id, reward=1.0, context=context)
+                bandit.update(rule_id, reward=1.0, context=None)
         except Exception:
             logging.getLogger(__name__).debug(
                 "Bandit credit update failed", exc_info=True
@@ -3214,9 +3205,81 @@ def commit(
     )
 
 
+def select_gauntlet_rules(
+    buildlog_dir: Path,
+    seeds: dict,
+    select_k: int | None = None,
+) -> dict:
+    """Filter and rank gauntlet rules through the learning backend.
+
+    When ``select_k`` is None, returns all rules unranked (flat mode).
+    When set, uses Thompson Sampling to pick the top-k rules per persona,
+    biased toward rules that have been cited in past gauntlet reviews.
+
+    Args:
+        buildlog_dir: Path to buildlog directory (for bandit state).
+        seeds: Dict mapping persona name to SeedFile (from ``load_all_seeds``).
+        select_k: Max rules to select per persona, or None for all.
+
+    Returns:
+        Filtered ``seeds`` dict with the same structure — SeedFiles with
+        a (possibly reduced) rules list.
+    """
+    if select_k is None:
+        return seeds
+
+    from buildlog.seeds import SeedFile, SeedRule, get_rule_id
+
+    backend = get_learning_backend(buildlog_dir)
+
+    filtered: dict = {}
+    for persona_name, sf in seeds.items():
+        if len(sf.rules) <= select_k:
+            filtered[persona_name] = sf
+            continue
+
+        # Build ID → rule index mapping
+        id_to_idx: dict[str, int] = {}
+        all_ids: list[str] = []
+        seed_rule_ids: set[str] = set()
+        for i, rule in enumerate(sf.rules):
+            rule_id = get_rule_id(rule, persona_name, i)
+            id_to_idx[rule_id] = i
+            all_ids.append(rule_id)
+            seed_rule_ids.add(rule_id)
+
+        selected_ids = backend.select(
+            candidates=all_ids,
+            context=None,
+            k=select_k,
+            seed_rule_ids=seed_rule_ids,
+        )
+
+        # Rebuild SeedFile with only selected rules
+        selected_rules: list[SeedRule] = []
+        for rid in selected_ids:
+            idx = id_to_idx.get(rid)
+            if idx is not None:
+                selected_rules.append(sf.rules[idx])
+
+        # Fallback: if selection returned empty, keep all
+        if not selected_rules:
+            filtered[persona_name] = sf
+        else:
+            filtered[persona_name] = SeedFile(
+                persona=sf.persona,
+                version=sf.version,
+                rules=selected_rules,
+            )
+
+    return filtered
+
+
 def generate_gauntlet_prompt(
     target: str,
     personas: list[str] | None = None,
+    buildlog_dir: Path | None = None,
+    select_k: int | None = None,
 ) -> GauntletPromptResult:
     """Generate a review prompt combining gauntlet rules with target info.
 
@@ -3267,6 +3330,12 @@ def generate_gauntlet_prompt(
                 ),
             )
         seeds = filtered
+
+    # Rank/filter rules through the learning backend when select_k is set
+    total_before = sum(len(sf.rules) for sf in seeds.values())
+    if select_k is not None and buildlog_dir is not None:
+        seeds = select_gauntlet_rules(buildlog_dir, seeds, select_k)
+    total_after = sum(len(sf.rules) for sf in seeds.values())
 
     from buildlog.seeds import get_rule_id
 
@@ -3323,14 +3392,16 @@ def generate_gauntlet_prompt(
 
     formatted = "\n".join(lines)
 
+    msg = f"Generated prompt with {total_rules} rules from {len(seeds)} personas"
+    if select_k is not None and total_before > total_after:
+        msg += f" (selected {total_after}/{total_before} via learning backend)"
+
     return GauntletPromptResult(
         prompt=formatted,
         target=target,
         personas=list(seeds.keys()),
         total_rules=total_rules,
-        message=(
-            f"Generated prompt with {total_rules} rules" f" from {len(seeds)} personas"
-        ),
+        message=msg,
     )
 
 
@@ -3340,6 +3411,8 @@ def gauntlet_loop_config(
     max_iterations: int = 10,
     stop_at: str = "minors",
     auto_gh_issues: bool = False,
+    buildlog_dir: Path | None = None,
+    select_k: int | None = None,
 ) -> GauntletLoopConfigResult:
     """Generate gauntlet loop configuration for an agent.
 
@@ -3391,6 +3464,10 @@ def gauntlet_loop_config(
             return _empty
         seeds = filtered
 
+    # Rank/filter rules through the learning backend
+    if select_k is not None and buildlog_dir is not None:
+        seeds = select_gauntlet_rules(buildlog_dir, seeds, select_k)
+
     rules_by_persona: dict[str, list[dict]] = {}
     for name, sf in seeds.items():
         rules_by_persona[name] = [
@@ -3405,7 +3482,12 @@ def gauntlet_loop_config(
 
     rule_id_index = build_rule_id_index(seeds)
 
-    prompt_result = generate_gauntlet_prompt(target=target, personas=list(seeds.keys()))
+    prompt_result = generate_gauntlet_prompt(
+        target=target,
+        personas=list(seeds.keys()),
+        buildlog_dir=buildlog_dir,
+        select_k=select_k,
+    )
     prompt = prompt_result.prompt if not prompt_result.error else ""
 
     instructions = [

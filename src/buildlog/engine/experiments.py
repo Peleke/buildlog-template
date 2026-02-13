@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from buildlog.core.bandit import ThompsonSamplingBandit
+from buildlog.core.learning import get_learning_backend
 from buildlog.core.operations import (
     EndSessionResult,
     LogMistakeResult,
@@ -172,8 +172,7 @@ def start_session(
     selected_rules: list[str] = []
 
     if current_rules:
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit = get_learning_backend(buildlog_dir)
 
         selected_rules = bandit.select(
             candidates=current_rules,
@@ -314,8 +313,7 @@ def log_mistake(
 
     selected_rules = session_data.get("selected_rules", [])
     if selected_rules:
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit = get_learning_backend(buildlog_dir)
         context = session_data.get("error_class") or "general"
         bandit.batch_update(
             rule_ids=selected_rules,
@@ -394,8 +392,7 @@ def log_reward(
     backend.append_event(project_id, "rewards", event.to_dict())  # type: ignore[arg-type]
 
     if rules_active:
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit = get_learning_backend(buildlog_dir)
         bandit.batch_update(
             rule_ids=rules_active,
             reward=reward_value,
