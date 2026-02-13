@@ -9,15 +9,23 @@ Usage:
 from buildlog.core.bandit import (
     DEFAULT_CONTEXT,
     DEFAULT_SEED_BOOST,
+    BanditPersistence,
     BanditState,
     BetaParams,
+    JsonlPersistence,
+    SqlitePersistence,
     ThompsonSamplingBandit,
+    resolve_bandit_persistence,
 )
 
 __all__ = [
-    "ThompsonSamplingBandit",
-    "BetaParams",
+    "BanditPersistence",
     "BanditState",
+    "BetaParams",
+    "JsonlPersistence",
+    "SqlitePersistence",
+    "ThompsonSamplingBandit",
+    "resolve_bandit_persistence",
     "DEFAULT_SEED_BOOST",
     "DEFAULT_CONTEXT",
 ]

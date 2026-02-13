@@ -36,8 +36,11 @@ import pytest
 
 from buildlog.core.bandit import (
     DEFAULT_SEED_BOOST,
+    BanditPersistence,
     BanditState,
     BetaParams,
+    JsonlPersistence,
+    SqlitePersistence,
     ThompsonSamplingBandit,
 )
 
@@ -882,3 +885,189 @@ class TestThompsonSamplingIntuitions:
 
         # Bad arm should be selected < 20% of the time
         assert bad_count < 20
+
+
+# =============================================================================
+# BANDIT PERSISTENCE TESTS
+# =============================================================================
+
+
+@pytest.fixture
+def sqlite_backend():
+    """Create an in-memory SQLite backend for testing."""
+    import sqlite3
+
+    from buildlog.storage.sqlite import SQLiteBackend
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    backend = SQLiteBackend(conn)
+    backend.ensure_project("test-proj", "test", "/tmp/test")
+    return backend, "test-proj"
+
+
+class TestBanditPersistenceProtocol:
+    """Verify both implementations satisfy the BanditPersistence protocol."""
+
+    def test_jsonl_is_bandit_persistence(self, bandit_path):
+        persistence = JsonlPersistence(bandit_path)
+        assert isinstance(persistence, BanditPersistence)
+
+    def test_sqlite_is_bandit_persistence(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+        assert isinstance(persistence, BanditPersistence)
+
+
+class TestJsonlPersistence:
+    """Verify JsonlPersistence delegates correctly to BanditState."""
+
+    def test_name(self, bandit_path):
+        assert JsonlPersistence(bandit_path).name == "jsonl"
+
+    def test_roundtrip(self, bandit_path):
+        persistence = JsonlPersistence(bandit_path)
+        state = persistence.load()
+        state.set_params("ctx", "r1", BetaParams(alpha=5, beta=3), is_seed=True)
+        persistence.save(state)
+
+        loaded = persistence.load()
+        params = loaded.get_params("ctx", "r1")
+        assert params is not None
+        assert params.alpha == 5
+        assert params.beta == 3
+        assert loaded.is_seed("ctx", "r1") is True
+
+
+class TestSqlitePersistence:
+    """Verify SqlitePersistence round-trips through the SQLite backend."""
+
+    def test_name(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        assert SqlitePersistence(backend, project_id).name == "sqlite"
+
+    def test_empty_load(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+        state = persistence.load()
+        assert len(list(state.all_arms())) == 0
+
+    def test_save_and_load_roundtrip(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+
+        state = BanditState()
+        state.set_params("ctx1", "r1", BetaParams(alpha=5, beta=3), is_seed=True)
+        state.set_params("ctx2", "r2", BetaParams(alpha=2, beta=8), is_seed=False)
+        persistence.save(state)
+
+        loaded = persistence.load()
+        p1 = loaded.get_params("ctx1", "r1")
+        assert p1 is not None
+        assert p1.alpha == 5
+        assert p1.beta == 3
+        assert loaded.is_seed("ctx1", "r1") is True
+
+        p2 = loaded.get_params("ctx2", "r2")
+        assert p2 is not None
+        assert p2.alpha == 2
+        assert p2.beta == 8
+        assert loaded.is_seed("ctx2", "r2") is False
+
+    def test_append_update(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+
+        state = BanditState()
+        state.set_params("ctx", "r1", BetaParams(alpha=1, beta=1))
+        persistence.save(state)
+
+        # Update and append
+        state.get_params("ctx", "r1").update(reward=1.0)
+        persistence.append_update(state, "ctx", "r1")
+
+        # Verify the update persisted
+        loaded = persistence.load()
+        params = loaded.get_params("ctx", "r1")
+        assert params.alpha == 2.0
+        assert params.beta == 1.0
+
+    def test_append_update_nonexistent_is_noop(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+        state = BanditState()
+        # Should not raise
+        persistence.append_update(state, "ctx", "nonexistent")
+
+
+class TestBanditWithSqlitePersistence:
+    """Integration: ThompsonSamplingBandit with SqlitePersistence."""
+
+    def test_bandit_with_sqlite(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+        bandit = ThompsonSamplingBandit(persistence)
+
+        selected = bandit.select(
+            candidates=["r1", "r2", "r3"],
+            context="ctx",
+            k=2,
+            seed_rule_ids={"r1"},
+        )
+        assert len(selected) == 2
+
+        # Arms persisted in SQLite
+        loaded = persistence.load()
+        assert loaded.get_params("ctx", "r1") is not None
+        assert loaded.get_params("ctx", "r2") is not None
+        assert loaded.get_params("ctx", "r3") is not None
+
+    def test_state_path_is_none_with_persistence(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+        bandit = ThompsonSamplingBandit(persistence)
+        assert bandit.state_path is None
+
+    def test_state_path_preserved_with_path(self, bandit_path):
+        bandit = ThompsonSamplingBandit(bandit_path)
+        assert bandit.state_path == bandit_path
+
+    def test_update_persists_via_sqlite(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+        bandit = ThompsonSamplingBandit(persistence)
+
+        bandit.select(candidates=["r1"], context="ctx", k=1)
+        bandit.update("r1", reward=1.0, context="ctx")
+
+        # Create a fresh bandit from the same backend — should see the update
+        bandit2 = ThompsonSamplingBandit(SqlitePersistence(backend, project_id))
+        params = bandit2.state.get_params("ctx", "r1")
+        assert params is not None
+        assert params.alpha == 2.0  # 1 (prior) + 1 (success)
+
+    def test_reset_persists_via_sqlite(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+        bandit = ThompsonSamplingBandit(persistence)
+
+        bandit.select(candidates=["r1"], context="ctx", k=1)
+        bandit.reset()
+
+        bandit2 = ThompsonSamplingBandit(SqlitePersistence(backend, project_id))
+        assert bandit2.state.get_params("ctx", "r1") is None
+
+    def test_decay_persists_via_sqlite(self, sqlite_backend):
+        backend, project_id = sqlite_backend
+        persistence = SqlitePersistence(backend, project_id)
+        bandit = ThompsonSamplingBandit(persistence)
+
+        bandit.state.set_params("ctx", "r1", BetaParams(alpha=5.0, beta=3.0))
+        persistence.save(bandit.state)
+
+        bandit.decay_arm("r1", decay_factor=0.5, context="ctx")
+
+        bandit2 = ThompsonSamplingBandit(SqlitePersistence(backend, project_id))
+        params = bandit2.state.get_params("ctx", "r1")
+        assert params.alpha == 3.0
+        assert params.beta == 2.0

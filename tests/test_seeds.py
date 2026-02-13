@@ -744,7 +744,11 @@ class TestImportSeedFile:
 
     def test_import_triggers_bandit_decay(self, tmp_path: Path):
         """Should actually decay bandit arms when version changes."""
-        from buildlog.core.bandit import BetaParams, ThompsonSamplingBandit
+        from buildlog.core.bandit import (
+            BetaParams,
+            ThompsonSamplingBandit,
+            resolve_bandit_persistence,
+        )
         from buildlog.skills import _generate_skill_id
 
         target_dir = tmp_path / "seeds"
@@ -756,11 +760,11 @@ class TestImportSeedFile:
         category = "security"
         skill_id = _generate_skill_id(category, rule_text)
 
-        # Pre-populate bandit with learned signal for this rule
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        # Pre-populate bandit through the resolved persistence (SQLite or JSONL)
+        persistence = resolve_bandit_persistence(buildlog_dir)
+        bandit = ThompsonSamplingBandit(persistence)
         bandit.state.set_params("default", skill_id, BetaParams(alpha=5.0, beta=3.0))
-        bandit.state.save(bandit_path)
+        persistence.save(bandit.state)
 
         # Verify pre-decay state
         pre_params = bandit.state.get_params("default", skill_id)
@@ -800,7 +804,8 @@ class TestImportSeedFile:
         assert result.decayed_rules == 1
 
         # Verify the bandit arm was actually decayed by re-loading
-        bandit2 = ThompsonSamplingBandit(bandit_path)
+        persistence2 = resolve_bandit_persistence(buildlog_dir)
+        bandit2 = ThompsonSamplingBandit(persistence2)
         post_params = bandit2.state.get_params("default", skill_id)
         # new_alpha = 1.0 + (5.0 - 1.0) * 0.5 = 3.0
         assert post_params.alpha == 3.0
