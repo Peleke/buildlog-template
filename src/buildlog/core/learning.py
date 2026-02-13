@@ -95,7 +95,7 @@ class BuiltinBandit:
 
     @property
     def backend_name(self) -> str:
-        return "jsonl"
+        return self._bandit._persistence.name
 
     def select(
         self,
@@ -345,9 +345,9 @@ def get_learning_backend(
         learner = Learner(config)
         return QortexLearner(learner)  # type: ignore[return-value]
 
-    # Default: builtin
-    from buildlog.core.bandit import ThompsonSamplingBandit
+    # Default: builtin — use SQLite if available, else JSONL
+    from buildlog.core.bandit import ThompsonSamplingBandit, resolve_bandit_persistence
 
-    state_path = buildlog_dir / "bandit_state.jsonl"
-    bandit = ThompsonSamplingBandit(state_path, seed_boost, default_context)
+    persistence = resolve_bandit_persistence(buildlog_dir)
+    bandit = ThompsonSamplingBandit(persistence, seed_boost, default_context)
     return BuiltinBandit(bandit)  # type: ignore[return-value]

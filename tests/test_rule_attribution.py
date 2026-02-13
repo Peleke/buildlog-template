@@ -460,7 +460,10 @@ class TestGauntletProcessIssuesBanditCredit:
         return buildlog_dir
 
     def test_bandit_updated_for_credited_rules(self, tmp_path):
-        from buildlog.core.bandit import ThompsonSamplingBandit
+        from buildlog.core.bandit import (
+            ThompsonSamplingBandit,
+            resolve_bandit_persistence,
+        )
         from buildlog.core.operations import gauntlet_process_issues
 
         buildlog_dir = self._setup_buildlog(tmp_path)
@@ -483,13 +486,18 @@ class TestGauntletProcessIssuesBanditCredit:
 
         # Verify bandit state was updated
         # Context is None → "general" (shared pool for all gauntlet rules)
-        bandit = ThompsonSamplingBandit(buildlog_dir / "bandit_state.jsonl")
+        persistence = resolve_bandit_persistence(buildlog_dir)
+        bandit = ThompsonSamplingBandit(persistence)
         params = bandit.state.get_params("general", "karen:rule:0")
         assert params is not None
         # After reward=1.0: alpha should be > 1.0 (prior is 1.0)
         assert params.alpha > 1.0
 
     def test_no_bandit_update_without_citations(self, tmp_path):
+        from buildlog.core.bandit import (
+            ThompsonSamplingBandit,
+            resolve_bandit_persistence,
+        )
         from buildlog.core.operations import gauntlet_process_issues
 
         buildlog_dir = self._setup_buildlog(tmp_path)
@@ -504,9 +512,10 @@ class TestGauntletProcessIssuesBanditCredit:
 
         gauntlet_process_issues(buildlog_dir, issues, iteration=1)
 
-        # Bandit state file should not exist (no updates)
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        assert not bandit_path.exists()
+        # Bandit should have no arms (no updates happened)
+        persistence = resolve_bandit_persistence(buildlog_dir)
+        bandit = ThompsonSamplingBandit(persistence)
+        assert len(list(bandit.state.all_arms())) == 0
 
     def test_bandit_failure_doesnt_break_loop(self, tmp_path):
         from buildlog.core.operations import gauntlet_process_issues
@@ -522,8 +531,8 @@ class TestGauntletProcessIssuesBanditCredit:
             },
         ]
 
-        with patch("buildlog.core.bandit.ThompsonSamplingBandit") as mock_bandit_cls:
-            mock_bandit_cls.side_effect = RuntimeError("bandit broken")
+        with patch("buildlog.core.learning.get_learning_backend") as mock_factory:
+            mock_factory.side_effect = RuntimeError("bandit broken")
             result = gauntlet_process_issues(
                 buildlog_dir,
                 issues,
