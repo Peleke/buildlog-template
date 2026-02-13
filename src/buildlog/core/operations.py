@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from buildlog.confidence import ConfidenceMetrics, merge_confidence_metrics
-from buildlog.core.bandit import ThompsonSamplingBandit
+from buildlog.core.learning import get_learning_backend
 from buildlog.render import get_renderer
 from buildlog.skills import Skill, SkillSet, generate_skills
 from buildlog.storage import StorageBackend, get_backend
@@ -1131,8 +1131,7 @@ def log_reward(
     # =========================================================================
 
     if rules_active:
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit = get_learning_backend(buildlog_dir)
 
         bandit.batch_update(
             rule_ids=rules_active,
@@ -1792,8 +1791,7 @@ def start_session(
 
     if current_rules:
         # Initialize bandit
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit = get_learning_backend(buildlog_dir)
 
         # Identify seed rules (those with persona_tags from gauntlet)
         # Seeds get boosted priors - we believe curated rules are good
@@ -2014,8 +2012,7 @@ def log_mistake(
 
     selected_rules = session_data.get("selected_rules", [])
     if selected_rules:
-        bandit_path = buildlog_dir / "bandit_state.jsonl"
-        bandit = ThompsonSamplingBandit(bandit_path)
+        bandit = get_learning_backend(buildlog_dir)
 
         # Use session's error_class as context, not the mistake's
         # (they should match, but session context is authoritative)
@@ -2203,8 +2200,7 @@ def get_bandit_status(
             - contexts: Per-context rule rankings
             - top_rules: Top rules by expected value per context
     """
-    bandit_path = buildlog_dir / "bandit_state.jsonl"
-    bandit = ThompsonSamplingBandit(bandit_path)
+    bandit = get_learning_backend(buildlog_dir)
 
     stats = bandit.get_stats(context)
 
@@ -2240,7 +2236,7 @@ def get_bandit_status(
             "total_contexts": len(contexts),
             "total_arms": total_arms,
             "total_observations": total_observations,
-            "state_file": str(bandit_path),
+            "backend": bandit.backend_name,
         },
         "top_rules": top_rules,
         "all_rules": contexts if context else None,  # Only include all if filtering
@@ -2397,9 +2393,7 @@ def gauntlet_process_issues(
     # --- Bandit update with per-rule credit (Touch 3) ---
     if credited_rules:
         try:
-            from buildlog.core.bandit import ThompsonSamplingBandit
-
-            bandit = ThompsonSamplingBandit(buildlog_dir / "bandit_state.jsonl")
+            bandit = get_learning_backend(buildlog_dir)
             # Derive context from issue categories for segmentation
             categories = {
                 i.get("category", "general") for i in issues if i.get("rules_consulted")
