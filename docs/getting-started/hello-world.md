@@ -1,8 +1,6 @@
-# Hello World: Your First Promoted Rule
+# Hello World
 
-This walkthrough takes you from zero to a promoted rule in a real project. Every command is real. Every output is realistic. By the end, you'll have buildlog capturing work, extracting patterns, and writing rules into your agent's instruction file.
-
-Time: ~15 minutes.
+This walkthrough takes you from zero to a promoted rule in a real project. The commands and outputs below reflect a typical first run. By the end, you'll have buildlog extracting patterns from your work and writing rules into your agent's instruction file. It takes about 15 minutes.
 
 ## Prerequisites
 
@@ -123,7 +121,7 @@ workflow:
   wf-f6g7h8i9j0  Create a buildlog entry at the start of each work session  (freq: 1, confidence: low)
 ```
 
-Each skill gets a stable ID (e.g., `arch-a1b2c3d4e5`) based on its category and rule text. The ID is deterministic -- same input always produces the same ID.
+Each skill gets a stable ID (e.g., `arch-a1b2c3d4e5`) based on its category and rule text. The ID is deterministic. The same input always produces the same ID.
 
 ## Step 6: Check what's pending
 
@@ -152,7 +150,7 @@ Pending skills (not yet promoted or rejected):
 
 ## Step 7: Promote a rule
 
-This is the payoff. Promoting writes the rule into the file your agent reads.
+Promoting writes the rule into the file your agent reads.
 
 ```bash
 buildlog promote arch-a1b2c3d4e5 wf-f6g7h8i9j0 --target claude_md
@@ -182,7 +180,7 @@ Open your `CLAUDE.md`. You'll see a new section:
 <!-- buildlog:rules:end -->
 ```
 
-Claude Code reads this file at session start. Your agent now has rules derived from your actual work, not generic best practices.
+Claude Code reads this file at session start. Your agent now has rules derived from your project history.
 
 ## Step 8: Close the loop (optional but important)
 
@@ -228,24 +226,14 @@ After your work is reviewed and accepted:
 buildlog log-reward --outcome accepted
 ```
 
-This positive signal updates the Thompson Sampling bandit. Rules that were active during successful sessions get credit. Over time, the system learns which rules actually reduce mistakes.
+The `accepted` outcome updates the Thompson Sampling bandit. Rules that were active during successful sessions get credit. Over time, the system learns which rules reduce mistakes.
 
-## What just happened
-
-1. You created a structured entry documenting your work
-2. The extraction pipeline pulled patterns from it
-3. Those patterns became skills with stable IDs
-4. You promoted skills to your agent's instruction file
-5. Your agent now uses those rules in every session
-6. The experiment system tracks whether the rules help
-7. Reward signals update the bandit's beliefs about rule effectiveness
-
-This is the full loop: capture, extract, promote, measure, learn. Each iteration makes the system more accurate about which rules matter for your specific workflow.
+You now have a working pipeline from journal entry to promoted rule, with experiment tracking to measure whether the rules help.
 
 ## Next steps
 
 - **Run the gauntlet**: `buildlog gauntlet-loop --target src/` runs curated reviewer personas against your code and extracts rules from the findings
-- **Add more entries**: The system gets better with more data. Document mistakes -- they're the most valuable signal.
+- **Add more entries**: The system gets better with more data. Document mistakes, since they produce the most actionable rules.
 - **Check the bandit**: `buildlog bandit-status` shows which rules the system thinks are effective and how confident it is
 - **Read [Core Concepts](concepts.md)** for the theory behind RMR and Thompson Sampling
 - **Read [MCP Integration](../guides/mcp-integration.md)** if you want Claude to run the loop automatically

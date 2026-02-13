@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Real problems, real fixes. Each section has a symptom, likely cause, and what to do about it.
+Each section below has a symptom, likely cause, and fix.
 
 ---
 
@@ -48,7 +48,7 @@ claude mcp list
 buildlog mcp-test
 ```
 
-This invokes the MCP server directly and lists all 34 tools. If it errors, the problem is in the server itself.
+This invokes the MCP server directly and lists all 34 tools. If it errors, the problem is in the server.
 
 **Fixes:**
 
@@ -172,7 +172,7 @@ buildlog promote arch-a1b2c3d4e5 --target claude_md
 
 **Symptom:** Every experiment report shows Repeated Mistake Rate at 100%.
 
-**Cause:** Every mistake you're logging matches a prior mistake. This could mean:
+**Cause:** Every mistake you're logging matches a prior mistake. Possible causes:
 
 1. **Error classes are too broad.** If every mistake uses the same error class (e.g., `"bug"`), they'll all match each other. Use specific error classes:
    ```bash
@@ -184,7 +184,7 @@ buildlog promote arch-a1b2c3d4e5 --target claude_md
    buildlog experiment log-mistake --error-class "missing-test" --description "..."
    ```
 
-2. **You're actually repeating the same mistakes.** This is valid data. The system is telling you the rules aren't working yet. Log reward signals and let the bandit adapt.
+2. **You're actually repeating the same mistakes.** The high RMR means the current rules haven't prevented those mistakes yet. Log reward signals and let the bandit adapt.
 
 ### Experiment RMR is always 0%
 
@@ -212,7 +212,7 @@ buildlog experiment report
 
 **Symptom:** `buildlog experiment start` selects the same rules every time.
 
-**Cause:** Seed rules start with boosted priors (`Beta(3, 1)` by default). With few observations, the boosted rules will dominate because their distributions are concentrated at higher values. Thompson Sampling needs data to differentiate.
+**Cause:** Seed rules start with boosted priors. With few observations, the boosted rules dominate because their distributions are concentrated at higher values. Thompson Sampling needs data to differentiate.
 
 **Fix:** Log more feedback. The system needs reward signals to update posteriors:
 ```bash
@@ -220,7 +220,7 @@ buildlog log-reward --outcome accepted --rules-active arch-a1b2c3d4e5
 buildlog log-reward --outcome rejected --rules-active wf-f6g7h8i9j0
 ```
 
-After ~20 observations per context, you'll see meaningful differentiation. This is by design -- the system is deliberately conservative with limited data.
+After ~20 observations per context, you'll see meaningful differentiation. The system is deliberately conservative with limited data to avoid discarding rules prematurely.
 
 ### `buildlog bandit-status` shows empty state
 
@@ -269,9 +269,9 @@ export BUILDLOG_LEARNING_BACKEND=Qortex    # wrong - case sensitive
 
 **Symptom:** You switched from builtin to qortex (or back) and the bandit starts fresh.
 
-**Cause:** This is expected behavior. Each backend stores state independently. Switching backends starts with fresh priors on the new backend. Your old state is preserved and will be used if you switch back.
+**Cause:** Each backend stores state independently. Switching backends starts with fresh priors on the new backend. Your old state is preserved and will be used if you switch back.
 
-**Fix:** If this is a problem, don't switch backends. Pick one and stick with it. If you're early in your usage (few observations), a fresh start is fine -- the bandit converges quickly.
+**Fix:** If this is a problem, pick one backend and stay with it. If you're early in your usage (few observations), the fresh start has minimal impact.
 
 ---
 
@@ -356,7 +356,7 @@ The error message tells you exactly what went wrong. Common issues:
 
 1. **Already migrated.** Legacy files are renamed to `*.migrated` after migration. Check if your files already have this suffix.
 
-2. **No legacy files exist.** If you're on a fresh install, there's nothing to migrate -- the global SQLite database was created automatically.
+2. **No legacy files exist.** If you're on a fresh install, there's nothing to migrate. The global SQLite database was created automatically.
 
 3. **Wrong directory.** `buildlog migrate` looks for `.buildlog/` inside the `buildlog/` directory. Make sure you're in the project root:
    ```bash
@@ -420,7 +420,7 @@ pip install --force-reinstall buildlog
 
 **Symptom:** The gauntlet keeps finding issues iteration after iteration.
 
-**Cause:** This is usually legitimate -- the code has real issues. But it can also happen if:
+**Cause:** The code may have issues that require multiple iterations to resolve. It can also happen if:
 
 1. **Fixes introduce new issues.** Each fix is itself code that gets reviewed on the next iteration.
 2. **max_iterations is too low.** The default is 10, which should be plenty.
@@ -471,7 +471,7 @@ git status
 
 **Symptom:** `git commit` on the main branch is rejected.
 
-**Cause:** buildlog's pre-commit hook prevents direct commits to main. This is intentional -- the workflow requires branching.
+**Cause:** buildlog's pre-commit hook prevents direct commits to main. The enforced workflow requires branching.
 
 **Fix:** Create a branch:
 ```bash
@@ -520,4 +520,4 @@ For each failure:
 buildlog init --defaults
 ```
 
-Or ignore it. In global mode, buildlog tools work without initialization -- they just return empty state. You only need `buildlog init` if you want to create journal entries in this project.
+Or ignore it. In global mode, buildlog tools work without initialization and return empty state. You only need `buildlog init` if you want to create journal entries in this project.

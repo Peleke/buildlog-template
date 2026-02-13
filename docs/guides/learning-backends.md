@@ -1,6 +1,6 @@
 # Learning Backends
 
-buildlog uses Thompson Sampling to decide which rules to surface in your agent's instruction set. The learning backend is the component that runs the bandit: it tracks Beta distributions per rule, samples to select, and updates posteriors from feedback.
+buildlog uses Thompson Sampling to decide which rules to surface in your agent's instruction set. The learning backend is the component that runs the bandit. It tracks Beta distributions per rule, samples from them during selection, and updates posteriors from feedback.
 
 There are two backends. You pick one.
 
@@ -9,16 +9,16 @@ There are two backends. You pick one.
 **Start here:**
 
 1. Are you using qortex as a knowledge graph elsewhere in your stack?
-    - **No** -- use `builtin`. Done.
-    - **Yes** -- continue.
+    - **No.** Use `builtin`. Done.
+    - **Yes.** Continue.
 
 2. Do you need credit propagation from qortex's learning layer (e.g., shared bandits across multiple consumers)?
-    - **No** -- use `builtin`. It's simpler and has zero extra dependencies.
-    - **Yes** -- use `qortex`.
+    - **No.** Use `builtin`. It's simpler and has zero extra dependencies.
+    - **Yes.** Use `qortex`.
 
 3. Are you on Python 3.11+?
-    - **No** -- use `builtin`. qortex requires 3.11+.
-    - **Yes** -- use `qortex`.
+    - **No.** Use `builtin`. qortex requires 3.11+.
+    - **Yes.** Use `qortex`.
 
 If you're unsure, use `builtin`. It's the default, it's fast, it works, and you can switch later without losing data.
 
@@ -28,10 +28,10 @@ The builtin backend wraps `ThompsonSamplingBandit`, which ships with buildlog. Z
 
 ### How it works
 
-- **State storage**: Uses the global SQLite database at `~/.buildlog/buildlog.db` (or legacy JSONL files as fallback)
-- **Persistence**: SQLite persistence is preferred. Falls back to append-only JSONL with compaction on load.
-- **Priors**: Seed rules (from gauntlet personas) start with boosted priors -- `Beta(3, 1)` by default, meaning the system assumes curated rules are likely effective. Non-seed rules start with `Beta(1, 1)` (uniform, maximum uncertainty).
-- **Context**: Error class strings (e.g., `"type-errors"`, `"missing-test"`) partition the bandit state space. A rule can be great for type errors and useless for API design -- separate distributions per context let the system learn this.
+- State is stored in the global SQLite database at `~/.buildlog/buildlog.db`, with legacy JSONL files as fallback.
+- SQLite persistence is preferred. Falls back to append-only JSONL with compaction on load.
+- Seed rules (from gauntlet personas) start with boosted priors of `Beta(3, 1)`, reflecting the expectation that curated rules are more likely to be effective. Non-seed rules start with `Beta(1, 1)` (uniform, maximum uncertainty).
+- Error class strings (e.g., `"type-errors"`, `"missing-test"`) partition the bandit state space. A rule can be great for type errors and useless for API design. Separate distributions per context let the system learn this.
 
 ### Setup
 
@@ -130,7 +130,7 @@ Contexts: 2
 
 The `Backend: qortex` line confirms the qortex backend is active.
 
-### What changes
+### Behavioral differences
 
 The qortex backend is API-compatible with builtin. All MCP tools, CLI commands, and workflows work identically. The differences are internal:
 
@@ -153,18 +153,18 @@ buildlog uses string contexts (error class names like `"type-errors"`). qortex u
 # qortex receives: learner.select(arms, context={"error_class": "type-errors"})
 ```
 
-You don't need to do anything -- the translation is handled by the `QortexLearner` adapter.
+You don't need to do anything. The translation is handled by the `QortexLearner` adapter.
 
 ## Switching backends
 
 You can switch between backends at any time. The bandit state is stored independently per backend, so:
 
-- **builtin -> qortex**: The qortex backend starts with fresh priors. Your builtin state is preserved in SQLite and will be used again if you switch back.
-- **qortex -> builtin**: The builtin backend loads its last saved state from SQLite. Any learning that happened in qortex stays in qortex's store.
+- **builtin to qortex**: The qortex backend starts with fresh priors. Your builtin state is preserved in SQLite and will be used again if you switch back.
+- **qortex to builtin**: The builtin backend loads its last saved state from SQLite. Learning that happened in qortex stays in qortex's store.
 
-State is not migrated between backends. This is intentional -- the backends may have different prior structures, and blind migration could produce invalid distributions.
+State is not migrated between backends because the backends may have different prior structures. Blind migration could produce invalid distributions.
 
-If you need continuity, stay on one backend. If you're switching early (before significant learning has accumulated), the fresh start is fine -- the bandit converges quickly with active use.
+If you need continuity, stay on one backend. If you're switching early (before significant learning has accumulated), the fresh start has minimal impact since there is little state to lose.
 
 ## Fallback behavior
 
@@ -185,9 +185,9 @@ This is a hard error, not a fallback. If you set the backend to qortex, buildlog
 
 ## Performance notes
 
-Both backends are fast enough that you won't notice them in normal use. The bottleneck in buildlog is always I/O (reading entries, writing files), not bandit computation.
+Both backends are fast enough that you won't notice them in normal use. The bottleneck in buildlog is typically I/O (reading entries, writing files), not bandit computation.
 
 - **builtin**: Selection is O(n) where n is the number of candidate rules. Sampling from a Beta distribution is a single `random.betavariate()` call. Updates are O(1) with an append to SQLite.
-- **qortex**: Similar complexity, with additional overhead for context dict construction and qortex's internal bookkeeping. Negligible in practice.
+- **qortex**: Similar complexity, with additional overhead for context dict construction and qortex's internal bookkeeping. The difference is typically under 1ms.
 
 For reference, selecting from 100 candidate rules takes <1ms on either backend.
