@@ -16,7 +16,7 @@
 
 > **RE: The art.** Yes, it's AI-generated. Yes, that's hypocritical for a project about rigor over vibes. Looking for an actual artist to pay for a real logo. If you know someone good, [open an issue](https://github.com/Peleke/buildlog-template/issues) or DM me. Budget exists.
 
-**[Read the full documentation](https://peleke.github.io/buildlog-template/)**
+**[Read the full documentation](https://peleke.github.io/buildlog-template/)** | **[Landing page](https://launchpad-git-buildlog-kwayet-fs-projects.vercel.app)**
 
 </div>
 
@@ -92,7 +92,7 @@ buildlog experiment report
 
 ## Current Limits
 
-This is v0.13, not the end state.
+This is v0.15, not the end state.
 
 - **Extraction quality is uneven.** Regex extractors miss nuance; LLM extractors are accurate but expensive. The middle ground is still being found.
 - **Feedback signals are coarse.** Repeated Mistake Rate works but requires manual tagging. Richer automatic signals (test outcomes, review results, revision distance) are on the roadmap.
@@ -102,11 +102,12 @@ This is v0.13, not the end state.
 
 ### What's next
 
-Three layers building on the global SQLite backend:
+Two layers building on the global SQLite backend and qortex integration:
 
-1. **Embedding persistence** (sqlite-vec) — persist rule embeddings, replace pairwise dedup with KNN search
-2. **Cross-project convergence** — detect rules independently rediscovered across projects, track salience
-3. **Emergent rule graphs** — cluster embeddings into concept nodes, derive edges from co-occurrence and bandit correlation, contextual bandits with embedding-space context vectors (LinUCB)
+1. **Cross-project convergence** — detect rules independently rediscovered across projects, track salience
+2. **Emergent rule graphs** — cluster embeddings into concept nodes, derive edges from co-occurrence and bandit correlation, contextual bandits with embedding-space context vectors (LinUCB)
+
+Embedding persistence via sqlite-vec is already available through the qortex learning backend.
 
 See the [full roadmap](https://peleke.github.io/buildlog-template/roadmap/) for details.
 
