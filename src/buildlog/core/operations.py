@@ -116,6 +116,9 @@ class StatusResult:
     promotable_ids: list[str]
     """IDs of high-confidence skills ready for promotion."""
 
+    message: str = ""
+    """Human-readable summary."""
+
     error: str | None = None
     """Error message if operation failed."""
 
@@ -153,6 +156,9 @@ class RejectResult:
     total_rejected: int
     """Total number of rejected skills."""
 
+    message: str = ""
+    """Human-readable summary."""
+
     error: str | None = None
     """Error message if operation failed."""
 
@@ -172,6 +178,9 @@ class DiffResult:
 
     already_rejected: int
     """Number of previously rejected skills."""
+
+    message: str = ""
+    """Human-readable summary."""
 
     error: str | None = None
     """Error message if operation failed."""
@@ -591,12 +600,16 @@ def status(
     # Calculate actual total (sum of by_confidence, which excludes rejected)
     actual_total = sum(by_confidence.values())
 
+    parts = [f"{actual_total} skills from {skill_set.source_entries} entries"]
+    if promotable:
+        parts.append(f"{len(promotable)} ready to promote")
     return StatusResult(
         skills=filtered,
         total_entries=skill_set.source_entries,
         total_skills=actual_total,
         by_confidence=by_confidence,
         promotable_ids=promotable,
+        message=" | ".join(parts),
     )
 
 
@@ -688,6 +701,7 @@ def reject(
         return RejectResult(
             rejected_ids=[],
             total_rejected=0,
+            message="No skill IDs provided",
             error="No skill IDs provided",
         )
 
@@ -713,6 +727,7 @@ def reject(
     return RejectResult(
         rejected_ids=newly_rejected,
         total_rejected=len(existing_ids),
+        message=f"Rejected {len(newly_rejected)} skill(s), {len(existing_ids)} total rejected",
     )
 
 
@@ -733,6 +748,7 @@ def diff(
             total_pending=0,
             already_promoted=0,
             already_rejected=0,
+            message="No buildlog directory found",
             error=f"No buildlog directory found at {buildlog_dir}",
         )
 
@@ -762,6 +778,7 @@ def diff(
         total_pending=total_pending,
         already_promoted=len(promoted_ids),
         already_rejected=len(rejected_ids),
+        message=f"{total_pending} pending | {len(promoted_ids)} promoted | {len(rejected_ids)} rejected",
     )
 
 
@@ -2231,6 +2248,24 @@ def get_bandit_status(
         for rule in rules
     )
 
+    # Health: count arms with narrow confidence intervals (converging)
+    converging = 0
+    ci_threshold = 0.2  # CI width below which an arm is "converging"
+    for rules in contexts.values():
+        for rule in rules:
+            ci = rule.get("confidence_interval")
+            if ci and (ci[1] - ci[0]) < ci_threshold:
+                converging += 1
+
+    # Human-readable health summary
+    if total_observations == 0:
+        health = "no observations yet"
+    else:
+        parts = [f"{total_observations} obs across {total_arms} arms"]
+        if converging:
+            parts.append(f"{converging} converging")
+        health = " | ".join(parts)
+
     return {
         "summary": {
             "total_contexts": len(contexts),
@@ -2238,6 +2273,7 @@ def get_bandit_status(
             "total_observations": total_observations,
             "backend": bandit.backend_name,
         },
+        "message": health,
         "top_rules": top_rules,
         "all_rules": contexts if context else None,  # Only include all if filtering
     }
@@ -2577,6 +2613,7 @@ class GauntletRulesResult:
     format: str
     total_rules: int
     personas: list[str]
+    message: str = ""
     error: str | None = None
 
 
@@ -2590,6 +2627,7 @@ class OverviewResult:
     render_targets: list[str]
     workflow_ok: bool = True
     workflow_issues: list[str] | None = None
+    message: str = ""
 
 
 @dataclass
@@ -2635,6 +2673,7 @@ def get_gauntlet_rules(
             format=format,
             total_rules=0,
             personas=[],
+            message="No seed files found",
             error="No seed files found. Check your buildlog installation.",
         )
 
@@ -2645,6 +2684,7 @@ def get_gauntlet_rules(
             format=format,
             total_rules=0,
             personas=[],
+            message="No seed files found",
             error="No seed files found in seeds directory.",
         )
 
@@ -2657,6 +2697,7 @@ def get_gauntlet_rules(
                 format=format,
                 total_rules=0,
                 personas=[],
+                message=f"Unknown persona: {persona}",
                 error=f"Unknown persona: {persona}. Available: {available}",
             )
         seeds = {persona: seeds[persona]}
@@ -2712,6 +2753,7 @@ def get_gauntlet_rules(
         format=format,
         total_rules=total_rules,
         personas=list(seeds.keys()),
+        message=f"{total_rules} rules across {len(seeds)} persona(s)",
     )
 
 
@@ -2792,6 +2834,8 @@ def get_overview(
     if active_data is not None:
         active_session = active_data.get("id")
 
+    pending_count = total_skills - promoted_count - rejected_count
+    session_note = f" | session: {active_session}" if active_session else ""
     return OverviewResult(
         entries=len(entries),
         skills={
@@ -2799,10 +2843,11 @@ def get_overview(
             "by_confidence": by_confidence,
             "promoted": promoted_count,
             "rejected": rejected_count,
-            "pending": total_skills - promoted_count - rejected_count,
+            "pending": pending_count,
         },
         active_session=active_session,
         render_targets=list(RENDERERS.keys()),
+        message=f"{len(entries)} entries, {total_skills} skills ({pending_count} pending){session_note}",
         **_quick_workflow_check(buildlog_dir),
     )
 
@@ -3597,6 +3642,7 @@ class VerifyResult:
     failed: list[VerifyCheck]
     ok: bool
     summary: str
+    message: str = ""
 
 
 def gauntlet_generate(
@@ -4181,4 +4227,5 @@ def verify_workflow(
         failed=failed,
         ok=ok,
         summary=summary,
+        message=summary,
     )
