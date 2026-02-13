@@ -38,6 +38,16 @@ from buildlog.core import (
 )
 
 
+def _ensure_message(d: dict) -> dict:
+    """Ensure the result dict has a non-empty ``message`` for MCP display.
+
+    Falls back to ``error`` when ``message`` is empty/missing.
+    """
+    if not d.get("message") and d.get("error"):
+        d["message"] = d["error"]
+    return d
+
+
 def _project_root(buildlog_dir: str) -> Path:
     """Derive the project root from the buildlog directory path.
 
@@ -135,7 +145,7 @@ def buildlog_status(
         Dictionary with skills by category and summary statistics
     """
     result = status(Path(buildlog_dir), min_confidence)
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_promote(
@@ -158,7 +168,7 @@ def buildlog_promote(
     """
     validated_ids = _validate_skill_ids(skill_ids)
     result = promote(Path(buildlog_dir), validated_ids, target)
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_reject(
@@ -178,7 +188,7 @@ def buildlog_reject(
     """
     validated_ids = _validate_skill_ids(skill_ids)
     result = reject(Path(buildlog_dir), validated_ids)
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_diff(
@@ -195,7 +205,7 @@ def buildlog_diff(
         Dictionary with pending skills and counts
     """
     result = diff(Path(buildlog_dir))
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_learn_from_review(
@@ -259,7 +269,7 @@ def buildlog_learn_from_review(
         }
 
     result = learn_from_review(Path(buildlog_dir), resolved, source)
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_log_reward(
@@ -327,7 +337,7 @@ def buildlog_log_reward(
         source="mcp",
         session_id=session_id,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_rewards(
@@ -413,7 +423,7 @@ def buildlog_experiment_start(
         notes=notes,
         select_k=select_k,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_experiment_end(
@@ -445,7 +455,7 @@ def buildlog_experiment_end(
         entry_file=entry_file,
         notes=notes,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_log_mistake(
@@ -501,7 +511,7 @@ def buildlog_log_mistake(
         context=context,
         severity=severity,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_experiment_metrics(
@@ -528,7 +538,7 @@ def buildlog_experiment_metrics(
         Path(buildlog_dir),
         session_id=session_id,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_experiment_report(
@@ -684,7 +694,7 @@ def buildlog_gauntlet_issues(
         source=source,
         valid_rule_ids=set(valid_rule_ids) if valid_rule_ids else None,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_gauntlet_accept_risk(
@@ -746,7 +756,7 @@ def buildlog_gauntlet_accept_risk(
         repo=repo,
         cwd=str(_project_root(buildlog_dir)) if buildlog_dir else None,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 # -----------------------------------------------------------------------------
@@ -773,7 +783,7 @@ def buildlog_gauntlet_rules(
         Dict with formatted rules, total_rules, personas list
     """
     result = get_gauntlet_rules(persona=persona, format=format)
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_overview(
@@ -790,7 +800,7 @@ def buildlog_overview(
         Dict with entries, skills, active_session, render_targets
     """
     result = get_overview(Path(buildlog_dir))
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_entry_new(
@@ -822,7 +832,7 @@ def buildlog_entry_new(
         entry_date=entry_date,
         quick=quick,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_entry_list(
@@ -839,7 +849,7 @@ def buildlog_entry_list(
         Dict with entries list [{name, title}], count, message
     """
     result = list_entries(Path(buildlog_dir))
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 # =============================================================================
@@ -881,7 +891,7 @@ def buildlog_commit(
         no_entry=no_entry,
         cwd=str(_project_root(buildlog_dir)),
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_gauntlet_prompt(
@@ -911,7 +921,7 @@ def buildlog_gauntlet_prompt(
         buildlog_dir=Path(buildlog_dir) if select_k is not None else None,
         select_k=select_k,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_gauntlet_loop(
@@ -970,7 +980,7 @@ def buildlog_gauntlet_loop(
         rule_id_index = d.pop("rule_id_index", {})
         d["valid_rule_ids"] = sorted(rule_id_index.keys())
 
-    return d
+    return _ensure_message(d)
 
 
 # =============================================================================
@@ -1261,7 +1271,7 @@ def buildlog_gauntlet_generate(
         output_dir=out,
         dry_run=dry_run,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_migrate(
@@ -1344,7 +1354,7 @@ def buildlog_import_seed(
             target_dir=resolved_target,
             buildlog_dir=Path(buildlog_dir),
         )
-        return asdict(result)
+        return _ensure_message(asdict(result))
     except (FileNotFoundError, ValueError) as e:
         return {
             "persona": "",
@@ -1486,7 +1496,7 @@ def buildlog_init(
         no_claude_md=no_claude_md,
         no_mcp=no_mcp,
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_update(
@@ -1504,7 +1514,7 @@ def buildlog_update(
         Dict with updated, message, error
     """
     result = update_buildlog(project_dir=Path(project_dir).resolve())
-    return asdict(result)
+    return _ensure_message(asdict(result))
 
 
 def buildlog_verify(
@@ -1531,4 +1541,4 @@ def buildlog_verify(
         project_dir=project_dir,
         buildlog_dir=Path(buildlog_dir).resolve(),
     )
-    return asdict(result)
+    return _ensure_message(asdict(result))
