@@ -76,12 +76,19 @@ import random
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
+from typing import TYPE_CHECKING, Iterator, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from buildlog.storage.base import StorageBackend
 
 __all__ = [
     "BetaParams",
     "BanditState",
+    "BanditPersistence",
+    "JsonlPersistence",
+    "SqlitePersistence",
     "ThompsonSamplingBandit",
+    "resolve_bandit_persistence",
     "DEFAULT_SEED_BOOST",
     "DEFAULT_CONTEXT",
     "DEFAULT_DECAY_FACTOR",
@@ -407,6 +414,120 @@ class BanditState:
 
 
 # ============================================================================
+# BANDIT PERSISTENCE PROTOCOL
+# ============================================================================
+
+
+@runtime_checkable
+class BanditPersistence(Protocol):
+    """Protocol for pluggable bandit state persistence.
+
+    Abstracts I/O so ThompsonSamplingBandit can persist to JSONL files
+    or SQLite (via StorageBackend) without knowing the difference.
+    """
+
+    @property
+    def name(self) -> str:
+        """Backend name for diagnostics ('jsonl' or 'sqlite')."""
+        ...
+
+    def load(self) -> BanditState:
+        """Load compacted bandit state."""
+        ...
+
+    def save(self, state: BanditState) -> None:
+        """Save full bandit state (compacted)."""
+        ...
+
+    def append_update(self, state: BanditState, context: str, rule_id: str) -> None:
+        """Append a single arm update (efficient incremental persist)."""
+        ...
+
+
+class JsonlPersistence:
+    """BanditPersistence backed by append-only JSONL files."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    @property
+    def name(self) -> str:
+        return "jsonl"
+
+    def load(self) -> BanditState:
+        return BanditState.load(self.path)
+
+    def save(self, state: BanditState) -> None:
+        state.save(self.path)
+
+    def append_update(self, state: BanditState, context: str, rule_id: str) -> None:
+        state.append_update(self.path, context, rule_id)
+
+
+class SqlitePersistence:
+    """BanditPersistence backed by the SQLite StorageBackend."""
+
+    def __init__(self, backend: StorageBackend, project_id: str) -> None:
+        self._backend = backend
+        self._project_id = project_id
+
+    @property
+    def name(self) -> str:
+        return "sqlite"
+
+    def load(self) -> BanditState:
+        raw = self._backend.load_bandit_state(self._project_id)
+        state = BanditState()
+        for ctx, rules in raw.items():
+            for rule_id, arm in rules.items():
+                state.set_params(
+                    ctx,
+                    rule_id,
+                    BetaParams(alpha=arm["alpha"], beta=arm["beta"]),
+                    arm.get("is_seed", False),
+                )
+        return state
+
+    def save(self, state: BanditState) -> None:
+        arms: dict[str, dict[str, dict]] = {}
+        for ctx, rule_id, params in state.all_arms():
+            arms.setdefault(ctx, {})[rule_id] = {
+                "alpha": params.alpha,
+                "beta": params.beta,
+                "is_seed": state.is_seed(ctx, rule_id),
+            }
+        self._backend.save_bandit_state(self._project_id, arms)
+
+    def append_update(self, state: BanditState, context: str, rule_id: str) -> None:
+        params = state.get_params(context, rule_id)
+        if params is None:
+            return
+        self._backend.append_bandit_update(
+            self._project_id,
+            context,
+            rule_id,
+            {
+                "alpha": params.alpha,
+                "beta": params.beta,
+                "is_seed": state.is_seed(context, rule_id),
+            },
+        )
+
+
+def resolve_bandit_persistence(buildlog_dir: Path) -> BanditPersistence:
+    """Resolve the appropriate BanditPersistence for a project.
+
+    Uses SQLite when the global database is active, JSONL otherwise.
+    """
+    from buildlog.storage import SQLiteBackend, get_backend
+
+    backend, project_id = get_backend(buildlog_dir)
+    if isinstance(backend, SQLiteBackend):
+        return SqlitePersistence(backend, project_id)
+    return JsonlPersistence(buildlog_dir / "bandit_state.jsonl")
+
+
+# ============================================================================
 # THOMPSON SAMPLING BANDIT
 # ============================================================================
 
@@ -451,24 +572,31 @@ class ThompsonSamplingBandit:
 
     def __init__(
         self,
-        state_path: Path,
+        state_path_or_persistence: Path | BanditPersistence,
         seed_boost: float = DEFAULT_SEED_BOOST,
         default_context: str = DEFAULT_CONTEXT,
     ):
         """Initialize the bandit.
 
         Args:
-            state_path: Path to JSONL file for persistence.
+            state_path_or_persistence: Either a Path to a JSONL file (backwards
+                compatible) or a BanditPersistence instance for pluggable storage.
             seed_boost: Extra α for seed rules. Higher values mean
                        seed rules start with higher assumed success rates.
                        Default 2.0 means seed rules start as if they've
                        already had 2 extra successes.
             default_context: Fallback context when none specified.
         """
-        self.state_path = state_path
+        self._persistence: BanditPersistence
+        if isinstance(state_path_or_persistence, Path):
+            self._persistence = JsonlPersistence(state_path_or_persistence)
+            self.state_path = state_path_or_persistence
+        else:
+            self._persistence = state_path_or_persistence
+            self.state_path = None  # type: ignore[assignment]
         self.seed_boost = seed_boost
         self.default_context = default_context
-        self.state = BanditState.load(state_path)
+        self.state = self._persistence.load()
 
     def select(
         self,
@@ -531,7 +659,7 @@ class ThompsonSamplingBandit:
         selected = [rule_id for rule_id, _ in samples[:k]]
 
         # Persist any new arms we created
-        self.state.save(self.state_path)
+        self._persistence.save(self.state)
 
         return selected
 
@@ -573,7 +701,7 @@ class ThompsonSamplingBandit:
         params.update(reward)
 
         # Persist (append-only for efficiency)
-        self.state.append_update(self.state_path, ctx, rule_id)
+        self._persistence.append_update(self.state, ctx, rule_id)
 
     def batch_update(
         self,
@@ -714,7 +842,7 @@ class ThompsonSamplingBandit:
             if context in self.state.seed_flags:
                 del self.state.seed_flags[context]
 
-        self.state.save(self.state_path)
+        self._persistence.save(self.state)
 
     def decay_arm(
         self,
@@ -762,6 +890,6 @@ class ThompsonSamplingBandit:
             decayed = True
 
         if decayed:
-            self.state.save(self.state_path)
+            self._persistence.save(self.state)
 
         return decayed
