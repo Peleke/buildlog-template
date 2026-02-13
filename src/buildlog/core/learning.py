@@ -95,7 +95,7 @@ class BuiltinBandit:
 
     @property
     def backend_name(self) -> str:
-        return self._bandit._persistence.name
+        return self._bandit.persistence_name
 
     def select(
         self,
