@@ -2,74 +2,74 @@
 
 ## Where buildlog is heading
 
-buildlog today is a Thompson Sampling contextual bandit for engineering rule selection. What follows are the three layers that turn it into something bigger: a system that discovers *what you know* across projects, finds patterns you didn't design, and gets contextually sharper over time.
+buildlog started as a Thompson Sampling contextual bandit for engineering rule selection. Three layers turn it into something bigger: a system that discovers *what you know* across projects, finds patterns you didn't design, and gets contextually sharper over time.
 
-These layers build on the [global SQLite backend](guides/storage-architecture.md) shipped in v0.11.0.
+Layers 1 and 2 build on the [global SQLite backend](guides/storage-architecture.md) shipped in v0.11.0. Layer 3 is implemented by [qortex](https://github.com/Peleke/qortex), which ships the knowledge graph, bandit learning, and full observability stack.
 
 ## Layer 1: Embedding Persistence
 
-**Status:** Engineering. Next up.
+**Status:** Complete. Shipped in qortex v0.3.x.
 
-**The problem:** `buildlog distill` recomputes embeddings from scratch every run. This prevents cross-project deduplication and wastes computation.
-
-**The solution:** Persist embeddings in sqlite-vec virtual tables alongside metadata (project, skill ID, rule text, embedding model, dimension). One KNN query replaces pairwise similarity.
-
-| Decision | Options | Leaning |
-|----------|---------|---------|
-| Embedding backend | sentence-transformers (local, 384d) vs. OpenAI (1536d, API key) vs. Ollama | sentence-transformers (offline, no API key) |
-| Embed what | Rule text only vs. rule + mistake descriptions | Start with rules, add mistakes later |
-| Dimensions | Fixed vs. multi-dimension support | Fixed per model, table-per-model |
-
-**Depends on:** sqlite-vec >= 0.1.6 (already in pyproject.toml)
+Embeddings are persisted in vector indices (NumpyVectorIndex for dev, SqliteVecIndex for production) alongside metadata. KNN similarity search replaces pairwise recomputation. Three embedding backends supported: sentence-transformers (local, 384d), OpenAI, and Ollama -- all traced with `@traced` spans reporting model, batch size, and cache hit rates.
 
 ## Layer 2: Cross-Project Convergence
 
-**Status:** Engineering. The big win.
+**Status:** Complete. Shipped in qortex v0.3.x.
 
-**The problem:** When `learn_from_review()` produces "always wrap multi-statement writes in transactions," buildlog only checks for duplicates within the current project.
+On every new rule ingest, KNN search finds semantically similar rules across the entire graph. Reinforcement via edge promotion: online cosine-similarity edges that survive observation get promoted to persistent KG structure. Cross-project salience tracked through:
 
-**The solution:** On every new rule ingest, KNN search the *entire* global database. If a semantically similar rule exists in any project:
+- Which domains/projects discovered the rule
+- Edge confidence and observation count
+- Thompson Sampling posteriors per context partition
+- Whether the rule was human-validated or machine-extracted
 
-- **Reinforce** it (increment count, update timestamp) instead of creating a duplicate
-- **Cross-link** the projects that independently discovered it
-- **Track convergence** — how many independent projects arrived at the same rule?
+The **KG coverage ratio** (visible in Grafana) tracks what percentage of the retrieval neighborhood is persistent vs online edges. Coverage trending upward means the graph is crystallizing.
 
-A rule rediscovered across 5 projects is qualitatively different from one that appeared once. The reinforcement count becomes a **salience score**: rules that keep emerging independently are the most generalizable patterns.
+## Layer 3: Knowledge Graph + Adaptive Learning
 
-### Salience metadata
+**Status:** Shipped (v0.5.0). Active development continues.
 
-Each rule accumulates:
+The hypothesis from the original roadmap proved out: clusters in embedding space correspond to emergent concepts, and edges between them encode structure that pure cosine similarity misses. qortex implements this as a full knowledge graph with Personalized PageRank, Thompson Sampling bandits, credit propagation, and a complete observability stack.
 
-- Which projects discovered it
-- What error classes it emerged from
-- Thompson Sampling posteriors per context
-- Whether it was human-validated (promoted) or machine-extracted
+### What's shipped
 
-## Layer 3: Emergent Rule Graphs
+| Component | Status | Version |
+|-----------|--------|---------|
+| Knowledge graph (InMemoryBackend + MemgraphBackend) | Shipped | v0.2.0 |
+| Thompson Sampling bandit (select, observe, posteriors, context partitioning) | Shipped | v0.3.4 |
+| Credit propagation (causal DAG, feedback flows to ancestor concepts) | Shipped, flag-gated | v0.3.4 |
+| qortex-observe (standalone observability package) | Shipped | v0.5.0 |
+| Full trace hierarchy (14 graph ops, vec layer, embeddings, learning) | Shipped | v0.5.0 |
+| Unified metrics pipeline (36 metrics, declarative schema, OTel + Prometheus) | Shipped | v0.5.0 |
+| Selective trace sampling (errors/slow always, normal at configurable rate) | Shipped | v0.5.0 |
+| MCP server (33 tools, 6 learning tools) | Shipped | v0.4.0 |
+| Framework adapters (Agno, CrewAI, LangChain, Mastra) | Shipped | v0.4.0 |
 
-**Status:** Research direction.
+### What's next
 
-**The hypothesis:** At sufficient data density, clusters in embedding space correspond to emergent concepts.
+**1. qortex-observe PyPI publish** ([qortex#108](https://github.com/Peleke/qortex/issues/108))
 
-The progression:
+Publish `qortex-observe` as a standalone PyPI package so any consumer (openclaw, langchain-qortex, mastra-qortex) gets metrics + traces by calling `configure()`. Includes standalone CI, consumer migration, and a portable Docker Compose observability stack (Grafana + Prometheus + Jaeger + OTel Collector).
 
-1. Rules accumulate as points in embedding space
-2. At density thresholds, centroids emerge (via HDBSCAN or KNN density estimation)
-3. Each centroid is a **concept node** — not a single rule, but the *essence* multiple rules converge toward
-4. Edges between nodes come from:
-   - **Co-occurrence** within the same project
-   - **Temporal sequence** (rule A tends to be discovered before rule B)
-   - **Bandit correlation** (activating rule A improves outcomes when rule B is also active)
+**2. L-MVA: Learned Minimal Viable Agent** ([qortex#96](https://github.com/Peleke/qortex/issues/96))
 
-This gives a **knowledge graph that emerges from practice, not from taxonomy.** Nobody designs the categories — they form from repeated independent discovery.
+The outer bandit that discovers the minimum token budget maintaining quality, per task, per domain. An `InferenceTrace` event captures every selection: which rules, what budget tier, what reward. A `BudgetLearner` wraps the existing `Learner`: outer bandit picks budget tier, inner bandit picks rules under that budget. Both update from the same reward signal. This is the pitch: "the system learns how much context it needs."
 
-### Connection to bandits
+Thompson Sampling works for both inner and outer bandits today. UCB1 and Track-and-Stop (SOCP-optimal allocation) are Strategy plugins that can drop in later without touching the BudgetLearner architecture.
 
-Thompson Sampling today uses per-context posteriors with error class as the context feature. The research direction is **LinUCB**: make the context vector an embedding of the current situation (error class + file type + project type + semantic similarity to past situations). The bandit then selects rules by contextual similarity to situations where the rule previously helped.
+**3. Production deployment: triple interface** ([qortex#63](https://github.com/Peleke/qortex/issues/63))
 
-This is the bridge from "rules that worked" to "rules that work *in situations like this one*."
+Single FastAPI app serving GraphQL (`/graphql`, federation v2 for MindMirror mesh), REST (`/api/v1/`), and MCP (`/mcp`, streamable HTTP for AI agents). All three wrap the same `LocalQortexClient`. One container, one Dockerfile, one health check. This is the biggest platform unlock -- qortex becomes a real service, not just a library.
+
+**4. Causal DAG** ([qortex#3](https://github.com/Peleke/qortex/issues/3))
+
+Credit propagation is already wired and flag-gated. The missing piece is structural causal discovery from graph topology. Deferred until L-MVA and deployment are solid, since the causal DAG feeds into credit assignment which feeds the bandit.
 
 ## Related
 
-- [#100](https://github.com/Peleke/buildlog-template/issues/100) — sqlite-vec + emergent rule graphs: full design document
-- [#87](https://github.com/Peleke/buildlog-template/issues/87) — qortex knowledge graph integration
+- [#100](https://github.com/Peleke/buildlog-template/issues/100) -- sqlite-vec + emergent rule graphs: full design document
+- [#87](https://github.com/Peleke/buildlog-template/issues/87) -- qortex knowledge graph integration
+- [qortex#108](https://github.com/Peleke/qortex/issues/108) -- qortex-observe PyPI publish
+- [qortex#96](https://github.com/Peleke/qortex/issues/96) -- L-MVA (BudgetLearner)
+- [qortex#63](https://github.com/Peleke/qortex/issues/63) -- Production deployment (triple interface)
+- [qortex#3](https://github.com/Peleke/qortex/issues/3) -- Causal DAG
