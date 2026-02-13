@@ -333,7 +333,7 @@ def _check_version_decay(
     Returns:
         Tuple of (version_changed, decayed_count).
     """
-    from buildlog.core.bandit import ThompsonSamplingBandit
+    from buildlog.core.learning import get_learning_backend
 
     # Build lookup: rule text → provenance for old and new
     def _version_map(sf: SeedFile) -> dict[str, str | None]:
@@ -358,11 +358,7 @@ def _check_version_decay(
         return False, 0
 
     # Decay bandit arms for changed rules
-    bandit_path = buildlog_dir / "bandit_state.jsonl"
-    if not bandit_path.exists():
-        return True, 0
-
-    bandit = ThompsonSamplingBandit(bandit_path)
+    bandit = get_learning_backend(buildlog_dir)
     decayed = 0
     for rule_text in changed_rules:
         # Find the category to generate the skill ID
