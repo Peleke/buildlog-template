@@ -347,6 +347,7 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
 **Data source:** `src/buildlog/stats.py:303` — `calculate_stats()` and `backend.load_events(project_id, "rewards")`.
 
 **What you see:**
+
 - **4 KPI cards:** Total entries, current streak, coverage %, this week count.
 - **Reward Trend chart:** Running mean of reward values over time (line 208-254). A line chart with fill-to-zero. Two dashed reference lines: green at 0.7 (target) and red at 0.4 (investigate). **A healthy system shows the line above 0.7.** If it dips below 0.4, the review process needs attention.
 - **Outcome Distribution donut:** Proportions of accepted/revision/rejected outcomes (lines 264-289). **A healthy system is mostly green (accepted).**
@@ -358,6 +359,7 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
 **Data source:** `backend.load_events(project_id, "sessions")` and `backend.load_events(project_id, "mistakes")`.
 
 **What you see:**
+
 - **Rule Growth bar chart:** Grouped bars showing `rules_at_start` vs `rules_at_end` for each session (lines 356-387). **If end > start, the session discovered new rules.** Monotonic growth = the system is learning.
 - **Mistake KPIs:** Total mistakes, repeat rate %, unique error classes (lines 416-428).
 - **Mistakes by Error Class:** Horizontal bar chart showing which error classes occur most (lines 434-452). **Tall bars = recurring problems the system hasn't solved yet.**
@@ -370,6 +372,7 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
 **Data source:** `src/buildlog/core/learning.py` — `get_learning_backend(buildlog_dir).get_stats(None)`.
 
 **What you see:**
+
 - **Thompson Sampling Posteriors:** Horizontal bar chart of posterior means with 90% credible interval error bars (lines 584-633).
   - **Green bars (mean >= 0.7):** High-confidence winners. The bandit will reliably select these.
   - **Red bars (mean < 0.4):** Weak rules. Candidates for revision or retirement.
@@ -386,6 +389,7 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
 **Data source:** `~/.buildlog/emissions/signal.jsonl` and `backend.load_emission_edges()`.
 
 **What you see:**
+
 - **Pipeline KPIs:** Emitted count, consumed count, pending count, edge count (lines 781-795). **Pending should be 0** in a healthy pipeline. Non-zero = run `buildlog_consume_emissions()`.
 - **Emission Rate Over Time:** Stacked area chart showing daily emission volume by artifact type (lines 812-849). Red = mistakes, green = rewards, purple = learned rules, cyan = sessions. **Dotted amber overlay shows consumption rate.** When consumed matches emitted, the pipeline is keeping up.
 - **Artifacts by Type:** Bar chart of total artifact counts by type (lines 871-889).
@@ -398,6 +402,7 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
 **Data source:** `stats.insights`, `backend.conn.execute("SELECT ... FROM review_learnings ...")`.
 
 **What you see:**
+
 - **Insights by Category:** Horizontal bars showing pattern counts from `buildlog distill` (lines 999-1022).
 - **Review Learnings chart:** Grouped horizontal bars — green (reinforced) vs red (contradicted) for each learning (lines 1039-1073). **High green with zero red = strong signal.** Red bars = rules that were later proven wrong.
 - **System Health:** Top source entries and quality warnings (lines 1087-1108).
