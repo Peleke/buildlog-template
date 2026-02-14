@@ -1,5 +1,6 @@
 """CLI for buildlog - engineering notebook for AI-assisted development."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -1067,6 +1068,57 @@ def stats(output_json: bool, detailed: bool, since_date: str | None):
         click.echo(format_json(stats_data))
     else:
         click.echo(format_dashboard(stats_data, detailed=detailed))
+
+
+@main.command()
+@click.option(
+    "--port", default=2718, type=int, help="Port for marimo server (default: 2718)"
+)
+@click.option("--no-browser", is_flag=True, help="Don't open browser automatically")
+def viz(port: int, no_browser: bool):
+    """Open the interactive buildlog dashboard in your browser.
+
+    Launches a marimo notebook with live visualizations of your
+    learning loop data: rewards, sessions, bandit posteriors, and more.
+
+    Examples:
+
+        buildlog viz                # Open dashboard
+        buildlog viz --port 8080    # Custom port
+        buildlog viz --no-browser   # Don't auto-open browser
+    """
+    import subprocess
+    import sys
+
+    buildlog_dir = Path("buildlog")
+    notebook = Path(__file__).parent.parent.parent / "notebooks" / "dashboard.py"
+
+    # Also check installed package location
+    if not notebook.exists():
+        # Try relative to CWD
+        notebook = Path("notebooks") / "dashboard.py"
+
+    if not notebook.exists():
+        click.echo("Dashboard notebook not found.", err=True)
+        click.echo("Expected at: notebooks/dashboard.py", err=True)
+        raise SystemExit(1)
+
+    env = {**os.environ, "BUILDLOG_DIR": str(buildlog_dir.resolve())}
+
+    cmd = [sys.executable, "-m", "marimo", "run", str(notebook), "--port", str(port)]
+    if no_browser:
+        cmd.append("--headless")
+
+    click.echo(f"Launching buildlog dashboard on port {port}...")
+    click.echo(f"Data source: {buildlog_dir.resolve()}")
+
+    try:
+        subprocess.run(cmd, env=env, check=True)
+    except KeyboardInterrupt:
+        click.echo("\nDashboard stopped.")
+    except FileNotFoundError:
+        click.echo("marimo not found. Install with: pip install marimo", err=True)
+        raise SystemExit(1)
 
 
 @main.command()

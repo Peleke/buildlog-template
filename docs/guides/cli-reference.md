@@ -10,6 +10,7 @@ buildlog list                    # List entries
 buildlog distill                 # Extract patterns
 buildlog skills                  # Generate rules
 buildlog stats                   # Usage statistics
+buildlog viz                     # Interactive dashboard (marimo)
 buildlog reward <outcome>        # Log reward signal
 buildlog overview                # Project state at a glance
 buildlog verify                  # Check workflow setup (hooks, CLAUDE.md, MCP)
@@ -74,6 +75,24 @@ The report includes:
 - Repeat rate (RMR)
 - Per-session breakdown
 - Mistakes by error class
+
+## Dashboard
+
+```bash
+buildlog viz                     # Open interactive dashboard in browser
+buildlog viz --port 8080         # Custom port
+buildlog viz --no-browser        # Headless mode (for CI or remote)
+```
+
+Launches a [marimo](https://marimo.io) notebook with live panels:
+
+- **Overview**: entry counts, coverage, streak stats
+- **Insights by Category**: distribution across architectural, workflow, tool usage, domain knowledge
+- **Learning Loop**: reward event trends, outcome breakdown, running mean
+- **Session History**: last 10 sessions with rule deltas
+- **Mistake Analysis**: error class breakdown, repeat rate
+- **Bandit Posteriors**: top 15 rules by mean, confidence intervals, status
+- **Health**: top sources, quality warnings
 
 ## Review Gauntlet
 

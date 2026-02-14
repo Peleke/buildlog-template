@@ -87,6 +87,7 @@ buildlog experiment report
 - **Migration and export:** `buildlog migrate` converts legacy JSON/JSONL files to the global database (idempotent, non-destructive). `buildlog export` dumps data back to JSONL for portability or backup.
 - **Ambient emission protocol:** mistakes and learned rules are automatically emitted as JSON artifacts to `~/.buildlog/emissions/pending/` for offline ingestion by downstream systems (knowledge graphs, analytics). Fire-and-forget — emission failure never breaks the primary operation.
 - **Workflow enforcement:** `buildlog verify` checks your setup (CLAUDE.md workflow section, MCP registration, branch protection hooks) and `--fix` repairs it. `buildlog init` installs pre-commit hooks that prevent direct commits to main and nudge toward `buildlog commit`.
+- **Interactive dashboard:** `buildlog viz` launches a [marimo](https://marimo.io) notebook in your browser with live visualizations of reward trends, bandit posteriors, session history, mistake analysis, and insight breakdowns. All data comes from the global SQLite backend.
 - **MCP server:** buildlog exposes itself as an MCP server so agents can query seeds, skills, and build history programmatically during sessions.
 - **npm wrapper:** `npx @peleke.s/buildlog` for JS/TS projects. Thin shim that finds and invokes the Python CLI.
 
@@ -182,6 +183,7 @@ buildlog experiment report
 | [MCP Integration](https://peleke.github.io/buildlog-template/guides/mcp-integration/) | Claude Code setup and available tools |
 | [Storage Architecture](https://peleke.github.io/buildlog-template/guides/storage-architecture/) | Global SQLite backend, migration, and export |
 | [Experiments](https://peleke.github.io/buildlog-template/guides/experiments/) | Running and measuring experiments |
+| [Dashboard](https://peleke.github.io/buildlog-template/guides/dashboard/) | Interactive marimo dashboard (`buildlog viz`) |
 | [Review Gauntlet](https://peleke.github.io/buildlog-template/guides/review-gauntlet/) | Reviewer personas and the gauntlet loop |
 | [Multi-Agent Setup](https://peleke.github.io/buildlog-template/guides/multi-agent/) | Render rules to any AI coding agent |
 | [Roadmap](https://peleke.github.io/buildlog-template/roadmap/) | Embeddings, cross-project convergence, rule graphs |
