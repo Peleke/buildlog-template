@@ -7,6 +7,32 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-02-14
+
+### Added
+- **Auto data pipeline** — `end_session()` now auto-runs `distill_all()` and `generate_skills()` so dashboard data stays fresh without manual intervention
+- **Session emission** — `end_session()` emits a `session_summary` artifact with typed edges (session→rule "uses", session→mistake "contains") for downstream consumers
+- **Emission consumer** — `consume_pending_emissions()` processes pending artifacts, extracts edges into `emission_edges` SQLite table, moves files to processed/
+- **emission_edges table** — schema v5 migration adds graph-relationship storage for cross-artifact edges (relation_type, confidence, properties)
+- **MCP tool** — `buildlog_consume_emissions()` for manual emission processing
+- **Emission health** — `EndSessionResult` and `OverviewResult` now report `pending_emissions`, `emissions_consumed`, `edges_stored`, `total_emission_edges`
+- **LegacyBackend warning** — consumer warns when edge storage is unavailable due to legacy backend
+- 32 new tests (consumer, auto-pipeline, emission edges, session emission)
+- Total: 1,446 tests
+
+### Fixed
+- `auto_outcome` variable placement in `end_session()` (was using unreliable `dir()` hack)
+- Signal log now records per-artifact edge count instead of cumulative
+- `__version__` string synced with pyproject.toml (was stuck at 0.8.0)
+
+## [0.16.0] - 2026-02-13
+
+### Added
+- **Enforcement system** — Claude Code hook + auto-reward + auto-migrate (#177)
+- **Marimo interactive dashboard** — `buildlog viz` command (#174)
+- **Session-end improvements report** in journal entries (#170)
+- **Sparse dashboard data fix** — template heading, parser regex, backfill entries (#175, #180)
+
 ## [0.15.0] - 2026-02-13
 
 ### Added
