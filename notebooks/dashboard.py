@@ -21,7 +21,6 @@ def _():
 
 @app.cell
 def _(mo):
-    # Resolve buildlog directory (env var or default)
     import os
     import sys
     from pathlib import Path
@@ -30,19 +29,17 @@ def _(mo):
     buildlog_dir = Path(_buildlog_dir_str)
 
     if not buildlog_dir.exists():
-        # Try parent directories (notebook might be in notebooks/)
-        for candidate in [Path("../buildlog"), Path("../../buildlog")]:
-            if candidate.exists():
-                buildlog_dir = candidate
+        for _candidate in [Path("../buildlog"), Path("../../buildlog")]:
+            if _candidate.exists():
+                buildlog_dir = _candidate
                 break
 
-    # Ensure the package is importable
     _src = buildlog_dir.parent / "src"
     if _src.exists() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
 
     mo.md(f"**Data source**: `{buildlog_dir.resolve()}`")
-    return buildlog_dir, os
+    return (buildlog_dir,)
 
 
 @app.cell
@@ -51,9 +48,8 @@ def _(buildlog_dir, mo):
 
     stats = calculate_stats(buildlog_dir)
 
-    # Overview cards
-    e = stats.entries
-    s = stats.streak
+    _e = stats.entries
+    _s = stats.streak
 
     mo.md(
         f"""
@@ -61,12 +57,12 @@ def _(buildlog_dir, mo):
 
     | Metric | Value |
     |--------|-------|
-    | Total entries | **{e.total}** |
-    | This week | **{e.this_week}** |
-    | This month | **{e.this_month}** |
-    | Coverage | **{e.coverage_percent}%** |
-    | Current streak | **{s.current} days** |
-    | Longest streak | **{s.longest} days** |
+    | Total entries | **{_e.total}** |
+    | This week | **{_e.this_week}** |
+    | This month | **{_e.this_month}** |
+    | Coverage | **{_e.coverage_percent}%** |
+    | Current streak | **{_s.current} days** |
+    | Longest streak | **{_s.longest} days** |
     """
     )
     return (stats,)
@@ -74,28 +70,27 @@ def _(buildlog_dir, mo):
 
 @app.cell
 def _(mo, stats):
-    # Insight category breakdown
-    categories = stats.insights.by_category
-    total = stats.insights.total
+    _categories = stats.insights.by_category
+    _total = stats.insights.total
 
-    if total > 0:
-        rows = []
-        for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
-            pct = count / total * 100 if total else 0
-            bar = "#" * int(pct / 2)
-            display = cat.replace("_", " ").title()
-            rows.append(f"| {display} | {count} | {pct:.0f}% | `{bar}` |")
+    if _total > 0:
+        _rows = []
+        for _cat, _cnt in sorted(_categories.items(), key=lambda x: x[1], reverse=True):
+            _pct = _cnt / _total * 100 if _total else 0
+            _bar = "#" * int(_pct / 2)
+            _display = _cat.replace("_", " ").title()
+            _rows.append(f"| {_display} | {_cnt} | {_pct:.0f}% | `{_bar}` |")
 
-        table = "\n".join(rows)
+        _table = "\n".join(_rows)
         mo.md(
             f"""
     ## Insights by Category
 
-    {total} insights extracted across {len(categories)} categories.
+    {_total} insights extracted across {len(_categories)} categories.
 
     | Category | Count | Share | Distribution |
     |----------|-------|-------|-------------|
-    {table}
+    {_table}
     """
         )
     else:
@@ -113,67 +108,62 @@ def _(mo, stats):
 def _(buildlog_dir, mo):
     import json
 
-    # Load reward events for learning loop visualization
-    reward_events = []
+    _reward_events = []
     _rewards_path = buildlog_dir / ".buildlog" / "reward_events.jsonl"
     if _rewards_path.exists():
-        for line in _rewards_path.read_text().splitlines():
-            line = line.strip()
-            if line:
+        for _line in _rewards_path.read_text().splitlines():
+            _line = _line.strip()
+            if _line:
                 try:
-                    reward_events.append(json.loads(line))
+                    _reward_events.append(json.loads(_line))
                 except json.JSONDecodeError:
                     continue
 
-    if reward_events:
-        # Compute running mean reward
-        total_reward = 0.0
-        running_means = []
-        outcomes = {"accepted": 0, "revision": 0, "rejected": 0}
+    if _reward_events:
+        _total_reward = 0.0
+        _running_means = []
+        _outcomes = {"accepted": 0, "revision": 0, "rejected": 0}
 
-        for i, evt in enumerate(reward_events, 1):
-            total_reward += evt.get("reward_value", 0.0)
-            running_means.append(total_reward / i)
-            outcome = evt.get("outcome", "unknown")
-            if outcome in outcomes:
-                outcomes[outcome] += 1
+        for _i, _evt in enumerate(_reward_events, 1):
+            _total_reward += _evt.get("reward_value", 0.0)
+            _running_means.append(_total_reward / _i)
+            _outcome = _evt.get("outcome", "unknown")
+            if _outcome in _outcomes:
+                _outcomes[_outcome] += 1
 
-        current_mean = running_means[-1] if running_means else 0.0
-        n = len(reward_events)
+        _current_mean = _running_means[-1] if _running_means else 0.0
+        _n = len(_reward_events)
 
-        # Outcome breakdown
-        outcome_rows = []
-        for outcome, count in sorted(
-            outcomes.items(), key=lambda x: x[1], reverse=True
+        _outcome_rows = []
+        for _oname, _ocnt in sorted(
+            _outcomes.items(), key=lambda x: x[1], reverse=True
         ):
-            pct = count / n * 100
-            outcome_rows.append(f"| {outcome} | {count} | {pct:.0f}% |")
-        outcome_table = "\n".join(outcome_rows)
+            _opct = _ocnt / _n * 100
+            _outcome_rows.append(f"| {_oname} | {_ocnt} | {_opct:.0f}% |")
+        _outcome_table = "\n".join(_outcome_rows)
 
-        # Running mean as sparkline-style text
-        # Show last 20 data points as a mini trend
-        recent = running_means[-20:]
-        spark_min, spark_max = min(recent), max(recent)
-        spark_range = spark_max - spark_min if spark_max != spark_min else 1.0
-        spark_chars = " _.-=^"
-        sparkline = ""
-        for val in recent:
-            idx = int((val - spark_min) / spark_range * (len(spark_chars) - 1))
-            sparkline += spark_chars[idx]
+        _recent = _running_means[-20:]
+        _spark_min, _spark_max = min(_recent), max(_recent)
+        _spark_range = _spark_max - _spark_min if _spark_max != _spark_min else 1.0
+        _spark_chars = " _.-=^"
+        _sparkline = ""
+        for _val in _recent:
+            _idx = int((_val - _spark_min) / _spark_range * (len(_spark_chars) - 1))
+            _sparkline += _spark_chars[_idx]
 
         mo.md(
             f"""
     ## Learning Loop
 
-    **{n} reward events** recorded. Current mean reward: **{current_mean:.3f}**
+    **{_n} reward events** recorded. Current mean reward: **{_current_mean:.3f}**
 
-    Recent trend: `{sparkline}`
+    Recent trend: `{_sparkline}`
 
     ### Outcome Breakdown
 
     | Outcome | Count | Share |
     |---------|-------|-------|
-    {outcome_table}
+    {_outcome_table}
 
     The learning loop works when accepted outcomes increase over time
     and the mean reward trends upward. Each reward event teaches the
@@ -196,44 +186,42 @@ def _(buildlog_dir, mo):
 def _(buildlog_dir, mo):
     import json as _json
 
-    # Load sessions for session history
-    sessions = []
+    _sessions = []
     _sessions_path = buildlog_dir / ".buildlog" / "sessions.jsonl"
     if _sessions_path.exists():
-        for line in _sessions_path.read_text().splitlines():
-            line = line.strip()
-            if line:
+        for _line in _sessions_path.read_text().splitlines():
+            _line = _line.strip()
+            if _line:
                 try:
-                    sessions.append(_json.loads(line))
+                    _sessions.append(_json.loads(_line))
                 except _json.JSONDecodeError:
                     continue
 
-    if sessions:
-        # Session metrics table
-        session_rows = []
-        for sess in reversed(sessions[-10:]):  # Last 10 sessions
-            sid = sess.get("id", "?")[:20]
-            started = sess.get("started_at", "?")[:10]
-            rules_start = len(sess.get("rules_at_start", []))
-            rules_end = len(sess.get("rules_at_end", []))
-            error_class = sess.get("error_class", "general") or "general"
-            delta = rules_end - rules_start
-            delta_str = f"+{delta}" if delta > 0 else str(delta)
-            session_rows.append(
-                f"| {started} | `{sid}` | {error_class} | {rules_start} | {rules_end} | {delta_str} |"
+    if _sessions:
+        _session_rows = []
+        for _sess in reversed(_sessions[-10:]):
+            _sid = _sess.get("id", "?")[:20]
+            _started = _sess.get("started_at", "?")[:10]
+            _rs = len(_sess.get("rules_at_start", []))
+            _re = len(_sess.get("rules_at_end", []))
+            _ec = _sess.get("error_class", "general") or "general"
+            _delta = _re - _rs
+            _delta_str = f"+{_delta}" if _delta > 0 else str(_delta)
+            _session_rows.append(
+                f"| {_started} | `{_sid}` | {_ec} | {_rs} | {_re} | {_delta_str} |"
             )
 
-        session_table = "\n".join(session_rows)
+        _session_table = "\n".join(_session_rows)
 
         mo.md(
             f"""
     ## Session History
 
-    **{len(sessions)} sessions** recorded. Showing last 10.
+    **{len(_sessions)} sessions** recorded. Showing last 10.
 
     | Date | Session | Error Class | Rules Start | Rules End | Delta |
     |------|---------|-------------|-------------|-----------|-------|
-    {session_table}
+    {_session_table}
 
     Rule count growth over sessions indicates the system is learning
     and promoting new rules based on observed patterns.
@@ -255,43 +243,41 @@ def _(buildlog_dir, mo):
 def _(buildlog_dir, mo):
     import json as _json2
 
-    # Load mistakes for mistake analysis
-    mistakes = []
+    _mistakes = []
     _mistakes_path = buildlog_dir / ".buildlog" / "mistakes.jsonl"
     if _mistakes_path.exists():
-        for line in _mistakes_path.read_text().splitlines():
-            line = line.strip()
-            if line:
+        for _line in _mistakes_path.read_text().splitlines():
+            _line = _line.strip()
+            if _line:
                 try:
-                    mistakes.append(_json2.loads(line))
+                    _mistakes.append(_json2.loads(_line))
                 except _json2.JSONDecodeError:
                     continue
 
-    if mistakes:
-        # Group by error class
-        error_classes: dict[str, int] = {}
-        repeats = 0
-        for m in mistakes:
-            ec = m.get("error_class", "unknown")
-            error_classes[ec] = error_classes.get(ec, 0) + 1
-            if m.get("was_repeat", False):
-                repeats += 1
+    if _mistakes:
+        _error_classes: dict[str, int] = {}
+        _repeats = 0
+        for _m in _mistakes:
+            _ec = _m.get("error_class", "unknown")
+            _error_classes[_ec] = _error_classes.get(_ec, 0) + 1
+            if _m.get("was_repeat", False):
+                _repeats += 1
 
-        repeat_pct = repeats / len(mistakes) * 100
+        _repeat_pct = _repeats / len(_mistakes) * 100
 
-        ec_rows = []
-        for ec, count in sorted(
-            error_classes.items(), key=lambda x: x[1], reverse=True
+        _ec_rows = []
+        for _ecname, _eccnt in sorted(
+            _error_classes.items(), key=lambda x: x[1], reverse=True
         ):
-            ec_rows.append(f"| {ec} | {count} |")
-        ec_table = "\n".join(ec_rows)
+            _ec_rows.append(f"| {_ecname} | {_eccnt} |")
+        _ec_table = "\n".join(_ec_rows)
 
         mo.md(
             f"""
     ## Mistake Analysis
 
-    **{len(mistakes)} mistakes** logged across {len(error_classes)} error classes.
-    **{repeats} repeats** ({repeat_pct:.0f}% repeat rate).
+    **{len(_mistakes)} mistakes** logged across {len(_error_classes)} error classes.
+    **{_repeats} repeats** ({_repeat_pct:.0f}% repeat rate).
 
     A declining repeat rate means the rules are preventing recurrence.
 
@@ -299,7 +285,7 @@ def _(buildlog_dir, mo):
 
     | Error Class | Count |
     |-------------|-------|
-    {ec_table}
+    {_ec_table}
     """
         )
     else:
@@ -316,55 +302,52 @@ def _(buildlog_dir, mo):
 
 @app.cell
 def _(buildlog_dir, mo):
-    # Bandit arm stats (if SQLite bandit exists)
-    bandit_stats = {}
+    _bandit_stats = {}
     try:
         from buildlog.core.learning import get_learning_backend
 
-        lb = get_learning_backend(buildlog_dir)
-        bandit_stats = lb.get_stats(None)  # All contexts
+        _lb = get_learning_backend(buildlog_dir)
+        _bandit_stats = _lb.get_stats(None)
     except Exception:
         pass
 
-    if bandit_stats:
-        # Sort by mean descending
-        sorted_arms = sorted(
-            bandit_stats.items(), key=lambda x: x[1].get("mean", 0), reverse=True
+    if _bandit_stats:
+        _sorted_arms = sorted(
+            _bandit_stats.items(), key=lambda x: x[1].get("mean", 0), reverse=True
         )
 
-        arm_rows = []
-        for rule_id, arm in sorted_arms[:15]:  # Top 15
-            mean = arm.get("mean", 0)
-            obs = int(arm.get("total_observations", 0))
-            ci = arm.get("confidence_interval", (0, 1))
-            ci_str = f"[{ci[0]:.2f}, {ci[1]:.2f}]"
+        _arm_rows = []
+        for _rule_id, _arm in _sorted_arms[:15]:
+            _mean = _arm.get("mean", 0)
+            _obs = int(_arm.get("total_observations", 0))
+            _ci = _arm.get("confidence_interval", (0, 1))
+            _ci_str = f"[{_ci[0]:.2f}, {_ci[1]:.2f}]"
 
-            # Status classification
-            if obs == 0:
-                status = "new"
-            elif mean >= 0.7:
-                status = "earning confidence"
-            elif mean < 0.4:
-                status = "demoted"
+            if _obs == 0:
+                _status = "new"
+            elif _mean >= 0.7:
+                _status = "earning confidence"
+            elif _mean < 0.4:
+                _status = "demoted"
             else:
-                status = "stable"
+                _status = "stable"
 
-            arm_rows.append(
-                f"| `{rule_id}` | {mean:.3f} | {obs} | {ci_str} | {status} |"
+            _arm_rows.append(
+                f"| `{_rule_id}` | {_mean:.3f} | {_obs} | {_ci_str} | {_status} |"
             )
 
-        arm_table = "\n".join(arm_rows)
+        _arm_table = "\n".join(_arm_rows)
 
         mo.md(
             f"""
     ## Bandit Arm Posteriors
 
-    **{len(bandit_stats)} rules** tracked by the Thompson Sampling bandit.
+    **{len(_bandit_stats)} rules** tracked by the Thompson Sampling bandit.
     Showing top 15 by posterior mean.
 
     | Rule | Mean | Observations | 95% CI | Status |
     |------|------|-------------|--------|--------|
-    {arm_table}
+    {_arm_table}
 
     Rules with high means and narrow confidence intervals are the ones
     the bandit exploits most. New rules get explored until there is enough
@@ -385,35 +368,34 @@ def _(buildlog_dir, mo):
 
 @app.cell
 def _(mo, stats):
-    # Quality warnings and top sources
-    warnings = stats.warnings
-    sources = stats.top_sources
+    _warnings = stats.warnings
+    _sources = stats.top_sources
 
-    parts = []
+    _parts = []
 
-    if sources:
-        source_rows = []
-        for i, src in enumerate(sources, 1):
-            source_rows.append(f"| {i} | {src['name']} | {src['insights']} |")
-        source_table = "\n".join(source_rows)
-        parts.append(
+    if _sources:
+        _source_rows = []
+        for _i, _src in enumerate(_sources, 1):
+            _source_rows.append(f"| {_i} | {_src['name']} | {_src['insights']} |")
+        _source_table = "\n".join(_source_rows)
+        _parts.append(
             f"""### Top Sources
 
 | Rank | Entry | Insights |
 |------|-------|----------|
-{source_table}"""
+{_source_table}"""
         )
 
-    if warnings:
-        warning_items = "\n".join(f"- {w}" for w in warnings)
-        parts.append(
+    if _warnings:
+        _warning_items = "\n".join(f"- {_w}" for _w in _warnings)
+        _parts.append(
             f"""### Quality Warnings
 
-{warning_items}"""
+{_warning_items}"""
         )
 
-    if parts:
-        mo.md("## Health\n\n" + "\n\n".join(parts))
+    if _parts:
+        mo.md("## Health\n\n" + "\n\n".join(_parts))
     else:
         mo.md("## Health\n\nNo warnings. Everything looks good.")
     return
