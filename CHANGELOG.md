@@ -7,6 +7,30 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-02-14
+
+### Added
+- **Learning Loop E2E documentation** (`docs/LEARNING-LOOP-E2E.md`): 13-step trace with explicit code citations covering installation through Thompson Sampling, gauntlet review, bandit updates, emission pipeline, cross-domain discovery via qortex, and rule re-export
+- **Section 11: Cross-Domain Discovery & Rule Re-Export**: documents how qortex bridges domains that buildlog cannot see, with full projection pipeline coverage
+- Full CLI reference for `qortex ingest emissions` with all flags
+- Homepage updated with "See it working" showcase and "The ecosystem" section
+- E2E doc featured in mkdocs nav, qortex integration guide added to nav
+- README links to E2E doc in Quick Start and Documentation table
+
+### Fixed
+- Bragi gauntlet findings: em-dash overuse, self-referential pivots, AI vocab blocklist
+
+## [0.18.0] - 2026-02-14
+
+### Added
+- **Marimo dashboard phase 2**: plotly dark theme, panel descriptions, design system
+- **Emission edge enrichment** with real gauntlet rule IDs
+- **Skill/gauntlet rule unification**: `promote()` inserts into `gauntlet_rules`, `_get_current_rules()` returns union
+
+### Fixed
+- **Rule unification P0+P1+P3**: ID alignment, seed detection, E2E test
+- Total: 1,460 tests
+
 ## [0.17.0] - 2026-02-14
 
 ### Added
