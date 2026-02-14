@@ -1533,6 +1533,38 @@ def buildlog_update(
     return _ensure_message(asdict(result))
 
 
+def buildlog_consume_emissions(
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
+) -> dict:
+    """Consume pending emission artifacts into edge storage.
+
+    Processes mistake manifests and session summaries into the
+    emission_edges table. Moves reward signals and learned rules
+    to processed/ (already stored via primary path).
+
+    Args:
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with consumed, failed, skipped, edges_stored, errors
+    """
+    from dataclasses import asdict as _asdict
+
+    from buildlog.emissions.consumer import consume_pending_emissions
+
+    result = consume_pending_emissions()
+    return _ensure_message(
+        {
+            **_asdict(result),
+            "message": (
+                f"Consumed {result.consumed} emissions, "
+                f"stored {result.edges_stored} edges"
+                + (f", {result.failed} failed" if result.failed else "")
+            ),
+        }
+    )
+
+
 def buildlog_verify(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:

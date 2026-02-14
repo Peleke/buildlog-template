@@ -232,6 +232,41 @@ class StorageBackend(Protocol):
         """
         ...
 
+    # -- Emission edges -----------------------------------------------------
+
+    def store_emission_edges(self, edges: list[dict]) -> int:
+        """Bulk insert emission edges, skipping duplicates.
+
+        Returns:
+            Number of edges stored.
+        """
+        ...
+
+    def count_emission_edges(
+        self,
+        project_id: str | None = None,
+        relation_type: str | None = None,
+    ) -> int:
+        """Count stored emission edges, optionally filtered.
+
+        Returns:
+            Number of matching edges.
+        """
+        ...
+
+    def load_emission_edges(
+        self,
+        project_id: str | None = None,
+        relation_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Load emission edges, optionally filtered.
+
+        Returns:
+            List of edge dictionaries.
+        """
+        ...
+
 
 @runtime_checkable
 class Exporter(Protocol):

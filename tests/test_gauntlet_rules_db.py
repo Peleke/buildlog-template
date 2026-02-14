@@ -143,13 +143,13 @@ def _make_seeds_dir(tmp_path: Path, personas: dict[str, list[dict]]) -> Path:
 class TestSchemaV4:
     """Tests for the gauntlet_rules table schema."""
 
-    def test_schema_version_is_4(self):
-        assert SCHEMA_VERSION == 4
+    def test_schema_version_is_5(self):
+        assert SCHEMA_VERSION == 5
 
-    def test_init_schema_returns_4(self, conn):
+    def test_init_schema_returns_5(self, conn):
         # init_schema already ran in fixture; verify version
         row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
-        assert row[0] == 4
+        assert row[0] == 5
 
     def test_gauntlet_rules_table_exists(self, conn):
         tables = [
@@ -260,7 +260,7 @@ class TestSchemaV4:
 
         # Run init_schema — should migrate to v4
         v = init_schema(conn)
-        assert v == 4
+        assert v == 5
 
         # gauntlet_rules should now exist
         tables = [
@@ -273,20 +273,20 @@ class TestSchemaV4:
 
         # Version should be 4
         row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
-        assert row[0] == 4
+        assert row[0] == 5
 
     def test_fresh_db_gets_v4(self):
         """A brand-new DB should land on v4 directly."""
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
         v = init_schema(conn)
-        assert v == 4
+        assert v == 5
 
     def test_migration_is_idempotent(self, conn):
         """Running init_schema again should be a no-op."""
         v1 = init_schema(conn)
         v2 = init_schema(conn)
-        assert v1 == v2 == 4
+        assert v1 == v2 == 5
 
 
 # ===========================================================================

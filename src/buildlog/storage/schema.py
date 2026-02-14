@@ -11,7 +11,7 @@ from pathlib import Path
 
 __all__ = ["SCHEMA_VERSION", "init_schema"]
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # ---------------------------------------------------------------------------
 # DDL statements
@@ -192,6 +192,28 @@ CREATE INDEX IF NOT EXISTS idx_gauntlet_rules_active
     ON gauntlet_rules(active);
 """
 
+_CREATE_EMISSION_EDGES = """\
+CREATE TABLE IF NOT EXISTS emission_edges (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id       TEXT NOT NULL,
+    target_id       TEXT NOT NULL,
+    relation_type   TEXT NOT NULL,
+    confidence      REAL,
+    artifact_type   TEXT NOT NULL,
+    project_id      TEXT NOT NULL,
+    emitted_at      TEXT NOT NULL,
+    consumed_at     TEXT NOT NULL,
+    properties      TEXT,
+    UNIQUE(source_id, target_id, relation_type, emitted_at)
+);
+CREATE INDEX IF NOT EXISTS idx_emission_edges_relation
+    ON emission_edges(relation_type);
+CREATE INDEX IF NOT EXISTS idx_emission_edges_target
+    ON emission_edges(target_id);
+CREATE INDEX IF NOT EXISTS idx_emission_edges_project
+    ON emission_edges(project_id);
+"""
+
 # Ordered list of all DDL blocks for schema v1.
 _DDL_V1: list[str] = [
     _CREATE_SCHEMA_VERSION,
@@ -233,6 +255,12 @@ _MIGRATE_V3: list[str] = [
 # ---------------------------------------------------------------------------
 
 _MIGRATE_V4: str = _CREATE_GAUNTLET_RULES
+
+# ---------------------------------------------------------------------------
+# v5 migration: add emission_edges table for consumed emission data
+# ---------------------------------------------------------------------------
+
+_MIGRATE_V5: str = _CREATE_EMISSION_EDGES
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +338,16 @@ def init_schema(conn: sqlite3.Connection) -> int:
         conn.execute(
             "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
             (4,),
+        )
+        conn.commit()
+        current_version = 4
+
+    # Apply v5 migration: add emission_edges table
+    if current_version < 5:
+        conn.executescript(_MIGRATE_V5)
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+            (5,),
         )
         conn.commit()
 
