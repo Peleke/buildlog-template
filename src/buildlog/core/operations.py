@@ -684,6 +684,55 @@ def promote(
     metadata = {s.id: now for s in found_skills}
     backend.save_id_set(project_id, "promoted", new_ids, metadata)  # type: ignore[arg-type]
 
+    # =========================================================================
+    # UNIFICATION: Insert promoted skills into gauntlet_rules table.
+    #
+    # Skills and gauntlet rules are the same concept — actionable rules that
+    # get selected by the bandit and reviewed by the gauntlet. Without this,
+    # promoted skills feed the bandit but never enter the gauntlet review loop.
+    # =========================================================================
+    try:
+        gauntlet_rows = []
+        for s in found_skills:
+            provenance = json.dumps(
+                {
+                    "source": "skill_promotion",
+                    "skill_id": s.id,
+                    "category": s.category,
+                    "confidence": getattr(s, "confidence_score", None),
+                    "confidence_tier": getattr(s, "confidence_tier", None),
+                    "frequency": s.frequency,
+                    "sources": s.sources[:5] if s.sources else [],
+                    "derivation": "learned",
+                }
+            )
+            gauntlet_rows.append(
+                {
+                    "rule_id": s.id,
+                    "persona": "learned",
+                    "rule": s.rule,
+                    "category": s.category,
+                    "context": getattr(s, "context", "") or "",
+                    "antipattern": getattr(s, "antipattern", "") or "",
+                    "rationale": getattr(s, "rationale", "") or "",
+                    "tags": json.dumps(s.tags if s.tags else []),
+                    "refs": "[]",
+                    "provenance": provenance,
+                    "version": 1,
+                    "active": 1,
+                }
+            )
+        if gauntlet_rows:
+            backend.save_gauntlet_rules_batch(
+                gauntlet_rows,
+                seed_file_hash=None,
+                seed_filename="skill_promotion",
+            )
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "Failed to insert promoted skills into gauntlet_rules", exc_info=True
+        )
+
     return PromoteResult(
         promoted_ids=[s.id for s in found_skills],
         target=target,
@@ -1791,9 +1840,27 @@ def _compute_semantic_hash(description: str) -> str:
 
 
 def _get_current_rules(buildlog_dir: Path) -> list[str]:
-    """Get list of current promoted rule IDs."""
+    """Get list of current rule IDs — promoted skills + active gauntlet rules.
+
+    Returns the UNIFIED pool of rules for bandit selection:
+    - Promoted skill IDs (from skill_decisions)
+    - Active gauntlet rule IDs (from gauntlet_rules WHERE active = 1)
+
+    This ensures the bandit selects from ALL rules, whether they came
+    from journal extraction (skills) or YAML seed import (gauntlet rules).
+    """
     backend, project_id = _get_storage(buildlog_dir)
-    return sorted(backend.load_id_set(project_id, "promoted"))
+    promoted = backend.load_id_set(project_id, "promoted")
+
+    # Also include active gauntlet rules
+    gauntlet_ids: set[str] = set()
+    try:
+        rows = backend.load_gauntlet_rules(active_only=True)
+        gauntlet_ids = {r["rule_id"] for r in rows}
+    except Exception:
+        pass
+
+    return sorted(promoted | gauntlet_ids)
 
 
 def _get_seed_rule_ids(buildlog_dir: Path) -> tuple[set[str], dict[str, float]]:
