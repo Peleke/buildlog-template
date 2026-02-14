@@ -701,4 +701,16 @@ def load_rules(
     # DB is empty → auto-import from YAML, then load from DB
     logger.info("No rules in DB, auto-importing from YAML seeds")
     import_seeds_to_db(backend, seeds_dir=seeds_dir)
-    return load_rules_from_db(backend, persona=persona)
+    result = load_rules_from_db(backend, persona=persona)
+    if result:
+        return result
+
+    # Auto-import failed (e.g. LegacyBackend with no-op saves) → YAML fallback
+    if seeds_dir is None:
+        seeds_dir = get_default_seeds_dir()
+    if seeds_dir is None:
+        return {}
+    seeds = load_all_seeds(seeds_dir)
+    if persona is not None:
+        seeds = {k: v for k, v in seeds.items() if k == persona}
+    return seeds

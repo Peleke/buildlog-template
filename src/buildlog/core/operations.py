@@ -2684,6 +2684,19 @@ def get_gauntlet_rules(
 
     seeds = load_rules(backend=backend, persona=persona)
     if not seeds:
+        # Distinguish "unknown persona" from "no rules at all"
+        if persona is not None:
+            all_seeds = load_rules(backend=backend)
+            if all_seeds:
+                available = ", ".join(all_seeds.keys())
+                return GauntletRulesResult(
+                    formatted="",
+                    format=format,
+                    total_rules=0,
+                    personas=[],
+                    message=f"Unknown persona: {persona}",
+                    error=f"Unknown persona: {persona}. Available: {available}",
+                )
         return GauntletRulesResult(
             formatted="",
             format=format,
@@ -2691,18 +2704,6 @@ def get_gauntlet_rules(
             personas=[],
             message="No rules found",
             error="No rules found. Check your buildlog installation.",
-        )
-
-    # Persona filtering already handled by load_rules, but validate
-    if persona is not None and persona not in seeds:
-        available = ", ".join(seeds.keys())
-        return GauntletRulesResult(
-            formatted="",
-            format=format,
-            total_rules=0,
-            personas=[],
-            message=f"Unknown persona: {persona}",
-            error=f"Unknown persona: {persona}. Available: {available}",
         )
 
     # Build data structure

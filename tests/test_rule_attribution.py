@@ -7,7 +7,13 @@ from unittest.mock import patch
 
 import pytest
 
-from buildlog.seeds import SeedFile, SeedRule, build_rule_id_index, get_rule_id
+from buildlog.seeds import (
+    SeedFile,
+    SeedRule,
+    build_rule_id_index,
+    generate_rule_id,
+    get_rule_id,
+)
 
 
 class TestGetRuleId:
@@ -183,14 +189,17 @@ class TestGauntletPromptRuleIds:
 
         result = generate_gauntlet_prompt(target="src/", personas=["test_persona"])
         assert result.error is None
-        assert "[test_persona:rule:0]" in result.prompt
-        assert "[test_persona:rule:1]" in result.prompt
+        # Content-hash IDs are used (persona:sha256[:8])
+        rid0 = generate_rule_id("test_persona", "Always validate input")
+        rid1 = generate_rule_id("test_persona", "Use HTTPS")
+        assert f"[{rid0}]" in result.prompt
+        assert f"[{rid1}]" in result.prompt
         assert "rules_consulted" in result.prompt
         assert "rule_reasoning" in result.prompt
         assert "carpet-cite" in result.prompt
 
-    def test_prompt_uses_provenance_id(self, tmp_path, monkeypatch):
-        """Prompt should use provenance ID when available."""
+    def test_prompt_uses_content_hash_id(self, tmp_path, monkeypatch):
+        """Prompt should use content-hash rule IDs."""
         import yaml
 
         from buildlog.core.operations import generate_gauntlet_prompt
@@ -214,7 +223,9 @@ class TestGauntletPromptRuleIds:
         monkeypatch.chdir(tmp_path)
 
         result = generate_gauntlet_prompt(target="src/", personas=["test_p"])
-        assert "[my-custom-id]" in result.prompt
+        # DB import assigns content-hash IDs (overrides custom provenance ID)
+        expected_id = generate_rule_id("test_p", "Some rule")
+        assert f"[{expected_id}]" in result.prompt
 
 
 class TestGauntletLoopConfigRuleIndex:
@@ -247,8 +258,9 @@ class TestGauntletLoopConfigRuleIndex:
 
         result = gauntlet_loop_config(target="src/")
         assert result.error is None
-        assert "test_reviewer:rule:0" in result.rule_id_index
-        entry = result.rule_id_index["test_reviewer:rule:0"]
+        expected_id = generate_rule_id("test_reviewer", "Check boundaries")
+        assert expected_id in result.rule_id_index
+        entry = result.rule_id_index[expected_id]
         assert entry["persona"] == "test_reviewer"
         assert entry["rule_text"] == "Check boundaries"
 
@@ -279,7 +291,8 @@ class TestGauntletLoopConfigRuleIndex:
 
         result = gauntlet_loop_config(target="src/")
         rules = result.rules_by_persona["test_p"]
-        assert rules[0]["provenance_id"] == "test_p:rule:0"
+        expected_id = generate_rule_id("test_p", "Rule one")
+        assert rules[0]["provenance_id"] == expected_id
 
 
 class TestGauntletProcessIssuesCitations:
