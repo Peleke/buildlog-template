@@ -10,9 +10,12 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
+
+if TYPE_CHECKING:
+    from buildlog.core.report import ImprovementsReportData
 
 from buildlog.confidence import ConfidenceMetrics, merge_confidence_metrics
 from buildlog.core.learning import get_learning_backend
@@ -1587,6 +1590,8 @@ class EndSessionResult:
     rules_at_start: int
     rules_at_end: int
     message: str
+    entry_path: str | None = None
+    report_appended: bool = False
 
 
 @dataclass
@@ -1854,6 +1859,139 @@ def start_session(
     )
 
 
+# -----------------------------------------------------------------------------
+# Improvements Report Helpers (I/O shell + pure computation)
+# -----------------------------------------------------------------------------
+
+
+def _load_improvements_inputs(
+    buildlog_dir: Path,
+    backend: object,
+    project_id: str,
+    session: "Session",
+) -> dict:
+    """I/O shell: load all data needed for the improvements report.
+
+    Returns a dict of raw data for ``_compute_improvements_data``.
+    """
+    # Learning backend stats
+    stats: dict[str, dict] = {}
+    try:
+        lb = get_learning_backend(buildlog_dir)
+        stats = lb.get_stats(session.error_class)
+    except Exception:
+        pass
+
+    # Prior session: load all ended sessions, find the one before current
+    raw_sessions = backend.load_events(project_id, "sessions")  # type: ignore[attr-defined]
+    prior_session = None
+    prior_mistakes: list["Mistake"] = []
+    prior_reward_summary = None
+
+    ended_sessions = []
+    for s in raw_sessions:
+        try:
+            sess = Session.from_dict(s)  # type: ignore[arg-type]
+            if sess.ended_at is not None and sess.id != session.id:
+                ended_sessions.append(sess)
+        except (KeyError, ValueError):
+            continue
+
+    if ended_sessions:
+        ended_sessions.sort(
+            key=lambda s: s.ended_at or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        prior_session = ended_sessions[0]
+
+        # Load prior session mistakes
+        raw_mistakes = backend.load_events(project_id, "mistakes")  # type: ignore[attr-defined]
+        all_mistakes = [Mistake.from_dict(m) for m in raw_mistakes]  # type: ignore[arg-type]
+        prior_mistakes = [m for m in all_mistakes if m.session_id == prior_session.id]
+
+        # Load prior session rewards
+        prior_reward_summary = get_rewards(buildlog_dir, session_id=prior_session.id)
+
+    # Current session rewards
+    current_reward_summary = get_rewards(buildlog_dir, session_id=session.id)
+
+    return {
+        "stats": stats,
+        "prior_session": prior_session,
+        "prior_mistakes": prior_mistakes,
+        "prior_reward_summary": prior_reward_summary,
+        "current_reward_summary": current_reward_summary,
+    }
+
+
+def _compute_improvements_data(
+    session: "Session",
+    duration: float,
+    session_mistakes: list["Mistake"],
+    stats: dict[str, dict],
+    prior_session: "Session | None",
+    prior_mistakes: list["Mistake"],
+    prior_reward_summary: "RewardSummary | None",
+    current_reward_summary: "RewardSummary",
+) -> "ImprovementsReportData":
+    """Pure computation: assemble ImprovementsReportData from loaded inputs."""
+    from buildlog.core.report import ImprovementsReportData, RuleStatus, classify_rule
+
+    # Classify rules
+    rule_statuses = []
+    for rule_id, rule_stats in stats.items():
+        mean = rule_stats.get("mean", 0.5)
+        observations = int(rule_stats.get("total_observations", 0))
+        status = classify_rule(mean, observations)
+        rule_statuses.append(
+            RuleStatus(
+                rule_id=rule_id,
+                mean=mean,
+                observations=observations,
+                status=status,
+            )
+        )
+
+    # Mean reward: None if no events
+    mean_reward: float | None = None
+    if current_reward_summary.total_events > 0:
+        mean_reward = current_reward_summary.mean_reward
+
+    # Prior session metrics
+    prior_mistakes_count: int | None = None
+    prior_repeats: int | None = None
+    prior_rules_start: int | None = None
+    prior_rules_end: int | None = None
+    prior_mean_reward: float | None = None
+
+    if prior_session is not None:
+        prior_mistakes_count = len(prior_mistakes)
+        prior_repeats = sum(1 for m in prior_mistakes if m.was_repeat)
+        prior_rules_start = len(prior_session.rules_at_start)
+        prior_rules_end = len(prior_session.rules_at_end)
+        if prior_reward_summary and prior_reward_summary.total_events > 0:
+            prior_mean_reward = prior_reward_summary.mean_reward
+
+    repeated = sum(1 for m in session_mistakes if m.was_repeat)
+
+    return ImprovementsReportData(
+        session_id=session.id,
+        duration_minutes=round(duration, 1),
+        error_class=session.error_class,
+        mistakes_caught=len(session_mistakes),
+        repeated_mistakes=repeated,
+        rules_at_start=len(session.rules_at_start),
+        rules_at_end=len(session.rules_at_end),
+        mean_reward=mean_reward,
+        rule_statuses=rule_statuses,
+        prior_mistakes=prior_mistakes_count,
+        prior_repeats=prior_repeats,
+        prior_rules_start=prior_rules_start,
+        prior_rules_end=prior_rules_end,
+        prior_mean_reward=prior_mean_reward,
+    )
+
+
 def end_session(
     buildlog_dir: Path,
     entry_file: str | None = None,
@@ -1901,6 +2039,50 @@ def end_session(
 
     duration = (session.ended_at - session.started_at).total_seconds() / 60
 
+    # --- Improvements report (best-effort) ---
+    entry_path_str: str | None = None
+    report_appended = False
+    try:
+        from buildlog.core.report import (
+            inject_improvements_into_entry,
+            render_improvements_narrative,
+            render_improvements_table,
+            should_emit_report,
+        )
+
+        inputs = _load_improvements_inputs(buildlog_dir, backend, project_id, session)
+        data = _compute_improvements_data(
+            session,
+            duration,
+            session_mistakes,
+            stats=inputs["stats"],
+            prior_session=inputs["prior_session"],
+            prior_mistakes=inputs["prior_mistakes"],
+            prior_reward_summary=inputs["prior_reward_summary"],
+            current_reward_summary=inputs["current_reward_summary"],
+        )
+        if should_emit_report(data):
+            narrative = render_improvements_narrative(data)
+            table = render_improvements_table(data)
+            report = narrative + "\n\n" + table
+
+            # Resolve entry path
+            today_str = date.today().isoformat()
+            entry_path = entry_file
+            if entry_path and not Path(entry_path).is_absolute():
+                entry_path = str(buildlog_dir / entry_path)
+            resolved = _resolve_entry_path_core(
+                buildlog_dir, today_str, None, entry_path
+            )
+            if resolved.exists():
+                content = resolved.read_text()
+                content = inject_improvements_into_entry(content, report)
+                resolved.write_text(content)
+                entry_path_str = str(resolved)
+                report_appended = True
+    except Exception:
+        pass  # Never break end_session()
+
     return EndSessionResult(
         session_id=session.id,
         duration_minutes=round(duration, 1),
@@ -1909,6 +2091,8 @@ def end_session(
         rules_at_start=len(session.rules_at_start),
         rules_at_end=len(session.rules_at_end),
         message=f"Ended session {session.id} ({duration:.1f}min, {len(session_mistakes)} mistakes, {repeated} repeats)",
+        entry_path=entry_path_str,
+        report_appended=report_appended,
     )
 
 
