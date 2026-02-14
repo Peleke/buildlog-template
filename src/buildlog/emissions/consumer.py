@@ -152,6 +152,16 @@ def consume_pending_emissions(
 
             # Append signal log entry
             try:
+                # Extract project_id from artifact or filename
+                _pid = artifact.get("project_id") or artifact.get("metadata", {}).get(
+                    "project_id"
+                )
+                if not _pid:
+                    import re
+
+                    _pid_match = re.search(r"_([0-9a-f]{12})_", path.name)
+                    if _pid_match:
+                        _pid = _pid_match.group(1)
                 signal_entry = {
                     "event": "consumed",
                     "type": artifact_type,
@@ -159,6 +169,8 @@ def consume_pending_emissions(
                     "ts": consumed_at,
                     "edges_extracted": artifact_edges_stored,
                 }
+                if _pid:
+                    signal_entry["project_id"] = _pid
                 with cfg.signal_log.open("a") as f:
                     f.write(json.dumps(signal_entry) + "\n")
             except Exception:

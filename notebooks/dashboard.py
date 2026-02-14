@@ -49,12 +49,14 @@ def _(mo):
     except Exception:
         backend, current_project_id = None, None
 
-    # --- Build project selector ---
+    # --- Build project selector + ID-to-name map ---
     _project_options = {"All Projects": "__all__"}
+    project_names: dict[str, str] = {}
     if backend:
         try:
             _projects = backend.list_projects()
             for _p in _projects:
+                project_names[_p["id"]] = _p["name"]
                 _label = _p["name"]
                 if _p["id"] == current_project_id:
                     _label += " (current)"
@@ -155,6 +157,7 @@ def _(mo):
         json,
         kpi_card,
         panel_note,
+        project_names,
         project_selector,
         section_header,
         sqlite3,
@@ -162,14 +165,8 @@ def _(mo):
 
 
 @app.cell
-def _(backend, current_project_id, mo, project_selector, MUTED):
+def _(backend, current_project_id, mo, project_names, project_selector, MUTED):
     """Derive the active project scope from the dropdown."""
-
-    mo.hstack(
-        [project_selector],
-        justify="center",
-        gap=1,
-    )
 
     _sel = project_selector.value
     if _sel == "__all__" or _sel is None:
@@ -190,7 +187,9 @@ def _(backend, current_project_id, mo, project_selector, MUTED):
             return []
 
     _scope_label = (
-        "all projects" if not selected_project_id else selected_project_id[:12]
+        "all projects"
+        if not selected_project_id
+        else project_names.get(selected_project_id, selected_project_id[:12])
     )
     scope_note = mo.md(
         f'<div style="text-align:center; font-size:0.75rem; color:{MUTED}; '
@@ -215,7 +214,6 @@ def _(
     load_events_scoped,
     mo,
     panel_note,
-    scope_note,
     section_header,
 ):
     """Overview + Learning Loop tab."""
@@ -349,7 +347,6 @@ def _(
 
     overview_tab = mo.vstack(
         [
-            scope_note,
             _header,
             _kpis,
             mo.hstack([_reward_chart, _outcome_chart], widths=[0.65, 0.35]),
@@ -796,11 +793,20 @@ def _(
             for _line in _cfg.signal_log.read_text().strip().split("\n"):
                 try:
                     _evt = json.loads(_line)
+                    # Resolve project_id: emitted events have it directly,
+                    # consumed events only have a file path — extract from filename.
+                    _evt_pid = _evt.get("project_id")
+                    if not _evt_pid and _evt.get("path"):
+                        import re as _re
+
+                        _m_pid = _re.search(r"_([0-9a-f]{12})_", _evt["path"])
+                        if _m_pid:
+                            _evt_pid = _m_pid.group(1)
                     # Filter to selected project (skip filter when showing all)
                     if (
                         selected_project_id
-                        and _evt.get("project_id")
-                        and _evt["project_id"] != selected_project_id
+                        and _evt_pid
+                        and _evt_pid != selected_project_id
                     ):
                         continue
                     _event = _evt.get("event", "")
@@ -1177,10 +1183,19 @@ def _(
 
 
 @app.cell
-def _(mo, overview_tab, sessions_tab, bandit_tab, emissions_tab, insights_tab):
+def _(
+    mo,
+    overview_tab,
+    sessions_tab,
+    bandit_tab,
+    emissions_tab,
+    insights_tab,
+    project_selector,
+    scope_note,
+):
     """Main tabbed layout."""
 
-    mo.ui.tabs(
+    _tabs = mo.ui.tabs(
         {
             "Overview": overview_tab,
             "Sessions & Mistakes": sessions_tab,
@@ -1188,6 +1203,14 @@ def _(mo, overview_tab, sessions_tab, bandit_tab, emissions_tab, insights_tab):
             "Emissions": emissions_tab,
             "Insights & Health": insights_tab,
         }
+    )
+
+    mo.vstack(
+        [
+            mo.hstack([project_selector], justify="center"),
+            scope_note,
+            _tabs,
+        ]
     )
 
 
