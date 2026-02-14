@@ -774,6 +774,7 @@ def buildlog_gauntlet_accept_risk(
 def buildlog_gauntlet_rules(
     persona: str | None = None,
     format: str = "json",
+    compact: bool = True,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Load gauntlet reviewer rules. Call before reviewing code to get rules.
@@ -784,12 +785,15 @@ def buildlog_gauntlet_rules(
     Args:
         persona: Filter to a specific persona, or None for all
         format: Output format (json, yaml, markdown)
+        compact: If True (default), return only id + rule + category
+            per rule. Set False for full fields (context, antipattern,
+            rationale, tags). Compact keeps responses under token limits.
         buildlog_dir: Path to buildlog directory
 
     Returns:
         Dict with formatted rules, total_rules, personas list
     """
-    result = get_gauntlet_rules(persona=persona, format=format)
+    result = get_gauntlet_rules(persona=persona, format=format, compact=compact)
     return _ensure_message(asdict(result))
 
 
