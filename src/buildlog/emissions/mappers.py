@@ -52,6 +52,7 @@ class EdgeMapperContext:
     source_id: str
     selected_rules: list[str]
     session_data: dict | None
+    gauntlet_map: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -142,10 +143,11 @@ def rule_challenge(ctx: EdgeMapperContext) -> MapperOutput:
     """CHALLENGES edges from mistake to each selected rule that failed to prevent it."""
     edges = []
     for rule_id in ctx.selected_rules:
+        target = ctx.gauntlet_map.get(rule_id, rule_id)
         edges.append(
             {
                 "source_id": ctx.mistake_node_id,
-                "target_id": rule_id,
+                "target_id": target,
                 "relation_type": "challenges",
                 "properties": {
                     "source_text": "Rule was active but failed to prevent mistake"
@@ -160,11 +162,14 @@ def rule_support(ctx: EdgeMapperContext) -> MapperOutput:
     """SUPPORTS edge from mistake to the rule that corrected it."""
     if not ctx.mistake.corrected_by_rule:
         return MapperOutput()
+    target = ctx.gauntlet_map.get(
+        ctx.mistake.corrected_by_rule, ctx.mistake.corrected_by_rule
+    )
     return MapperOutput(
         edges=[
             {
                 "source_id": ctx.mistake_node_id,
-                "target_id": ctx.mistake.corrected_by_rule,
+                "target_id": target,
                 "relation_type": "supports",
                 "properties": {
                     "source_text": (
@@ -241,10 +246,13 @@ def resolution_edges(ctx: EdgeMapperContext) -> MapperOutput:
     ]
 
     if ctx.mistake.corrected_by_rule:
+        target = ctx.gauntlet_map.get(
+            ctx.mistake.corrected_by_rule, ctx.mistake.corrected_by_rule
+        )
         edges.append(
             {
                 "source_id": resolution_id,
-                "target_id": ctx.mistake.corrected_by_rule,
+                "target_id": target,
                 "relation_type": "supports",
                 "properties": {
                     "source_text": "Resolution reinforces the correcting rule"
@@ -308,6 +316,7 @@ def _mistake_to_manifest(
     selected_rules: list[str],
     project_id: str,
     registry: EdgeMapperRegistry | None = None,
+    gauntlet_map: dict[str, str] | None = None,
 ) -> dict:
     """Build a manifest dict from a mistake using the mapper registry."""
     reg = registry or DEFAULT_REGISTRY
@@ -322,6 +331,7 @@ def _mistake_to_manifest(
         source_id=source_id,
         selected_rules=selected_rules,
         session_data=session_data,
+        gauntlet_map=gauntlet_map or {},
     )
 
     output = reg.run_all(ctx)

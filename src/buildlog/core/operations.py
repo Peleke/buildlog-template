@@ -1174,8 +1174,9 @@ def log_reward(
     try:
         from buildlog.emissions import emit_artifact
 
+        gauntlet_map = _build_skill_to_gauntlet_map(buildlog_dir)
         emit_artifact(
-            artifact=_reward_to_emission(event, project_id),
+            artifact=_reward_to_emission(event, project_id, gauntlet_map=gauntlet_map),
             artifact_type="reward_signal",
             project_id=project_id,
         )
@@ -1197,16 +1198,71 @@ def log_reward(
     )
 
 
+# =============================================================================
+# Skill → Gauntlet Rule ID mapping for emission edge enrichment
+# =============================================================================
+
+
+def _build_skill_to_gauntlet_map(buildlog_dir: Path) -> dict[str, str]:
+    """Build mapping from promoted skill IDs to gauntlet rule IDs.
+
+    Both IDs are deterministic content hashes of rule text:
+    - Skill ID: ``{prefix}-{sha256(rule.lower())[:10]}``
+    - Gauntlet rule ID: ``{persona}:{sha256(rule)[:8]}``
+
+    Returns dict mapping ``skill_id -> gauntlet_rule:{rule_id}``.
+    """
+    import sqlite3
+
+    from buildlog.skills import _generate_skill_id
+
+    db_path = buildlog_dir / ".buildlog" / "buildlog.db"
+    if not db_path.exists():
+        return {}
+
+    mapping: dict[str, str] = {}
+    try:
+        db = sqlite3.connect(str(db_path))
+        db.row_factory = sqlite3.Row
+        cursor = db.execute(
+            "SELECT rule_id, rule, category, active FROM gauntlet_rules WHERE active = 1"
+        )
+        for row in cursor:
+            rule_id = row["rule_id"]
+            rule_text = row["rule"]
+            category = row["category"] or "general"
+
+            # Compute what the skill ID would be for this rule
+            skill_id = _generate_skill_id(category, rule_text)
+            mapping[skill_id] = f"gauntlet_rule:{rule_id}"
+        db.close()
+    except Exception:
+        logging.getLogger(__name__).debug(
+            "Failed to build skill→gauntlet map", exc_info=True
+        )
+    return mapping
+
+
+def _resolve_rule_target(rule_id: str, gauntlet_map: dict[str, str]) -> str:
+    """Resolve a rule ID to its gauntlet_rule:{id} form if possible."""
+    if not gauntlet_map:
+        return rule_id
+    return gauntlet_map.get(rule_id, rule_id)
+
+
 def _reward_to_emission(
     event: RewardEvent,
     project_id: str,
+    gauntlet_map: dict[str, str] | None = None,
 ) -> dict:
     """Build a reward signal emission for downstream consumers."""
     source_id = f"buildlog:{project_id}"
     reward_node_id = f"reward:{event.id}"
+    gmap = gauntlet_map or {}
 
     edges: list[dict] = []
     for rule_id in event.rules_active:
+        target = _resolve_rule_target(rule_id, gmap)
         # SUPPORTS if accepted (rule helped), CHALLENGES if rejected (rule failed)
         relation = "supports" if event.outcome == "accepted" else "challenges"
         if event.outcome == "revision":
@@ -1215,7 +1271,7 @@ def _reward_to_emission(
         edges.append(
             {
                 "source_id": reward_node_id,
-                "target_id": rule_id,
+                "target_id": target,
                 "relation_type": relation,
                 "properties": {
                     "outcome": event.outcome,
@@ -1277,19 +1333,22 @@ def _session_to_emission(
     repeated: int,
     auto_outcome: str,
     project_id: str,
+    gauntlet_map: dict[str, str] | None = None,
 ) -> dict:
     """Build a session summary emission for downstream consumers."""
     source_id = f"buildlog:{project_id}"
     session_node_id = f"session:{session.id}"
+    gmap = gauntlet_map or {}
 
     edges: list[dict] = []
 
     # Session → rule (used) edges
     for rule_id in session.selected_rules:
+        target = _resolve_rule_target(rule_id, gmap)
         edges.append(
             {
                 "source_id": session_node_id,
-                "target_id": rule_id,
+                "target_id": target,
                 "relation_type": "uses",
                 "properties": {"type": "rule_in_session"},
                 "confidence": 1.0,
@@ -2209,6 +2268,7 @@ def end_session(
     try:
         from buildlog.emissions import emit_artifact
 
+        gauntlet_map = _build_skill_to_gauntlet_map(buildlog_dir)
         emit_artifact(
             artifact=_session_to_emission(
                 session,
@@ -2217,6 +2277,7 @@ def end_session(
                 repeated,
                 auto_outcome,
                 project_id,
+                gauntlet_map=gauntlet_map,
             ),
             artifact_type="session_summary",
             project_id=project_id,
@@ -2403,12 +2464,14 @@ def log_mistake(
         from buildlog.emissions import emit_artifact
         from buildlog.emissions.mappers import DEFAULT_REGISTRY, _mistake_to_manifest
 
+        gauntlet_map = _build_skill_to_gauntlet_map(buildlog_dir)
         manifest = _mistake_to_manifest(
             mistake=mistake,
             session_data=session_data,
             selected_rules=selected_rules,
             project_id=project_id,
             registry=DEFAULT_REGISTRY,
+            gauntlet_map=gauntlet_map,
         )
         emit_artifact(
             artifact=manifest,
