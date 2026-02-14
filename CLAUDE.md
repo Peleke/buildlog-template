@@ -45,7 +45,7 @@ buildlog_log_reward(outcome="accepted")
 
 <!-- buildlog:rules:start -->
 
-## Learned Rules (buildlog, updated 2026-02-13)
+## Learned Rules (buildlog, updated 2026-02-14)
 
 ### Architectural
 

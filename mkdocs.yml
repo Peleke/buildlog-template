@@ -24,6 +24,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Learning Loop E2E: LEARNING-LOOP-E2E.md
   - Getting Started:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quick-start.md
@@ -40,6 +41,7 @@ nav:
     - MCP Integration: guides/mcp-integration.md
     - Storage Architecture: guides/storage-architecture.md
     - Interop & Seed Ingestion: guides/interop.md
+    - qortex Integration: guides/qortex-integration.md
     - Experiments: guides/experiments.md
     - Review Gauntlet: guides/review-gauntlet.md
     - Multi-Agent Setup: guides/multi-agent.md

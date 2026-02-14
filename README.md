@@ -171,12 +171,15 @@ buildlog experiment end
 buildlog experiment report
 ```
 
+**Want the full picture?** The [Learning Loop E2E Trace](docs/LEARNING-LOOP-E2E.md) walks through all 13 steps with explicit code citations: installation, Thompson Sampling, gauntlet review, bandit updates, emission pipeline, cross-domain discovery via qortex, and rule re-export. Every claim above has a mechanical proof.
+
 ## Documentation
 
 | Section | Description |
 |---------|------------|
 | [Installation](https://peleke.github.io/buildlog-template/getting-started/installation/) | Setup, extras, and initialization |
 | [Quick Start](https://peleke.github.io/buildlog-template/getting-started/quick-start/) | Full pipeline walkthrough |
+| **[Learning Loop E2E](docs/LEARNING-LOOP-E2E.md)** | **Complete 13-step trace with code citations — the proof** |
 | [Core Concepts](https://peleke.github.io/buildlog-template/getting-started/concepts/) | The problem, the claim, and the metric |
 | [Theory](https://peleke.github.io/buildlog-template/theory/) | From restaurant intuition to contextual bandits — the full tutorial |
 | [CLI Reference](https://peleke.github.io/buildlog-template/guides/cli-reference/) | Every command documented |
