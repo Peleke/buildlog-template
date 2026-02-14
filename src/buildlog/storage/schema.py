@@ -11,7 +11,7 @@ from pathlib import Path
 
 __all__ = ["SCHEMA_VERSION", "init_schema"]
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # ---------------------------------------------------------------------------
 # DDL statements
@@ -167,6 +167,31 @@ CREATE INDEX IF NOT EXISTS idx_bandit_context
     ON bandit_arms(project_id, context);
 """
 
+_CREATE_GAUNTLET_RULES = """\
+CREATE TABLE IF NOT EXISTS gauntlet_rules (
+    rule_id         TEXT PRIMARY KEY,
+    persona         TEXT NOT NULL,
+    rule            TEXT NOT NULL,
+    category        TEXT NOT NULL,
+    context         TEXT NOT NULL DEFAULT '',
+    antipattern     TEXT NOT NULL DEFAULT '',
+    rationale       TEXT NOT NULL DEFAULT '',
+    tags            TEXT NOT NULL DEFAULT '[]',
+    refs            TEXT DEFAULT '[]',
+    provenance      TEXT,
+    version         INTEGER NOT NULL DEFAULT 1,
+    active          INTEGER NOT NULL DEFAULT 1,
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    seed_file_hash  TEXT,
+    seed_filename   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_gauntlet_rules_persona
+    ON gauntlet_rules(persona);
+CREATE INDEX IF NOT EXISTS idx_gauntlet_rules_active
+    ON gauntlet_rules(active);
+"""
+
 # Ordered list of all DDL blocks for schema v1.
 _DDL_V1: list[str] = [
     _CREATE_SCHEMA_VERSION,
@@ -179,6 +204,7 @@ _DDL_V1: list[str] = [
     _CREATE_SESSIONS,
     _CREATE_MISTAKES,
     _CREATE_BANDIT_ARMS,
+    _CREATE_GAUNTLET_RULES,
 ]
 
 # ---------------------------------------------------------------------------
@@ -201,6 +227,12 @@ _MIGRATE_V3: list[str] = [
     "ALTER TABLE reward_events ADD COLUMN session_id TEXT;",
     "CREATE INDEX IF NOT EXISTS idx_reward_events_session ON reward_events(project_id, session_id);",
 ]
+
+# ---------------------------------------------------------------------------
+# v4 migration: add gauntlet_rules table (global, no project_id)
+# ---------------------------------------------------------------------------
+
+_MIGRATE_V4: str = _CREATE_GAUNTLET_RULES
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +300,16 @@ def init_schema(conn: sqlite3.Connection) -> int:
         conn.execute(
             "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
             (3,),
+        )
+        conn.commit()
+        current_version = 3
+
+    # Apply v4 migration: add gauntlet_rules table
+    if current_version < 4:
+        conn.executescript(_MIGRATE_V4)
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+            (4,),
         )
         conn.commit()
 
