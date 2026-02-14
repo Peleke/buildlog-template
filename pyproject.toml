@@ -41,6 +41,12 @@ dependencies = [
 # Zero extra deps — the engine is part of the base package.
 # This extra documents the clean namespace: from buildlog.engine import X
 engine = []
+# Interactive dashboard (marimo + plotly)
+viz = [
+    "marimo>=0.19.5",
+    "plotly>=6.5.2",
+    "matplotlib>=3.5.0",
+]
 # Local embeddings for semantic deduplication (offline)
 embeddings = [
     "sentence-transformers>=2.2.0",
@@ -75,6 +81,9 @@ all = [
     "ollama>=0.4.0",
     "anthropic>=0.40.0",
     "qortex>=0.3.6; python_version>='3.11'",
+    "marimo>=0.19.5",
+    "plotly>=6.5.2",
+    "matplotlib>=3.5.0",
 ]
 # Development dependencies
 dev = [
