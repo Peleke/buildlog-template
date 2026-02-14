@@ -240,7 +240,7 @@ def _(
         _fig_r.update_layout(
             **LAYOUT,
             title=dict(
-                text=f"Reward Trend &mdash; {len(_reward_events)} events, mean {_running[-1]:.3f}",
+                text=f"Reward Trend ({len(_reward_events)} events, mean {_running[-1]:.3f})",
                 font=dict(size=14),
             ),
             yaxis=dict(
@@ -329,7 +329,7 @@ def _(
         "Each session tracks which gauntlet rules were active and what mistakes were logged. "
         "Rule growth (start vs end) shows whether sessions are discovering new patterns. "
         "The Repeated Mistake Rate (RMR) is the key metric: it should trend downward over time. "
-        "A rising RMR means the learning loop isn't working &mdash; rules aren't preventing known mistakes.",
+        "A rising RMR means the learning loop isn't working. Rules aren't preventing known mistakes.",
     )
 
     # --- Session history ---
@@ -376,7 +376,7 @@ def _(
         _fig_s.update_layout(
             **LAYOUT,
             title=dict(
-                text=f"Rule Growth Across Sessions &mdash; {len(_sessions)} total",
+                text=f"Rule Growth Across Sessions ({len(_sessions)} total)",
                 font=dict(size=14),
             ),
             barmode="group",
@@ -620,7 +620,7 @@ def _(
         _fig_b.update_layout(
             **LAYOUT,
             title=dict(
-                text=f"Thompson Sampling Posteriors &mdash; {len(_bandit_stats)} rules",
+                text=f"Thompson Sampling Posteriors ({len(_bandit_stats)} rules)",
                 font=dict(size=14),
             ),
             xaxis=dict(
@@ -748,11 +748,22 @@ def _(
         from buildlog.emissions import get_emission_config, list_pending
 
         _cfg = get_emission_config()
-        _pending_count = len(list_pending(_cfg))
+        _all_pending = list_pending(_cfg)
+        if project_id:
+            _pending_count = sum(1 for p in _all_pending if project_id in p.name)
+        else:
+            _pending_count = len(_all_pending)
         if _cfg.signal_log.exists():
             for _line in _cfg.signal_log.read_text().strip().split("\n"):
                 try:
                     _evt = json.loads(_line)
+                    # Filter to current project
+                    if (
+                        project_id
+                        and _evt.get("project_id")
+                        and _evt["project_id"] != project_id
+                    ):
+                        continue
                     _event = _evt.get("event", "")
                     _ts = _evt.get("ts", "")[:10]
                     _atype = _evt.get("type", "unknown")
@@ -921,9 +932,7 @@ def _(
         )
         _fig_rel.update_layout(
             **LAYOUT,
-            title=dict(
-                text=f"Edge Types &mdash; {len(_edges)} edges", font=dict(size=14)
-            ),
+            title=dict(text=f"Edge Types ({len(_edges)} edges)", font=dict(size=14)),
             height=300,
         )
         _edge_chart = mo.ui.plotly(_fig_rel)
