@@ -124,17 +124,24 @@ def get_backend(
         conn = _get_connection(GLOBAL_DB_PATH)
         backend = SQLiteBackend(conn)
         if not backend.project_exists(project_id):
-            # Case 2: auto-register — but warn if local data would be orphaned
+            # Case 2: auto-register — auto-migrate if local data exists
             legacy_dot = buildlog_dir / ".buildlog"
-            if legacy_dot.is_dir() and any(
+            has_unmigrated = legacy_dot.is_dir() and any(
                 f for f in legacy_dot.iterdir() if not f.name.endswith(".migrated")
-            ):
-                logging.getLogger("buildlog.storage").warning(
-                    "Found un-migrated local data in %s. "
-                    "This data will not be visible until you run "
-                    "'buildlog migrate'. Using global SQLite backend.",
-                    legacy_dot,
-                )
+            )
+            if has_unmigrated:
+                try:
+                    from buildlog.storage.migrate import migrate_project
+
+                    migrate_project(buildlog_dir, project_root=project_root)
+                    # Refresh connection after migration
+                    conn = _get_connection(GLOBAL_DB_PATH)
+                    backend = SQLiteBackend(conn)
+                except Exception:
+                    logging.getLogger("buildlog.storage").warning(
+                        "Auto-migration of %s failed. Run 'buildlog migrate' manually.",
+                        legacy_dot,
+                    )
             backend.ensure_project(project_id, project_name, str(project_root))
         return backend, project_id
 

@@ -156,15 +156,23 @@ class TestInstallHooks:
         # Should not add again
         assert "pre-commit-config (branch protection)" not in result["installed"]
 
-    def test_pre_commit_config_no_standalone_hook(self, tmp_path: Path):
-        """When config exists, should NOT create standalone pre-commit hook."""
+    def test_pre_commit_config_no_standalone_branch_hook(self, tmp_path: Path):
+        """When config exists, branch protection goes to config, not standalone.
+
+        The enforce hook (BUILDLOG_ENFORCE) is always standalone, but the
+        branch protection hook should go to .pre-commit-config.yaml.
+        """
         project = self._setup_git_repo(tmp_path)
         config = tmp_path / ".pre-commit-config.yaml"
         config.write_text("repos: []\n")
 
         install_hooks(project)
         standalone = tmp_path / ".git" / "hooks" / "pre-commit"
-        assert not standalone.exists()  # Used config instead
+        # Enforce hook IS installed standalone, but branch protection is NOT
+        if standalone.exists():
+            content = standalone.read_text()
+            assert "prevent direct commits to main" not in content
+            assert "BUILDLOG_ENFORCE" in content
 
     def test_creates_hooks_dir(self, tmp_path: Path):
         """Should create .git/hooks/ if it doesn't exist."""

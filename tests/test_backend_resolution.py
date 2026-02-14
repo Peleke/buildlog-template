@@ -24,7 +24,8 @@ def global_db(tmp_path):
 class TestOrphanedLocalDataWarning:
     """Case 2: global DB exists, project not registered, local files present."""
 
-    def test_warns_on_unmigrated_local_files(self, tmp_path, global_db, caplog):
+    def test_auto_migrates_unmigrated_local_files(self, tmp_path, global_db, caplog):
+        """Should auto-migrate legacy files instead of just warning."""
         db_path, conn = global_db
 
         # Set up a project with local legacy data
@@ -37,13 +38,14 @@ class TestOrphanedLocalDataWarning:
         with (
             patch("buildlog.storage.GLOBAL_DB_PATH", db_path),
             patch("buildlog.storage._conn_cache", {}),
+            patch("buildlog.storage.migrate.migrate_project") as mock_migrate,
             caplog.at_level(logging.WARNING, logger="buildlog.storage"),
         ):
             backend, pid = get_backend(buildlog_dir, project_root=project_root)
 
         assert isinstance(backend, SQLiteBackend)
-        assert "un-migrated local data" in caplog.text
-        assert "buildlog migrate" in caplog.text
+        # Should have attempted migration, not just warned
+        mock_migrate.assert_called_once_with(buildlog_dir, project_root=project_root)
 
     def test_no_warning_when_all_files_migrated(self, tmp_path, global_db, caplog):
         db_path, conn = global_db
