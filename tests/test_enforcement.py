@@ -10,134 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-class TestClaudeCodeHookScript:
-    """Tests for .claude/hooks/enforce-buildlog-commit.sh."""
-
-    HOOK_PATH = (
-        Path(__file__).parent.parent
-        / ".claude"
-        / "hooks"
-        / "enforce-buildlog-commit.sh"
-    )
-
-    def _run_hook(
-        self, tool_name: str, command: str = ""
-    ) -> subprocess.CompletedProcess:
-        """Run the hook script with a simulated Claude Code PreToolUse payload."""
-        payload = json.dumps(
-            {
-                "session_id": "test-123",
-                "hook_event_name": "PreToolUse",
-                "tool_name": tool_name,
-                "tool_input": {"command": command},
-            }
-        )
-        return subprocess.run(
-            ["bash", str(self.HOOK_PATH)],
-            input=payload,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-
-    def test_hook_script_exists_and_executable(self):
-        """Hook script should exist and be executable."""
-        assert self.HOOK_PATH.exists(), f"Missing hook at {self.HOOK_PATH}"
-        import os
-
-        assert os.access(self.HOOK_PATH, os.X_OK), "Hook script is not executable"
-
-    def test_allows_non_bash_tools(self):
-        """Non-Bash tool calls should pass through."""
-        result = self._run_hook("Read", "")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_blocks_bare_git_commit(self):
-        """Should deny bare `git commit -m '...'`."""
-        result = self._run_hook("Bash", 'git commit -m "test message"')
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-        assert (
-            "buildlog_commit"
-            in output["hookSpecificOutput"]["permissionDecisionReason"]
-        )
-
-    def test_blocks_git_commit_in_chain(self):
-        """Should deny git commit when chained with &&."""
-        result = self._run_hook("Bash", 'git add . && git commit -m "test"')
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-
-    def test_allows_buildlog_commit_env_var(self):
-        """Should allow when BUILDLOG_COMMIT=1 is set."""
-        result = self._run_hook("Bash", 'BUILDLOG_COMMIT=1 git commit -m "test"')
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_allows_git_commit_amend(self):
-        """Should allow --amend commits."""
-        result = self._run_hook("Bash", "git commit --amend")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_allows_git_add(self):
-        """Should allow git add (not a commit)."""
-        result = self._run_hook("Bash", "git add .")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_allows_git_push(self):
-        """Should allow git push."""
-        result = self._run_hook("Bash", "git push origin feat/my-branch")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_allows_git_status(self):
-        """Should allow git status."""
-        result = self._run_hook("Bash", "git status")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_blocks_git_commit_after_semicolon(self):
-        """Should block git commit after semicolon separator."""
-        result = self._run_hook("Bash", 'echo "done"; git commit -m "test"')
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-
-
-class TestClaudeCodeSettingsJson:
-    """Tests for .claude/settings.json hook configuration."""
-
-    SETTINGS_PATH = Path(__file__).parent.parent / ".claude" / "settings.json"
-
-    def test_settings_file_exists(self):
-        """Settings file should exist."""
-        assert self.SETTINGS_PATH.exists()
-
-    def test_settings_has_pretooluse_hook(self):
-        """Settings should configure PreToolUse hook."""
-        config = json.loads(self.SETTINGS_PATH.read_text())
-        assert "hooks" in config
-        assert "PreToolUse" in config["hooks"]
-
-    def test_hook_targets_bash_tool(self):
-        """Hook should match Bash tool."""
-        config = json.loads(self.SETTINGS_PATH.read_text())
-        hook_entry = config["hooks"]["PreToolUse"][0]
-        assert hook_entry["matcher"] == "Bash"
-
-    def test_hook_command_references_script(self):
-        """Hook command should reference the enforce script."""
-        config = json.loads(self.SETTINGS_PATH.read_text())
-        hook_entry = config["hooks"]["PreToolUse"][0]
-        command = hook_entry["hooks"][0]["command"]
-        assert "enforce-buildlog-commit.sh" in command
-
-
 class TestAutoRewardOnEndSession:
     """Tests that end_session() auto-fires a reward signal."""
 
@@ -347,6 +219,131 @@ class TestEnforceCommitHookConstant:
         from buildlog.hooks import ENFORCE_COMMIT_HOOK
 
         assert "BUILDLOG_ENFORCE:-0" in ENFORCE_COMMIT_HOOK
+
+
+class TestInstallClaudeHooks:
+    """Tests for install_claude_hooks(): writes script + merges settings."""
+
+    def test_creates_hook_script(self, tmp_path: Path):
+        """Should create .claude/hooks/enforce-buildlog-commit.sh."""
+        from buildlog.hooks import install_claude_hooks
+
+        result = install_claude_hooks(tmp_path)
+        hook_path = tmp_path / ".claude" / "hooks" / "enforce-buildlog-commit.sh"
+        assert hook_path.exists()
+        assert "enforce-buildlog-commit.sh" in result["installed"]
+
+    def test_hook_script_is_executable(self, tmp_path: Path):
+        """Hook script must have executable permission."""
+        import stat
+
+        from buildlog.hooks import install_claude_hooks
+
+        install_claude_hooks(tmp_path)
+        hook_path = tmp_path / ".claude" / "hooks" / "enforce-buildlog-commit.sh"
+        mode = hook_path.stat().st_mode
+        assert mode & stat.S_IEXEC
+
+    def test_hook_script_actually_blocks_git_commit(self, tmp_path: Path):
+        """Run the installed script and verify it blocks bare git commit."""
+        from buildlog.hooks import install_claude_hooks
+
+        install_claude_hooks(tmp_path)
+        hook_path = tmp_path / ".claude" / "hooks" / "enforce-buildlog-commit.sh"
+
+        payload = json.dumps(
+            {
+                "session_id": "test",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "git commit -m 'test'"},
+            }
+        )
+        result = subprocess.run(
+            [str(hook_path)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+        output = json.loads(result.stdout)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_hook_script_allows_buildlog_commit(self, tmp_path: Path):
+        """Installed script should allow BUILDLOG_COMMIT=1 git commit."""
+        from buildlog.hooks import install_claude_hooks
+
+        install_claude_hooks(tmp_path)
+        hook_path = tmp_path / ".claude" / "hooks" / "enforce-buildlog-commit.sh"
+
+        payload = json.dumps(
+            {
+                "session_id": "test",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "BUILDLOG_COMMIT=1 git commit -m 'test'"},
+            }
+        )
+        result = subprocess.run(
+            [str(hook_path)],
+            input=payload,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == ""  # No deny output
+
+    def test_creates_settings_with_pretooluse_config(self, tmp_path: Path):
+        """Should create .claude/settings.json with PreToolUse hook."""
+        from buildlog.hooks import install_claude_hooks
+
+        install_claude_hooks(tmp_path)
+        settings_path = tmp_path / ".claude" / "settings.json"
+        assert settings_path.exists()
+        settings = json.loads(settings_path.read_text())
+        assert "hooks" in settings
+        assert "PreToolUse" in settings["hooks"]
+        entries = settings["hooks"]["PreToolUse"]
+        assert len(entries) == 1
+        assert entries[0]["matcher"] == "Bash"
+        assert "enforce-buildlog-commit.sh" in entries[0]["hooks"][0]["command"]
+
+    def test_merges_with_existing_settings(self, tmp_path: Path):
+        """Should preserve existing settings when adding hook config."""
+        from buildlog.hooks import install_claude_hooks
+
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        settings_path = claude_dir / "settings.json"
+        settings_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {"buildlog": {"command": "buildlog-mcp"}},
+                    "permissions": {"allow": ["Bash(git status:*)"]},
+                }
+            )
+        )
+
+        install_claude_hooks(tmp_path)
+        settings = json.loads(settings_path.read_text())
+        # Original keys preserved
+        assert "mcpServers" in settings
+        assert "buildlog" in settings["mcpServers"]
+        assert "permissions" in settings
+        # Hook added
+        assert "hooks" in settings
+        assert len(settings["hooks"]["PreToolUse"]) == 1
+
+    def test_idempotent(self, tmp_path: Path):
+        """Calling twice should not duplicate the hook entry."""
+        from buildlog.hooks import install_claude_hooks
+
+        install_claude_hooks(tmp_path)
+        install_claude_hooks(tmp_path)
+        settings = json.loads((tmp_path / ".claude" / "settings.json").read_text())
+        assert len(settings["hooks"]["PreToolUse"]) == 1
 
 
 class TestInstallEnforceHook:

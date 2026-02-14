@@ -4215,6 +4215,7 @@ class InitResult:
     claude_md_updated: bool
     mcp_registered: bool
     message: str
+    hooks_installed: bool = False
     error: str | None = None
 
 
@@ -4521,11 +4522,22 @@ def init_buildlog(
         except Exception:
             pass
 
+    # Install git hooks (pre-commit enforcement + post-commit nudge)
+    hooks_installed = False
+    try:
+        from buildlog.hooks import install_hooks
+
+        install_hooks(project_dir)
+        hooks_installed = True
+    except Exception:
+        pass
+
     return InitResult(
         initialized=True,
         buildlog_dir=str(buildlog_dir),
         claude_md_updated=claude_md_updated,
         mcp_registered=mcp_registered,
+        hooks_installed=hooks_installed,
         message="buildlog initialized successfully.",
     )
 

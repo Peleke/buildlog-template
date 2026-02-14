@@ -31,20 +31,21 @@ if [ -z "$BUILDLOG_COMMIT" ]; then
 fi
 """
 
-# Pre-commit hook: enforce buildlog_commit (opt-in via BUILDLOG_ENFORCE=1)
-# Users toggle this on with: export BUILDLOG_ENFORCE=1
-# Or per-project in .envrc / .env / shell profile
+# Pre-commit hook: enforce buildlog_commit (always on)
+# buildlog_commit() sets BUILDLOG_COMMIT=1 to bypass this hook.
+# Set BUILDLOG_ENFORCE=0 to disable (opt-out, not opt-in).
 ENFORCE_COMMIT_HOOK = """\
 #!/bin/sh
-# buildlog: block bare git commit when enforcement is enabled
-# Set BUILDLOG_ENFORCE=1 to activate (e.g. in .envrc or shell profile)
+# buildlog: block bare git commit — use buildlog_commit() instead
 # buildlog_commit() sets BUILDLOG_COMMIT=1 to bypass this hook.
-if [ "${BUILDLOG_ENFORCE:-0}" = "1" ] && [ -z "$BUILDLOG_COMMIT" ]; then
+# Set BUILDLOG_ENFORCE=0 to disable.
+if [ "${BUILDLOG_ENFORCE:-1}" != "0" ] && [ -z "$BUILDLOG_COMMIT" ]; then
     echo ""
-    echo "\\033[31m[buildlog] git commit blocked — enforcement is active.\\033[0m"
+    echo "\\033[31m[buildlog] Direct git commit blocked.\\033[0m"
     echo "  Use: buildlog commit -m \\"your message\\""
-    echo "  Or:  BUILDLOG_COMMIT=1 git commit -m \\"your message\\""
-    echo "  To disable: unset BUILDLOG_ENFORCE"
+    echo "  Or:  buildlog_commit(message=\\"...\\") via MCP"
+    echo "  To bypass once: BUILDLOG_COMMIT=1 git commit -m \\"...\\""
+    echo "  To disable enforcement: export BUILDLOG_ENFORCE=0"
     exit 1
 fi
 """
