@@ -59,6 +59,16 @@ repos:
         always_run: true
         pass_filenames: false
 
+  # Enforcement: block bare git commit, require buildlog_commit() (added by buildlog init)
+  - repo: local
+    hooks:
+      - id: enforce-buildlog-commit
+        name: "buildlog: enforce buildlog_commit()"
+        entry: "bash -c 'if [ \"${BUILDLOG_ENFORCE:-1}\" != \"0\" ] && [ -z \"$BUILDLOG_COMMIT\" ]; then echo \"[buildlog] Direct git commit blocked. Use buildlog_commit() or set BUILDLOG_ENFORCE=0.\"; exit 1; fi'"
+        language: system
+        always_run: true
+        pass_filenames: false
+
 # Configuration
 default_language_version:
   python: python3

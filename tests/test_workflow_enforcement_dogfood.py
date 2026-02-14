@@ -6,11 +6,12 @@ block what they should block, or they don't.
 
 What this proves:
 1. Pre-commit hook prevents commits to main/master
-2. Pre-commit hook allows commits on feature branches
-3. Post-commit hook nudges toward buildlog_commit (BUILDLOG_COMMIT unset)
-4. Post-commit hook is silent when BUILDLOG_COMMIT=1
-5. `buildlog verify --fix` detects + repairs missing workflow section
-6. Full init sets up the entire enforcement stack
+2. Pre-commit hook blocks bare git commit on feature branches (enforcement always-on)
+3. Pre-commit hook allows BUILDLOG_COMMIT=1 commits on feature branches
+4. Post-commit hook nudges toward buildlog_commit (when enforcement disabled)
+5. Post-commit hook is silent when BUILDLOG_COMMIT=1
+6. `buildlog verify --fix` detects + repairs missing workflow section
+7. Full init sets up the entire enforcement stack
 """
 
 from __future__ import annotations
@@ -69,17 +70,39 @@ class TestPreCommitHookBlocksMain:
         )
         assert "not allowed" in result.stderr or "not allowed" in result.stdout
 
-    def test_allows_commit_on_feature_branch(self, real_git_repo: Path):
-        """Committing on a feature branch should succeed."""
+    def test_blocks_bare_commit_on_feature_branch(self, real_git_repo: Path):
+        """Bare git commit on a feature branch should be blocked (enforcement is always-on)."""
         install_hooks(real_git_repo)
 
         _git(real_git_repo, "checkout", "-b", "feat/dogfood-test")
         (real_git_repo / "file.py").write_text("x = 1\n")
         _git(real_git_repo, "add", "file.py")
 
-        result = _git(real_git_repo, "commit", "-m", "should succeed")
+        result = _git(real_git_repo, "commit", "-m", "should fail")
+        assert result.returncode != 0, (
+            f"Bare commit on feature branch should be blocked by enforcement!\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        combined = result.stdout + result.stderr
+        assert "blocked" in combined.lower() or "buildlog" in combined.lower()
+
+    def test_allows_buildlog_commit_on_feature_branch(self, real_git_repo: Path):
+        """Commit via buildlog_commit (BUILDLOG_COMMIT=1) should succeed on feature branches."""
+        install_hooks(real_git_repo)
+
+        _git(real_git_repo, "checkout", "-b", "feat/dogfood-test")
+        (real_git_repo / "file.py").write_text("x = 1\n")
+        _git(real_git_repo, "add", "file.py")
+
+        result = _git(
+            real_git_repo,
+            "commit",
+            "-m",
+            "should succeed",
+            env={"BUILDLOG_COMMIT": "1"},
+        )
         assert result.returncode == 0, (
-            f"Commit on feature branch should succeed!\n"
+            f"Commit with BUILDLOG_COMMIT=1 should succeed on feature branch!\n"
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
 
@@ -88,15 +111,20 @@ class TestPostCommitHookNudge:
     """The post-commit hook must nudge users toward buildlog_commit."""
 
     def test_nudge_fires_without_env_var(self, real_git_repo: Path):
-        """Post-commit should print nudge when BUILDLOG_COMMIT is not set."""
+        """Post-commit should print nudge when BUILDLOG_COMMIT is not set.
+
+        Requires BUILDLOG_ENFORCE=0 because enforcement (always-on) would
+        block the commit before the post-commit nudge fires.
+        """
         install_hooks(real_git_repo)
 
         _git(real_git_repo, "checkout", "-b", "feat/nudge-test")
         (real_git_repo / "file.py").write_text("x = 1\n")
         _git(real_git_repo, "add", "file.py")
 
-        # Commit WITHOUT BUILDLOG_COMMIT env var
+        # Commit WITHOUT BUILDLOG_COMMIT, enforcement disabled
         env = {k: v for k, v in os.environ.items() if k != "BUILDLOG_COMMIT"}
+        env["BUILDLOG_ENFORCE"] = "0"
         result = _git(real_git_repo, "commit", "-m", "raw commit", env=env)
         assert result.returncode == 0
 
@@ -228,10 +256,16 @@ class TestFullInitDogfood:
             commit_result.returncode != 0
         ), "Pre-commit hook should block commits on main after init"
 
-        # Verify 5: Feature branch commits work
+        # Verify 5: Feature branch commits work via buildlog_commit (BUILDLOG_COMMIT=1)
         _git(real_git_repo, "checkout", "-b", "feat/dogfood-full")
-        commit_result = _git(real_git_repo, "commit", "-m", "should work")
+        commit_result = _git(
+            real_git_repo,
+            "commit",
+            "-m",
+            "should work",
+            env={"BUILDLOG_COMMIT": "1"},
+        )
         assert commit_result.returncode == 0, (
-            f"Feature branch commits should work!\n"
+            f"Feature branch commits with BUILDLOG_COMMIT=1 should work!\n"
             f"stdout: {commit_result.stdout}\nstderr: {commit_result.stderr}"
         )

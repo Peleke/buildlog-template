@@ -70,7 +70,7 @@ PRE_COMMIT_CONFIG_ENTRY = (
     "        pass_filenames: false\n"
 )
 
-# Dict form used for proper YAML manipulation in install_hooks()
+# Dict forms used for proper YAML manipulation in install_hooks()
 _PRE_COMMIT_HOOK_DICT: dict = {
     "repo": "local",
     "hooks": [
@@ -82,6 +82,27 @@ _PRE_COMMIT_HOOK_DICT: dict = {
                 "branch=$(git branch --show-current); "
                 'if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then '
                 'echo "[buildlog] Direct commits to $branch not allowed."; '
+                "exit 1; "
+                "fi'"
+            ),
+            "language": "system",
+            "always_run": True,
+            "pass_filenames": False,
+        }
+    ],
+}
+
+_ENFORCE_HOOK_DICT: dict = {
+    "repo": "local",
+    "hooks": [
+        {
+            "id": "enforce-buildlog-commit",
+            "name": "buildlog: enforce buildlog_commit()",
+            "entry": (
+                "bash -c '"
+                'if [ "${BUILDLOG_ENFORCE:-1}" != "0" ] && [ -z "$BUILDLOG_COMMIT" ]; then '
+                'echo "[buildlog] Direct git commit blocked. '
+                'Use buildlog_commit() or set BUILDLOG_ENFORCE=0."; '
                 "exit 1; "
                 "fi'"
             ),
@@ -106,16 +127,11 @@ def install_hooks(
     """Install buildlog git hooks into a project.
 
     Strategy:
-    1. If .pre-commit-config.yaml exists, append branch protection entry (if missing)
-    2. Otherwise, install standalone .git/hooks/pre-commit (chains with existing)
-    3. Always install .git/hooks/post-commit nudge (chains with existing)
-
-    Args:
-        project_dir: Project root directory.
-        no_hooks: Skip hook installation entirely.
-
-    Returns:
-        Dict with installed hooks and messages.
+    1. If .pre-commit-config.yaml exists, add branch protection + enforcement
+       as local hooks in the yaml (pre-commit framework uses exec, so appending
+       to .git/hooks/pre-commit would be dead code).
+    2. Otherwise, install standalone .git/hooks/pre-commit with both hooks.
+    3. Always install .git/hooks/post-commit nudge.
     """
     if no_hooks:
         return {"installed": [], "message": "Hook installation skipped (--no-hooks)"}
@@ -133,42 +149,52 @@ def install_hooks(
     hooks_dir = git_dir / "hooks"
     hooks_dir.mkdir(exist_ok=True)
 
-    # --- Pre-commit: branch protection ---
+    # --- Pre-commit: branch protection + enforcement ---
     pre_commit_config = project_dir / ".pre-commit-config.yaml"
     if pre_commit_config.exists():
+        # When pre-commit framework is in use, add hooks via yaml config.
+        # Appending to .git/hooks/pre-commit won't work because the
+        # pre-commit framework uses `exec`, making appended code unreachable.
         content = pre_commit_config.read_text()
+        config = yaml.safe_load(content) or {}
+        repos = config.get("repos") or []
+        changed = False
+
         if "prevent-commit-to-main" not in content:
-            # Parse YAML, append our hook entry, write back
-            config = yaml.safe_load(content) or {}
-            repos = config.get("repos") or []
             repos.append(_PRE_COMMIT_HOOK_DICT)
+            installed.append("pre-commit-config (branch protection)")
+            changed = True
+
+        if "enforce-buildlog-commit" not in content:
+            repos.append(_ENFORCE_HOOK_DICT)
+            installed.append("pre-commit-config (enforce buildlog_commit)")
+            changed = True
+
+        if changed:
             config["repos"] = repos
             pre_commit_config.write_text(
                 yaml.dump(config, default_flow_style=False, sort_keys=False)
             )
-            installed.append("pre-commit-config (branch protection)")
             messages.append(
-                "Added branch protection to .pre-commit-config.yaml. "
+                "Updated .pre-commit-config.yaml. "
                 "Run 'pre-commit install' to activate."
             )
         else:
-            messages.append("Branch protection already in .pre-commit-config.yaml")
+            messages.append("All hooks already in .pre-commit-config.yaml")
     else:
-        # Standalone hook
+        # No pre-commit framework — install standalone hooks
         _install_standalone_hook(
             hooks_dir / "pre-commit", PRE_COMMIT_HOOK, installed, messages
+        )
+        # Enforcement appends to the same pre-commit file (no exec issue
+        # since we wrote the file ourselves)
+        _install_standalone_hook(
+            hooks_dir / "pre-commit", ENFORCE_COMMIT_HOOK, installed, messages
         )
 
     # --- Post-commit: buildlog_commit nudge ---
     _install_standalone_hook(
         hooks_dir / "post-commit", POST_COMMIT_HOOK, installed, messages
-    )
-
-    # --- Pre-commit: enforce buildlog_commit (opt-in via BUILDLOG_ENFORCE=1) ---
-    # This chains with the existing pre-commit hook. The env var check means it's
-    # a no-op unless the user explicitly opts in.
-    _install_standalone_hook(
-        hooks_dir / "pre-commit", ENFORCE_COMMIT_HOOK, installed, messages
     )
 
     return {
@@ -204,7 +230,7 @@ def _install_standalone_hook(
         # Chain: append our hook after existing content (strip shebang line)
         lines = hook_content.split("\n", 1)
         body = lines[1] if len(lines) > 1 else hook_content
-        with open(hook_path, "a") as f:
+        with hook_path.open("a") as f:
             f.write("\n" + body)
         installed.append(f"{hook_name} (appended)")
         messages.append(f"{hook_name}: appended buildlog hook to existing")
