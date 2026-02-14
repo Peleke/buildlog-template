@@ -64,7 +64,7 @@ def _(mo):
 
     project_selector = mo.ui.dropdown(
         options=_project_options,
-        value="__all__",
+        value="All Projects",
         label="Project scope",
     )
 
