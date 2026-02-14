@@ -1190,26 +1190,22 @@ def buildlog_gauntlet_list_personas(
     Returns:
         Dict with personas, total_rules, total_personas
     """
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import load_rules
+    from buildlog.storage import get_backend
 
-    seeds_dir = get_default_seeds_dir()
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
 
-    if seeds_dir is None:
-        return {
-            "personas": {},
-            "total_rules": 0,
-            "total_personas": 0,
-            "error": ("No seed files found." " Check your buildlog installation."),
-        }
-
-    seeds = load_all_seeds(seeds_dir)
+    seeds = load_rules(backend=backend)
 
     if not seeds:
         return {
             "personas": {},
             "total_rules": 0,
             "total_personas": 0,
-            "error": "No seed files found in seeds directory.",
+            "error": "No rules found. Check your buildlog installation.",
         }
 
     personas_info = {

@@ -93,14 +93,17 @@ def _build_rules_join(seeds_dir: Path | None) -> list[dict]:
     Returns:
         List of dicts for rules.jsonl.
     """
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds, seeds_to_skills
+    from buildlog.seeds import load_rules, seeds_to_skills
+    from buildlog.storage import get_backend
 
-    if seeds_dir is None:
-        seeds_dir = get_default_seeds_dir()
-    if seeds_dir is None:
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
+
+    all_seeds = load_rules(backend=backend, seeds_dir=seeds_dir)
+    if not all_seeds:
         return []
-
-    all_seeds = load_all_seeds(seeds_dir)
     rows = []
     for persona, seed_file in all_seeds.items():
         skills = seeds_to_skills(seed_file)

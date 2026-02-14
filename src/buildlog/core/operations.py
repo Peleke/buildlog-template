@@ -2673,43 +2673,37 @@ def get_gauntlet_rules(
     Returns:
         GauntletRulesResult with formatted rules.
     """
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import load_rules
+    from buildlog.storage import get_backend
 
-    seeds_dir = get_default_seeds_dir()
-    if seeds_dir is None:
-        return GauntletRulesResult(
-            formatted="",
-            format=format,
-            total_rules=0,
-            personas=[],
-            message="No seed files found",
-            error="No seed files found. Check your buildlog installation.",
-        )
+    # Resolve backend for DB-backed rules
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
 
-    seeds = load_all_seeds(seeds_dir)
+    seeds = load_rules(backend=backend, persona=persona)
     if not seeds:
         return GauntletRulesResult(
             formatted="",
             format=format,
             total_rules=0,
             personas=[],
-            message="No seed files found",
-            error="No seed files found in seeds directory.",
+            message="No rules found",
+            error="No rules found. Check your buildlog installation.",
         )
 
-    # Filter by persona
-    if persona is not None:
-        if persona not in seeds:
-            available = ", ".join(seeds.keys())
-            return GauntletRulesResult(
-                formatted="",
-                format=format,
-                total_rules=0,
-                personas=[],
-                message=f"Unknown persona: {persona}",
-                error=f"Unknown persona: {persona}. Available: {available}",
-            )
-        seeds = {persona: seeds[persona]}
+    # Persona filtering already handled by load_rules, but validate
+    if persona is not None and persona not in seeds:
+        available = ", ".join(seeds.keys())
+        return GauntletRulesResult(
+            formatted="",
+            format=format,
+            total_rules=0,
+            personas=[],
+            message=f"Unknown persona: {persona}",
+            error=f"Unknown persona: {persona}. Available: {available}",
+        )
 
     # Build data structure
     data: dict = {}
@@ -3346,20 +3340,15 @@ def generate_gauntlet_prompt(
     Returns:
         GauntletPromptResult with the formatted prompt.
     """
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import get_rule_id, load_rules
+    from buildlog.storage import get_backend
 
-    seeds_dir = get_default_seeds_dir()
-    if seeds_dir is None:
-        return GauntletPromptResult(
-            prompt="",
-            target=target,
-            personas=[],
-            total_rules=0,
-            message="",
-            error="No seed files found. Check your buildlog installation.",
-        )
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
 
-    seeds = load_all_seeds(seeds_dir)
+    seeds = load_rules(backend=backend)
     if not seeds:
         return GauntletPromptResult(
             prompt="",
@@ -3367,7 +3356,7 @@ def generate_gauntlet_prompt(
             personas=[],
             total_rules=0,
             message="",
-            error="No seed files found in seeds directory.",
+            error="No rules found. Check your buildlog installation.",
         )
 
     if personas:
@@ -3392,8 +3381,6 @@ def generate_gauntlet_prompt(
     if select_k is not None and buildlog_dir is not None:
         seeds = select_gauntlet_rules(buildlog_dir, seeds, select_k)
     total_after = sum(len(sf.rules) for sf in seeds.values())
-
-    from buildlog.seeds import get_rule_id
 
     lines = [
         "# Review Gauntlet Prompt\n",
@@ -3482,14 +3469,14 @@ def gauntlet_loop_config(
     Returns:
         GauntletLoopConfigResult with full loop configuration.
     """
-    from buildlog.seeds import (
-        build_rule_id_index,
-        get_default_seeds_dir,
-        get_rule_id,
-        load_all_seeds,
-    )
+    from buildlog.seeds import build_rule_id_index, get_rule_id, load_rules
+    from buildlog.storage import get_backend
 
-    seeds_dir = get_default_seeds_dir()
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
+
     _empty = GauntletLoopConfigResult(
         target=target,
         personas=[],
@@ -3503,13 +3490,9 @@ def gauntlet_loop_config(
         message="",
     )
 
-    if seeds_dir is None:
-        _empty.error = "No seed files found. Check your buildlog installation."
-        return _empty
-
-    seeds = load_all_seeds(seeds_dir)
+    seeds = load_rules(backend=backend)
     if not seeds:
-        _empty.error = "No seed files found in seeds directory."
+        _empty.error = "No rules found. Check your buildlog installation."
         return _empty
 
     if personas:
