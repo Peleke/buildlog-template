@@ -258,3 +258,23 @@ class LegacyBackend:
         active_only: bool = True,
     ) -> int:
         return 0
+
+    # -- Emission edges (no-op for legacy) ----------------------------------
+
+    def store_emission_edges(self, edges: list[dict]) -> int:
+        return 0
+
+    def count_emission_edges(
+        self,
+        project_id: str | None = None,
+        relation_type: str | None = None,
+    ) -> int:
+        return 0
+
+    def load_emission_edges(
+        self,
+        project_id: str | None = None,
+        relation_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        return []

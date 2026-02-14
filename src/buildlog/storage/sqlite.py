@@ -646,6 +646,95 @@ class SQLiteBackend:
         ).fetchone()
         return row[0]
 
+    # -- Emission edges ------------------------------------------------------
+
+    def store_emission_edges(self, edges: list[dict]) -> int:
+        """Bulk insert emission edges, skipping duplicates. Returns count stored."""
+        stored = 0
+        for edge in edges:
+            try:
+                props = edge.get("properties")
+                if props is not None and not isinstance(props, str):
+                    props = json.dumps(props)
+                self.conn.execute(
+                    """\
+                    INSERT OR IGNORE INTO emission_edges
+                        (source_id, target_id, relation_type, confidence,
+                         artifact_type, project_id, emitted_at, consumed_at, properties)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        edge["source_id"],
+                        edge["target_id"],
+                        edge["relation_type"],
+                        edge.get("confidence"),
+                        edge["artifact_type"],
+                        edge["project_id"],
+                        edge["emitted_at"],
+                        edge["consumed_at"],
+                        props,
+                    ),
+                )
+                stored += self.conn.execute("SELECT changes()").fetchone()[0]
+            except sqlite3.IntegrityError:
+                pass
+        self.conn.commit()
+        return stored
+
+    def count_emission_edges(
+        self,
+        project_id: str | None = None,
+        relation_type: str | None = None,
+    ) -> int:
+        """Count stored emission edges, optionally filtered."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        if relation_type is not None:
+            clauses.append("relation_type = ?")
+            params.append(relation_type)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        row = self.conn.execute(
+            f"SELECT COUNT(*) FROM emission_edges{where}",
+            params,
+        ).fetchone()
+        return row[0]
+
+    def load_emission_edges(
+        self,
+        project_id: str | None = None,
+        relation_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Load emission edges, optionally filtered."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        if relation_type is not None:
+            clauses.append("relation_type = ?")
+            params.append(relation_type)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        rows = self.conn.execute(
+            f"SELECT * FROM emission_edges{where} ORDER BY id DESC LIMIT ?",
+            params,
+        ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            props = d.get("properties")
+            if props is not None and isinstance(props, str):
+                try:
+                    d["properties"] = json.loads(props)
+                except json.JSONDecodeError:
+                    pass
+            result.append(d)
+        return result
+
     def _gauntlet_row_to_dict(self, row: sqlite3.Row) -> dict:
         d = dict(row)
         # Deserialize JSON columns

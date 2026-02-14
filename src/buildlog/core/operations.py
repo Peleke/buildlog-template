@@ -1270,6 +1270,82 @@ def _reward_to_emission(
     }
 
 
+def _session_to_emission(
+    session: Session,
+    session_mistakes: list[Mistake],
+    duration: float,
+    repeated: int,
+    auto_outcome: str,
+    project_id: str,
+) -> dict:
+    """Build a session summary emission for downstream consumers."""
+    source_id = f"buildlog:{project_id}"
+    session_node_id = f"session:{session.id}"
+
+    edges: list[dict] = []
+
+    # Session → rule (used) edges
+    for rule_id in session.selected_rules:
+        edges.append(
+            {
+                "source_id": session_node_id,
+                "target_id": rule_id,
+                "relation_type": "uses",
+                "properties": {"type": "rule_in_session"},
+                "confidence": 1.0,
+            }
+        )
+
+    # Session → mistake (contains) edges
+    for mistake in session_mistakes:
+        edges.append(
+            {
+                "source_id": session_node_id,
+                "target_id": f"mistake:{mistake.id}",
+                "relation_type": "contains",
+                "properties": {
+                    "error_class": mistake.error_class,
+                    "was_repeat": mistake.was_repeat,
+                },
+                "confidence": 1.0,
+            }
+        )
+
+    props: dict = {
+        "started_at": session.started_at.isoformat(),
+        "duration_minutes": round(duration, 1),
+        "mistakes_logged": len(session_mistakes),
+        "repeated_mistakes": repeated,
+        "outcome": auto_outcome,
+        "rules_count": len(session.selected_rules),
+    }
+    if session.ended_at:
+        props["ended_at"] = session.ended_at.isoformat()
+    if session.error_class:
+        props["error_class"] = session.error_class
+
+    return {
+        "source_id": source_id,
+        "domain": "experiential",
+        "concepts": [
+            {
+                "name": session_node_id,
+                "domain": "experiential",
+                "properties": props,
+                "source_id": source_id,
+            }
+        ],
+        "edges": edges,
+        "rules": [],
+        "metadata": {
+            "source": "buildlog",
+            "emitted_at": (session.ended_at or session.started_at).isoformat(),
+            "project_id": project_id,
+            "session_id": session.id,
+        },
+    }
+
+
 def get_rewards(
     buildlog_dir: Path,
     limit: int | None = None,
@@ -1592,6 +1668,11 @@ class EndSessionResult:
     message: str
     entry_path: str | None = None
     report_appended: bool = False
+    distill_count: int = 0
+    skills_count: int = 0
+    emissions_consumed: int = 0
+    edges_stored: int = 0
+    pending_emissions: int = 0
 
 
 @dataclass
@@ -2106,6 +2187,62 @@ def end_session(
     except Exception:
         pass  # Never break end_session()
 
+    # --- Auto-distill: extract insights from entries ---
+    distill_count = 0
+    try:
+        from buildlog.distill import distill_all
+
+        distill_result = distill_all(buildlog_dir)
+        distill_count = distill_result.statistics.get("total_patterns", 0)
+    except Exception:
+        pass  # Never break end_session()
+
+    # --- Auto-skills: extract actionable skills from insights ---
+    skills_count = 0
+    try:
+        skill_set = generate_skills(buildlog_dir)
+        skills_count = skill_set.total_skills
+    except Exception:
+        pass  # Never break end_session()
+
+    # --- Session emission: fire-and-forget session summary ---
+    try:
+        from buildlog.emissions import emit_artifact
+
+        emit_artifact(
+            artifact=_session_to_emission(
+                session,
+                session_mistakes,
+                duration,
+                repeated,
+                auto_outcome if "auto_outcome" in dir() else "accepted",
+                project_id,
+            ),
+            artifact_type="session_summary",
+            project_id=project_id,
+        )
+    except Exception:
+        pass  # Never break end_session()
+
+    # --- Consume pending emissions: process backlog ---
+    emissions_consumed = 0
+    edges_stored = 0
+    pending_emissions = 0
+    try:
+        from buildlog.emissions.consumer import consume_pending_emissions
+
+        consumption = consume_pending_emissions(backend=backend)
+        emissions_consumed = consumption.consumed
+        edges_stored = consumption.edges_stored
+        try:
+            from buildlog.emissions import list_pending
+
+            pending_emissions = len(list_pending())
+        except Exception:
+            pass
+    except Exception:
+        pass  # Never break end_session()
+
     return EndSessionResult(
         session_id=session.id,
         duration_minutes=round(duration, 1),
@@ -2116,6 +2253,11 @@ def end_session(
         message=f"Ended session {session.id} ({duration:.1f}min, {len(session_mistakes)} mistakes, {repeated} repeats)",
         entry_path=entry_path_str,
         report_appended=report_appended,
+        distill_count=distill_count,
+        skills_count=skills_count,
+        emissions_consumed=emissions_consumed,
+        edges_stored=edges_stored,
+        pending_emissions=pending_emissions,
     )
 
 
@@ -2844,6 +2986,8 @@ class OverviewResult:
     workflow_ok: bool = True
     workflow_issues: list[str] | None = None
     message: str = ""
+    pending_emissions: int = 0
+    total_emission_edges: int = 0
 
 
 @dataclass
@@ -3057,6 +3201,21 @@ def get_overview(
         active_session = active_data.get("id")
 
     pending_count = total_skills - promoted_count - rejected_count
+
+    # Emission health
+    pending_emissions_count = 0
+    total_edges = 0
+    try:
+        from buildlog.emissions import list_pending
+
+        pending_emissions_count = len(list_pending())
+    except Exception:
+        pass
+    try:
+        total_edges = backend.count_emission_edges()
+    except Exception:
+        pass
+
     session_note = f" | session: {active_session}" if active_session else ""
     return OverviewResult(
         entries=len(entries),
@@ -3070,6 +3229,8 @@ def get_overview(
         active_session=active_session,
         render_targets=list(RENDERERS.keys()),
         message=f"{len(entries)} entries, {total_skills} skills ({pending_count} pending){session_note}",
+        pending_emissions=pending_emissions_count,
+        total_emission_edges=total_edges,
         **_quick_workflow_check(buildlog_dir),
     )
 
