@@ -165,9 +165,10 @@ def parse_improvements(content: str) -> dict[str, list[str]]:
     """
     result: dict[str, list[str]] = {cat: [] for cat in CATEGORIES}
 
-    # Stop at any H1 or H2 header (not H3+), or end of string
+    # Match both ## Improvements and ### Improvements headings.
+    # Stop at any H1 or H2 header (not H3+), or end of string.
     improvements_match = re.search(
-        r"^##\s+Improvements\s*\n(.*?)(?=^#{1,2}\s|\Z)",
+        r"^#{2,3}\s+Improvements\s*\n(.*?)(?=^#{1,2}\s|\Z)",
         content,
         re.MULTILINE | re.DOTALL,
     )
@@ -208,9 +209,9 @@ def parse_improvements_llm(content: str, backend: LLMBackend) -> list[ExtractedR
     Returns:
         List of ExtractedRule objects with rich metadata.
     """
-    # Extract the Improvements section
+    # Extract the Improvements section (accept both H2 and H3 headings)
     improvements_match = re.search(
-        r"^##\s+Improvements\s*\n(.*?)(?=^#{1,2}\s|\Z)",
+        r"^#{2,3}\s+Improvements\s*\n(.*?)(?=^#{1,2}\s|\Z)",
         content,
         re.MULTILINE | re.DOTALL,
     )
