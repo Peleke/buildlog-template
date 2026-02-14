@@ -21,6 +21,12 @@ class StorageBackend(Protocol):
     by ``buildlog_dir`` path.
     """
 
+    # -- project listing -----------------------------------------------------
+
+    def list_projects(self) -> list[dict]:
+        """Return all registered projects as ``[{id, name, path}]``."""
+        ...
+
     # -- ID set operations (promoted.json / rejected.json) -------------------
 
     def load_id_set(self, project_id: str, collection: str) -> set[str]:

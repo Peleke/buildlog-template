@@ -45,9 +45,28 @@ def _(mo):
     try:
         from buildlog.storage import get_backend
 
-        backend, project_id = get_backend()
+        backend, current_project_id = get_backend()
     except Exception:
-        backend, project_id = None, None
+        backend, current_project_id = None, None
+
+    # --- Build project selector ---
+    _project_options = {"All Projects": "__all__"}
+    if backend:
+        try:
+            _projects = backend.list_projects()
+            for _p in _projects:
+                _label = _p["name"]
+                if _p["id"] == current_project_id:
+                    _label += " (current)"
+                _project_options[_label] = _p["id"]
+        except Exception:
+            pass
+
+    project_selector = mo.ui.dropdown(
+        options=_project_options,
+        value="__all__",
+        label="Project scope",
+    )
 
     # --- Design tokens ---
     BLUE = "#3b82f6"
@@ -131,14 +150,54 @@ def _(mo):
         TEXT,
         backend,
         buildlog_dir,
+        current_project_id,
         go,
         json,
         kpi_card,
         panel_note,
-        project_id,
+        project_selector,
         section_header,
         sqlite3,
     )
+
+
+@app.cell
+def _(backend, current_project_id, mo, project_selector, MUTED):
+    """Derive the active project scope from the dropdown."""
+
+    mo.hstack(
+        [project_selector],
+        justify="center",
+        gap=1,
+    )
+
+    _sel = project_selector.value
+    if _sel == "__all__" or _sel is None:
+        selected_project_id = None
+    else:
+        selected_project_id = _sel
+
+    def load_events_scoped(table):
+        """Load events respecting the project selector."""
+        if not backend:
+            return []
+        try:
+            if selected_project_id:
+                return backend.load_events(selected_project_id, table)
+            else:
+                return backend.load_events_global(table)
+        except Exception:
+            return []
+
+    _scope_label = (
+        "all projects" if not selected_project_id else selected_project_id[:12]
+    )
+    scope_note = mo.md(
+        f'<div style="text-align:center; font-size:0.75rem; color:{MUTED}; '
+        f'margin-bottom:0.5rem;">Showing data for: <strong>{_scope_label}</strong></div>'
+    )
+
+    return load_events_scoped, scope_note, selected_project_id
 
 
 @app.cell
@@ -150,13 +209,13 @@ def _(
     LAYOUT,
     MUTED,
     RED,
-    backend,
     buildlog_dir,
     go,
     kpi_card,
+    load_events_scoped,
     mo,
     panel_note,
-    project_id,
+    scope_note,
     section_header,
 ):
     """Overview + Learning Loop tab."""
@@ -186,12 +245,7 @@ def _(
     )
 
     # --- Reward trend ---
-    _reward_events = []
-    if backend and project_id:
-        try:
-            _reward_events = backend.load_events(project_id, "rewards")
-        except Exception:
-            pass
+    _reward_events = load_events_scoped("rewards")
 
     _reward_chart = None
     if _reward_events:
@@ -295,6 +349,7 @@ def _(
 
     overview_tab = mo.vstack(
         [
+            scope_note,
             _header,
             _kpis,
             mo.hstack([_reward_chart, _outcome_chart], widths=[0.65, 0.35]),
@@ -314,12 +369,11 @@ def _(
     MUTED,
     PURPLE,
     RED,
-    backend,
     go,
     kpi_card,
+    load_events_scoped,
     mo,
     panel_note,
-    project_id,
     section_header,
 ):
     """Sessions + Mistakes tab."""
@@ -333,12 +387,7 @@ def _(
     )
 
     # --- Session history ---
-    _sessions = []
-    if backend and project_id:
-        try:
-            _sessions = backend.load_events(project_id, "sessions")
-        except Exception:
-            pass
+    _sessions = load_events_scoped("sessions")
 
     _session_chart = None
     if _sessions:
@@ -391,12 +440,7 @@ def _(
         )
 
     # --- Mistake analysis ---
-    _mistakes = []
-    if backend and project_id:
-        try:
-            _mistakes = backend.load_events(project_id, "mistakes")
-        except Exception:
-            pass
+    _mistakes = load_events_scoped("mistakes")
 
     _mistake_kpis = None
     _mistake_chart = None
@@ -523,6 +567,7 @@ def _(
     RED,
     buildlog_dir,
     go,
+    load_events_scoped,
     mo,
     panel_note,
     section_header,
@@ -639,15 +684,7 @@ def _(
 
     # --- Rule usage frequency from sessions ---
     _rule_usage: dict[str, int] = {}
-    _usage_sessions = []
-    try:
-        from buildlog.storage import get_backend as _gb2
-
-        _be2, _pid2 = _gb2()
-        if _be2 and _pid2:
-            _usage_sessions = _be2.load_events(_pid2, "sessions")
-    except Exception:
-        pass
+    _usage_sessions = load_events_scoped("sessions")
 
     _usage_chart = None
     if _usage_sessions:
@@ -720,8 +757,8 @@ def _(
     kpi_card,
     mo,
     panel_note,
-    project_id,
     section_header,
+    selected_project_id,
 ):
     """Emissions tab — signal timeline, artifact breakdown, pipeline health."""
     from collections import defaultdict
@@ -749,19 +786,21 @@ def _(
 
         _cfg = get_emission_config()
         _all_pending = list_pending(_cfg)
-        if project_id:
-            _pending_count = sum(1 for p in _all_pending if project_id in p.name)
+        if selected_project_id:
+            _pending_count = sum(
+                1 for p in _all_pending if selected_project_id in p.name
+            )
         else:
             _pending_count = len(_all_pending)
         if _cfg.signal_log.exists():
             for _line in _cfg.signal_log.read_text().strip().split("\n"):
                 try:
                     _evt = json.loads(_line)
-                    # Filter to current project
+                    # Filter to selected project (skip filter when showing all)
                     if (
-                        project_id
+                        selected_project_id
                         and _evt.get("project_id")
-                        and _evt["project_id"] != project_id
+                        and _evt["project_id"] != selected_project_id
                     ):
                         continue
                     _event = _evt.get("event", "")
@@ -784,7 +823,7 @@ def _(
     _edge_count = 0
     if backend:
         try:
-            _edge_count = backend.count_emission_edges()
+            _edge_count = backend.count_emission_edges(project_id=selected_project_id)
         except Exception:
             pass
 
@@ -901,9 +940,11 @@ def _(
 
     # --- Emission edges ---
     _edges = []
-    if backend and project_id:
+    if backend:
         try:
-            _edges = backend.load_emission_edges(project_id=project_id, limit=500)
+            _edges = backend.load_emission_edges(
+                project_id=selected_project_id, limit=500
+            )
         except Exception:
             pass
 
@@ -972,8 +1013,8 @@ def _(
     kpi_card,
     mo,
     panel_note,
-    project_id,
     section_header,
+    selected_project_id,
     stats,
 ):
     """Insights + Health tab."""
@@ -1032,14 +1073,21 @@ def _(
 
     # --- Review learnings ---
     _learnings = []
-    if backend and project_id:
+    if backend:
         try:
-            _rows = backend.conn.execute(
-                "SELECT rule, reinforcement_count, contradiction_count, category "
-                "FROM review_learnings WHERE project_id = ? "
-                "ORDER BY reinforcement_count DESC LIMIT 15",
-                (project_id,),
-            ).fetchall()
+            if selected_project_id:
+                _rows = backend.conn.execute(
+                    "SELECT rule, reinforcement_count, contradiction_count, category "
+                    "FROM review_learnings WHERE project_id = ? "
+                    "ORDER BY reinforcement_count DESC LIMIT 15",
+                    (selected_project_id,),
+                ).fetchall()
+            else:
+                _rows = backend.conn.execute(
+                    "SELECT rule, reinforcement_count, contradiction_count, category "
+                    "FROM review_learnings "
+                    "ORDER BY reinforcement_count DESC LIMIT 15",
+                ).fetchall()
             _learnings = [dict(r) for r in _rows]
         except Exception:
             pass

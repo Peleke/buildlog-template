@@ -32,6 +32,12 @@ class LegacyBackend:
         self.buildlog_dir = buildlog_dir
         self._dot = buildlog_dir / ".buildlog"
 
+    # -- project listing -----------------------------------------------------
+
+    def list_projects(self) -> list[dict]:
+        """Legacy backend has no project registry; return empty list."""
+        return []
+
     # -- helpers -------------------------------------------------------------
 
     def _ensure_dot(self) -> Path:
