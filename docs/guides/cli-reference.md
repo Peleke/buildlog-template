@@ -18,6 +18,36 @@ buildlog verify --fix            # Auto-fix missing workflow section
 buildlog verify --json           # Output as JSON
 ```
 
+## Workflow Enforcement
+
+`buildlog init` installs two enforcement layers automatically:
+
+### Git Hooks (pre-commit framework)
+
+When `.pre-commit-config.yaml` exists, `install_hooks()` adds two local hooks:
+
+| Hook ID | What it does |
+|---------|-------------|
+| `prevent-commit-to-main` | Blocks commits to `main`/`master` |
+| `enforce-buildlog-commit` | Blocks bare `git commit`. Use `buildlog commit` instead. |
+
+Without a pre-commit config, both hooks install as standalone `.git/hooks/pre-commit` scripts.
+
+The enforcement hook is always-on by default. `buildlog commit` sets `BUILDLOG_COMMIT=1` to bypass it.
+
+| Env var | Effect |
+|---------|--------|
+| `BUILDLOG_COMMIT=1` | Allow this commit through (set by `buildlog commit`) |
+| `BUILDLOG_ENFORCE=0` | Disable enforcement entirely (opt-out) |
+
+Skip hook installation with `buildlog init --defaults --no-hooks`.
+
+### Claude Code Hooks (agent-level)
+
+`.claude/hooks/enforce-buildlog-commit.sh` is a `PreToolUse` hook that intercepts `git commit` in Bash tool calls. It blocks bare commits and directs agents to use `buildlog commit` instead. `BUILDLOG_COMMIT=1` and `--amend` are allowed through.
+
+Wired via `.claude/settings.json` under `hooks.PreToolUse`.
+
 ## MCP Registration
 
 ```bash

@@ -8,6 +8,7 @@ import pytest
 
 from buildlog.hooks import (
     _HOOK_MARKER,
+    ENFORCE_COMMIT_HOOK,
     POST_COMMIT_HOOK,
     PRE_COMMIT_CONFIG_ENTRY,
     PRE_COMMIT_HOOK,
@@ -132,9 +133,9 @@ class TestInstallHooks:
         content = config.read_text()
         assert "prevent-commit-to-main" in content
 
-        # Result should be valid YAML with both repos preserved
+        # Result should be valid YAML with all repos preserved
         parsed = yaml.safe_load(content)
-        assert len(parsed["repos"]) == 2
+        assert len(parsed["repos"]) == 3  # original + branch protection + enforcement
         ids = [
             h["id"]
             for repo in parsed["repos"]
@@ -142,6 +143,7 @@ class TestInstallHooks:
             if "id" in h
         ]
         assert "prevent-commit-to-main" in ids
+        assert "enforce-buildlog-commit" in ids
 
     def test_pre_commit_config_idempotent(self, tmp_path: Path):
         """Should not double-add to .pre-commit-config.yaml."""
@@ -156,23 +158,52 @@ class TestInstallHooks:
         # Should not add again
         assert "pre-commit-config (branch protection)" not in result["installed"]
 
-    def test_pre_commit_config_no_standalone_branch_hook(self, tmp_path: Path):
-        """When config exists, branch protection goes to config, not standalone.
+    def test_pre_commit_config_no_standalone_hooks(self, tmp_path: Path):
+        """When .pre-commit-config.yaml exists, both hooks go to yaml, not standalone.
 
-        The enforce hook (BUILDLOG_ENFORCE) is always standalone, but the
-        branch protection hook should go to .pre-commit-config.yaml.
+        The pre-commit framework uses `exec` in .git/hooks/pre-commit, so
+        appending to it would be dead code. Both branch protection and
+        enforcement go into the yaml config instead.
         """
+        import yaml
+
         project = self._setup_git_repo(tmp_path)
         config = tmp_path / ".pre-commit-config.yaml"
         config.write_text("repos: []\n")
 
         install_hooks(project)
         standalone = tmp_path / ".git" / "hooks" / "pre-commit"
-        # Enforce hook IS installed standalone, but branch protection is NOT
+        # Neither hook should be standalone when yaml exists
         if standalone.exists():
             content = standalone.read_text()
             assert "prevent direct commits to main" not in content
-            assert "BUILDLOG_ENFORCE" in content
+            assert "BUILDLOG_ENFORCE" not in content
+
+        # Both should be in the yaml
+        parsed = yaml.safe_load(config.read_text())
+        ids = [
+            h["id"]
+            for repo in parsed["repos"]
+            for h in repo.get("hooks", [])
+            if "id" in h
+        ]
+        assert "prevent-commit-to-main" in ids
+        assert "enforce-buildlog-commit" in ids
+
+    def test_chains_enforce_hook_with_existing_pre_commit(self, tmp_path: Path):
+        """Should append enforcement hook to existing pre-commit alongside branch protection."""
+        project = self._setup_git_repo(tmp_path)
+        hooks_dir = tmp_path / ".git" / "hooks"
+        hooks_dir.mkdir()
+
+        existing_hook = hooks_dir / "pre-commit"
+        existing_hook.write_text("#!/bin/sh\n# user lint hook\nflake8 .\n")
+
+        install_hooks(project)
+
+        content = existing_hook.read_text()
+        assert "user lint hook" in content  # Original preserved
+        assert "BUILDLOG_ENFORCE" in content  # Enforcement added
 
     def test_creates_hooks_dir(self, tmp_path: Path):
         """Should create .git/hooks/ if it doesn't exist."""
@@ -203,6 +234,21 @@ class TestHookConstants:
         full_config = "repos:\n" + PRE_COMMIT_CONFIG_ENTRY
         parsed = yaml.safe_load(full_config)
         assert "repos" in parsed
+
+    def test_string_and_dict_forms_equivalent(self):
+        """PRE_COMMIT_CONFIG_ENTRY (string) and _PRE_COMMIT_HOOK_DICT (dict) must match."""
+        import yaml
+
+        from buildlog.hooks import _PRE_COMMIT_HOOK_DICT
+
+        parsed_string = yaml.safe_load("repos:\n" + PRE_COMMIT_CONFIG_ENTRY)
+        string_hook = parsed_string["repos"][0]["hooks"][0]
+        dict_hook = _PRE_COMMIT_HOOK_DICT["hooks"][0]
+
+        assert string_hook["id"] == dict_hook["id"]
+        assert string_hook["language"] == dict_hook["language"]
+        assert string_hook["always_run"] == dict_hook["always_run"]
+        assert string_hook["pass_filenames"] == dict_hook["pass_filenames"]
 
 
 class TestBuildlogCommitEnvVar:

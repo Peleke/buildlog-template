@@ -134,11 +134,15 @@ class TestInitBuildlog:
         assert result.mcp_registered is True
 
     def test_no_mcp_flag(self, tmp_path):
-        """no_mcp=True should skip MCP registration."""
+        """no_mcp=True should skip MCP registration (hooks still install)."""
         with patch("subprocess.run", side_effect=self._mock_copier(tmp_path)):
             result = init_buildlog(tmp_path, no_mcp=True)
-        assert not (tmp_path / ".claude" / "settings.json").exists()
         assert result.mcp_registered is False
+        # settings.json may exist for hook config, but must not have MCP
+        settings_path = tmp_path / ".claude" / "settings.json"
+        if settings_path.exists():
+            data = json.loads(settings_path.read_text())
+            assert "buildlog" not in data.get("mcpServers", {})
 
     def test_updates_claude_md(self, tmp_path):
         """Should add buildlog section to existing CLAUDE.md."""

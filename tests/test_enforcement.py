@@ -1,141 +1,12 @@
-"""Tests for enforcement layers: Claude Code hook, auto-reward, auto-migrate, git hook."""
+"""Tests for enforcement layers: auto-reward, auto-migrate, git hook."""
 
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
-
-class TestClaudeCodeHookScript:
-    """Tests for .claude/hooks/enforce-buildlog-commit.sh."""
-
-    HOOK_PATH = (
-        Path(__file__).parent.parent
-        / ".claude"
-        / "hooks"
-        / "enforce-buildlog-commit.sh"
-    )
-
-    def _run_hook(
-        self, tool_name: str, command: str = ""
-    ) -> subprocess.CompletedProcess:
-        """Run the hook script with a simulated Claude Code PreToolUse payload."""
-        payload = json.dumps(
-            {
-                "session_id": "test-123",
-                "hook_event_name": "PreToolUse",
-                "tool_name": tool_name,
-                "tool_input": {"command": command},
-            }
-        )
-        return subprocess.run(
-            ["bash", str(self.HOOK_PATH)],
-            input=payload,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-
-    def test_hook_script_exists_and_executable(self):
-        """Hook script should exist and be executable."""
-        assert self.HOOK_PATH.exists(), f"Missing hook at {self.HOOK_PATH}"
-        import os
-
-        assert os.access(self.HOOK_PATH, os.X_OK), "Hook script is not executable"
-
-    def test_allows_non_bash_tools(self):
-        """Non-Bash tool calls should pass through."""
-        result = self._run_hook("Read", "")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_blocks_bare_git_commit(self):
-        """Should deny bare `git commit -m '...'`."""
-        result = self._run_hook("Bash", 'git commit -m "test message"')
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-        assert (
-            "buildlog_commit"
-            in output["hookSpecificOutput"]["permissionDecisionReason"]
-        )
-
-    def test_blocks_git_commit_in_chain(self):
-        """Should deny git commit when chained with &&."""
-        result = self._run_hook("Bash", 'git add . && git commit -m "test"')
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-
-    def test_allows_buildlog_commit_env_var(self):
-        """Should allow when BUILDLOG_COMMIT=1 is set."""
-        result = self._run_hook("Bash", 'BUILDLOG_COMMIT=1 git commit -m "test"')
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_allows_git_commit_amend(self):
-        """Should allow --amend commits."""
-        result = self._run_hook("Bash", "git commit --amend")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_allows_git_add(self):
-        """Should allow git add (not a commit)."""
-        result = self._run_hook("Bash", "git add .")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_allows_git_push(self):
-        """Should allow git push."""
-        result = self._run_hook("Bash", "git push origin feat/my-branch")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_allows_git_status(self):
-        """Should allow git status."""
-        result = self._run_hook("Bash", "git status")
-        assert result.returncode == 0
-        assert result.stdout.strip() == ""
-
-    def test_blocks_git_commit_after_semicolon(self):
-        """Should block git commit after semicolon separator."""
-        result = self._run_hook("Bash", 'echo "done"; git commit -m "test"')
-        assert result.returncode == 0
-        output = json.loads(result.stdout)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
-
-
-class TestClaudeCodeSettingsJson:
-    """Tests for .claude/settings.json hook configuration."""
-
-    SETTINGS_PATH = Path(__file__).parent.parent / ".claude" / "settings.json"
-
-    def test_settings_file_exists(self):
-        """Settings file should exist."""
-        assert self.SETTINGS_PATH.exists()
-
-    def test_settings_has_pretooluse_hook(self):
-        """Settings should configure PreToolUse hook."""
-        config = json.loads(self.SETTINGS_PATH.read_text())
-        assert "hooks" in config
-        assert "PreToolUse" in config["hooks"]
-
-    def test_hook_targets_bash_tool(self):
-        """Hook should match Bash tool."""
-        config = json.loads(self.SETTINGS_PATH.read_text())
-        hook_entry = config["hooks"]["PreToolUse"][0]
-        assert hook_entry["matcher"] == "Bash"
-
-    def test_hook_command_references_script(self):
-        """Hook command should reference the enforce script."""
-        config = json.loads(self.SETTINGS_PATH.read_text())
-        hook_entry = config["hooks"]["PreToolUse"][0]
-        command = hook_entry["hooks"][0]["command"]
-        assert "enforce-buildlog-commit.sh" in command
 
 
 class TestAutoRewardOnEndSession:
@@ -342,11 +213,11 @@ class TestEnforceCommitHookConstant:
 
         assert ENFORCE_COMMIT_HOOK.startswith("#!/bin/sh")
 
-    def test_enforce_hook_opt_in_only(self):
-        """Should only block when BUILDLOG_ENFORCE=1, not by default."""
+    def test_enforce_hook_always_on_by_default(self):
+        """Should block by default (BUILDLOG_ENFORCE defaults to 1, opt-out with 0)."""
         from buildlog.hooks import ENFORCE_COMMIT_HOOK
 
-        assert "BUILDLOG_ENFORCE:-0" in ENFORCE_COMMIT_HOOK
+        assert "BUILDLOG_ENFORCE:-1" in ENFORCE_COMMIT_HOOK
 
 
 class TestInstallEnforceHook:
