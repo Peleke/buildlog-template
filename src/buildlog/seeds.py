@@ -36,9 +36,14 @@ __all__ = [
     "get_package_seeds_dir",
     "get_default_seeds_dir",
     "get_rule_id",
+    "generate_rule_id",
     "build_rule_id_index",
+    "import_seeds_to_db",
+    "load_rules_from_db",
+    "load_rules",
 ]
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from importlib import resources
@@ -500,3 +505,212 @@ def build_rule_id_index(
                 "index": i,
             }
     return index
+
+
+# ---------------------------------------------------------------------------
+# DB-backed rule storage
+# ---------------------------------------------------------------------------
+
+
+def generate_rule_id(persona: str, rule_text: str) -> str:
+    """Generate a content-addressable rule ID.
+
+    Format: ``{persona}:{sha256(rule_text)[:8]}``
+
+    Stable across reorders, renames, and re-imports. Two rules with
+    identical text under the same persona get the same ID.
+    """
+    digest = hashlib.sha256(rule_text.encode()).hexdigest()[:8]
+    return f"{persona}:{digest}"
+
+
+def import_seeds_to_db(
+    backend: Any,
+    seeds_dir: Path | None = None,
+) -> dict[str, int]:
+    """Import all YAML seed files into the gauntlet_rules SQLite table.
+
+    Args:
+        backend: A StorageBackend (must support save_gauntlet_rules_batch).
+        seeds_dir: Directory containing YAML seed files. Defaults to
+            the standard seeds resolution order.
+
+    Returns:
+        Dict mapping persona name to number of rules imported.
+    """
+    if seeds_dir is None:
+        seeds_dir = get_default_seeds_dir()
+    if seeds_dir is None:
+        logger.warning("No seeds directory found for DB import")
+        return {}
+
+    seeds = load_all_seeds(seeds_dir)
+    result: dict[str, int] = {}
+
+    for persona_name, sf in seeds.items():
+        # Compute a hash of the whole YAML file for change detection
+        yaml_path = seeds_dir / f"{persona_name}.yaml"
+        seed_file_hash = None
+        if yaml_path.exists():
+            seed_file_hash = hashlib.sha256(yaml_path.read_bytes()).hexdigest()
+
+        rules_batch: list[dict[str, Any]] = []
+        for rule in sf.rules:
+            rule_id = generate_rule_id(persona_name, rule.rule)
+            refs = [{"url": r.url, "title": r.title} for r in rule.references]
+            # Inject content-hash ID into provenance
+            prov = dict(rule.provenance) if rule.provenance else {}
+            prov["id"] = rule_id
+
+            rules_batch.append(
+                {
+                    "rule_id": rule_id,
+                    "persona": persona_name,
+                    "rule": rule.rule,
+                    "category": rule.category,
+                    "context": rule.context,
+                    "antipattern": rule.antipattern,
+                    "rationale": rule.rationale,
+                    "tags": rule.tags,
+                    "refs": refs,
+                    "provenance": prov,
+                    "version": sf.version,
+                    "active": True,
+                    "seed_file_hash": seed_file_hash,
+                    "seed_filename": yaml_path.name if yaml_path.exists() else None,
+                }
+            )
+
+        count = backend.save_gauntlet_rules_batch(
+            rules_batch,
+            seed_file_hash=seed_file_hash,
+            seed_filename=yaml_path.name if yaml_path.exists() else None,
+        )
+        result[persona_name] = count
+        logger.info(f"Imported {count} rules for {persona_name} into DB")
+
+    return result
+
+
+def load_rules_from_db(
+    backend: Any,
+    persona: str | None = None,
+) -> dict[str, SeedFile]:
+    """Load gauntlet rules from the DB and return as ``dict[str, SeedFile]``.
+
+    The returned structure is identical to ``load_all_seeds()`` so callers
+    can swap transparently. Each rule's ``provenance["id"]`` is set to
+    the content-hash rule_id so ``get_rule_id()`` returns stable IDs.
+
+    Args:
+        backend: A StorageBackend with load_gauntlet_rules.
+        persona: Optional persona filter.
+
+    Returns:
+        Dict mapping persona name to SeedFile.
+    """
+    rows = backend.load_gauntlet_rules(persona=persona, active_only=True)
+    if not rows:
+        return {}
+
+    # Group by persona
+    by_persona: dict[str, list[dict]] = {}
+    versions: dict[str, int] = {}
+    for row in rows:
+        p = row["persona"]
+        if p not in by_persona:
+            by_persona[p] = []
+        by_persona[p].append(row)
+        versions[p] = row.get("version", 1)
+
+    result: dict[str, SeedFile] = {}
+    for p, rule_rows in by_persona.items():
+        rules: list[SeedRule] = []
+        for r in rule_rows:
+            refs_data = r.get("refs", [])
+            refs = [
+                SeedReference(url=ref["url"], title=ref["title"])
+                for ref in (refs_data if isinstance(refs_data, list) else [])
+            ]
+            prov = r.get("provenance")
+            if isinstance(prov, str):
+                import json
+
+                try:
+                    prov = json.loads(prov)
+                except Exception:
+                    prov = None
+            # Ensure provenance has the content-hash ID
+            if prov is None:
+                prov = {}
+            prov["id"] = r["rule_id"]
+
+            rules.append(
+                SeedRule(
+                    rule=r["rule"],
+                    category=r["category"],
+                    context=r.get("context", ""),
+                    antipattern=r.get("antipattern", ""),
+                    rationale=r.get("rationale", ""),
+                    tags=r.get("tags", []),
+                    references=refs,
+                    provenance=prov,
+                )
+            )
+        result[p] = SeedFile(persona=p, version=versions.get(p, 1), rules=rules)
+
+    return result
+
+
+def load_rules(
+    backend: Any | None = None,
+    seeds_dir: Path | None = None,
+    persona: str | None = None,
+) -> dict[str, SeedFile]:
+    """Unified entry point: load rules from DB with YAML auto-import fallback.
+
+    Resolution order:
+      1. If backend has rules in the DB, return those.
+      2. If DB is empty, auto-import from YAML seeds, then return from DB.
+      3. If no backend (legacy), fall back to ``load_all_seeds()``.
+
+    Args:
+        backend: StorageBackend instance (None = legacy YAML-only mode).
+        seeds_dir: Seeds directory override.
+        persona: Optional persona filter.
+
+    Returns:
+        Dict mapping persona name to SeedFile.
+    """
+    # Legacy path: no backend → YAML only
+    if backend is None:
+        if seeds_dir is None:
+            seeds_dir = get_default_seeds_dir()
+        if seeds_dir is None:
+            return {}
+        seeds = load_all_seeds(seeds_dir)
+        if persona is not None:
+            seeds = {k: v for k, v in seeds.items() if k == persona}
+        return seeds
+
+    # Try loading from DB first
+    result = load_rules_from_db(backend, persona=persona)
+    if result:
+        return result
+
+    # DB is empty → auto-import from YAML, then load from DB
+    logger.info("No rules in DB, auto-importing from YAML seeds")
+    import_seeds_to_db(backend, seeds_dir=seeds_dir)
+    result = load_rules_from_db(backend, persona=persona)
+    if result:
+        return result
+
+    # Auto-import failed (e.g. LegacyBackend with no-op saves) → YAML fallback
+    if seeds_dir is None:
+        seeds_dir = get_default_seeds_dir()
+    if seeds_dir is None:
+        return {}
+    seeds = load_all_seeds(seeds_dir)
+    if persona is not None:
+        seeds = {k: v for k, v in seeds.items() if k == persona}
+    return seeds

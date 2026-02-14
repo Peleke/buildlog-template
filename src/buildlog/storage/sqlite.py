@@ -16,6 +16,24 @@ from buildlog.storage.schema import init_schema
 
 __all__ = ["SQLiteBackend"]
 
+# Whitelist of columns that can be updated on gauntlet_rules.
+_GAUNTLET_UPDATABLE: frozenset[str] = frozenset(
+    {
+        "rule",
+        "category",
+        "context",
+        "antipattern",
+        "rationale",
+        "tags",
+        "refs",
+        "provenance",
+        "version",
+        "active",
+        "seed_file_hash",
+        "seed_filename",
+    }
+)
+
 
 class SQLiteBackend:
     """StorageBackend backed by a global SQLite database."""
@@ -494,3 +512,155 @@ class SQLiteBackend:
             ),
         )
         self.conn.commit()
+
+    # -- Gauntlet rules (global, no project_id) -----------------------------
+
+    def load_gauntlet_rules(
+        self,
+        persona: str | None = None,
+        active_only: bool = True,
+    ) -> list[dict]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if persona is not None:
+            clauses.append("persona = ?")
+            params.append(persona)
+        if active_only:
+            clauses.append("active = 1")
+
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self.conn.execute(
+            f"SELECT * FROM gauntlet_rules{where} ORDER BY persona, rowid",
+            params,
+        ).fetchall()
+
+        return [self._gauntlet_row_to_dict(row) for row in rows]
+
+    def save_gauntlet_rules_batch(
+        self,
+        rules: list[dict],
+        seed_file_hash: str | None = None,
+        seed_filename: str | None = None,
+    ) -> int:
+        now = datetime.now(timezone.utc).isoformat()
+        count = 0
+        for r in rules:
+            self.conn.execute(
+                """\
+                INSERT INTO gauntlet_rules
+                    (rule_id, persona, rule, category, context, antipattern,
+                     rationale, tags, refs, provenance, version, active,
+                     created_at, updated_at, seed_file_hash, seed_filename)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (rule_id)
+                DO UPDATE SET
+                    rule = excluded.rule,
+                    category = excluded.category,
+                    context = excluded.context,
+                    antipattern = excluded.antipattern,
+                    rationale = excluded.rationale,
+                    tags = excluded.tags,
+                    refs = excluded.refs,
+                    provenance = excluded.provenance,
+                    version = excluded.version,
+                    active = excluded.active,
+                    updated_at = excluded.updated_at,
+                    seed_file_hash = excluded.seed_file_hash,
+                    seed_filename = excluded.seed_filename
+                """,
+                (
+                    r["rule_id"],
+                    r["persona"],
+                    r["rule"],
+                    r["category"],
+                    r.get("context", ""),
+                    r.get("antipattern", ""),
+                    r.get("rationale", ""),
+                    json.dumps(r.get("tags", [])),
+                    json.dumps(r.get("refs", [])),
+                    json.dumps(r.get("provenance")) if r.get("provenance") else None,
+                    r.get("version", 1),
+                    1 if r.get("active", True) else 0,
+                    r.get("created_at", now),
+                    now,
+                    seed_file_hash or r.get("seed_file_hash"),
+                    seed_filename or r.get("seed_filename"),
+                ),
+            )
+            count += 1
+        self.conn.commit()
+        return count
+
+    def get_gauntlet_rule(self, rule_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM gauntlet_rules WHERE rule_id = ?",
+            (rule_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._gauntlet_row_to_dict(row)
+
+    def update_gauntlet_rule(self, rule_id: str, **fields: Any) -> bool:
+        # Only allow whitelisted columns
+        safe_fields = {k: v for k, v in fields.items() if k in _GAUNTLET_UPDATABLE}
+        if not safe_fields:
+            return False
+
+        # Serialize JSON fields
+        for col in ("tags", "refs", "provenance"):
+            if col in safe_fields and not isinstance(safe_fields[col], str):
+                safe_fields[col] = json.dumps(safe_fields[col])
+
+        now = datetime.now(timezone.utc).isoformat()
+        safe_fields["updated_at"] = now
+
+        set_clause = ", ".join(f"{k} = ?" for k in safe_fields)
+        params = list(safe_fields.values()) + [rule_id]
+        cursor = self.conn.execute(
+            f"UPDATE gauntlet_rules SET {set_clause} WHERE rule_id = ?",
+            params,
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
+
+    def deactivate_gauntlet_rule(self, rule_id: str) -> bool:
+        return self.update_gauntlet_rule(rule_id, active=0)
+
+    def count_gauntlet_rules(
+        self,
+        persona: str | None = None,
+        active_only: bool = True,
+    ) -> int:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if persona is not None:
+            clauses.append("persona = ?")
+            params.append(persona)
+        if active_only:
+            clauses.append("active = 1")
+
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        row = self.conn.execute(
+            f"SELECT COUNT(*) FROM gauntlet_rules{where}",
+            params,
+        ).fetchone()
+        return row[0]
+
+    def _gauntlet_row_to_dict(self, row: sqlite3.Row) -> dict:
+        d = dict(row)
+        # Deserialize JSON columns
+        for col in ("tags", "refs"):
+            val = d.get(col)
+            if val is not None and isinstance(val, str):
+                try:
+                    d[col] = json.loads(val)
+                except json.JSONDecodeError:
+                    pass
+        prov = d.get("provenance")
+        if prov is not None and isinstance(prov, str):
+            try:
+                d["provenance"] = json.loads(prov)
+            except json.JSONDecodeError:
+                pass
+        d["active"] = bool(d.get("active", 1))
+        return d

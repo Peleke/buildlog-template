@@ -1908,20 +1908,23 @@ def gauntlet_list(output_json: bool):
     """
     import json as json_module
 
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import load_rules
+    from buildlog.storage import get_backend
 
-    # Find seeds directory (local overrides > buildlog template > package bundled)
-    seeds_dir = get_default_seeds_dir()
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
 
-    if seeds_dir is None:
+    seeds = load_rules(backend=backend)
+
+    if not seeds:
         if output_json:
-            click.echo('{"personas": {}, "total_rules": 0, "error": "No seeds found"}')
+            click.echo('{"personas": {}, "total_rules": 0, "error": "No rules found"}')
         else:
-            click.echo("No seed files found.")
+            click.echo("No rules found.")
             click.echo("Seeds are bundled with buildlog - check your installation.")
         return
-
-    seeds = load_all_seeds(seeds_dir)
 
     if output_json:
         data = {
@@ -1987,25 +1990,25 @@ def gauntlet_rules(persona: str, fmt: str, output: str | None):
     """
     import json as json_module
 
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import load_rules
+    from buildlog.storage import get_backend
 
-    # Find seeds directory (local overrides > buildlog template > package bundled)
-    seeds_dir = get_default_seeds_dir()
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
 
-    if seeds_dir is None:
-        click.echo("No seed files found.", err=True)
-        click.echo(
-            "Seeds are bundled with buildlog - check your installation.", err=True
-        )
-        raise SystemExit(1)
-
-    seeds = load_all_seeds(seeds_dir)
+    persona_filter = persona if persona != "all" else None
+    seeds = load_rules(backend=backend, persona=persona_filter)
 
     if not seeds:
-        click.echo("No seed files found in directory.", err=True)
+        if persona_filter:
+            click.echo(f"No rules found for persona: {persona}", err=True)
+        else:
+            click.echo("No rules found.", err=True)
         raise SystemExit(1)
 
-    # Filter personas
+    # Filter personas (handles case where load_rules returned all and we need one)
     if persona != "all":
         if persona not in seeds:
             available = ", ".join(seeds.keys())
@@ -2111,22 +2114,18 @@ def gauntlet_prompt(target: str, persona: tuple[str, ...], output: str | None):
         buildlog gauntlet prompt src/api.py -p security_karen
         buildlog gauntlet prompt . -o review_prompt.md
     """
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import load_rules
+    from buildlog.storage import get_backend
 
-    # Find seeds directory (local overrides > buildlog template > package bundled)
-    seeds_dir = get_default_seeds_dir()
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
 
-    if seeds_dir is None:
-        click.echo("No seed files found.", err=True)
-        click.echo(
-            "Seeds are bundled with buildlog - check your installation.", err=True
-        )
-        raise SystemExit(1)
-
-    seeds = load_all_seeds(seeds_dir)
+    seeds = load_rules(backend=backend)
 
     if not seeds:
-        click.echo("No seed files found in directory.", err=True)
+        click.echo("No rules found.", err=True)
         raise SystemExit(1)
 
     # Filter personas
@@ -2370,19 +2369,18 @@ def gauntlet_loop(
     """
     import json as json_module
 
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import load_rules
+    from buildlog.storage import get_backend
 
-    # Find seeds directory
-    seeds_dir = get_default_seeds_dir()
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
 
-    if seeds_dir is None:
-        click.echo("No seed files found.", err=True)
-        raise SystemExit(1)
-
-    seeds = load_all_seeds(seeds_dir)
+    seeds = load_rules(backend=backend)
 
     if not seeds:
-        click.echo("No seed files found in directory.", err=True)
+        click.echo("No rules found.", err=True)
         raise SystemExit(1)
 
     # Filter personas

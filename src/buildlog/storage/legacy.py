@@ -8,9 +8,12 @@ by the ``buildlog_dir`` path passed at construction time.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["LegacyBackend"]
 
@@ -220,3 +223,38 @@ class LegacyBackend:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a") as f:
             f.write(json.dumps(record) + "\n")
+
+    # -- Gauntlet rules (no-op for legacy) ----------------------------------
+
+    def load_gauntlet_rules(
+        self,
+        persona: str | None = None,
+        active_only: bool = True,
+    ) -> list[dict]:
+        logger.debug("LegacyBackend.load_gauntlet_rules: no-op (use YAML)")
+        return []
+
+    def save_gauntlet_rules_batch(
+        self,
+        rules: list[dict],
+        seed_file_hash: str | None = None,
+        seed_filename: str | None = None,
+    ) -> int:
+        logger.debug("LegacyBackend.save_gauntlet_rules_batch: no-op")
+        return 0
+
+    def get_gauntlet_rule(self, rule_id: str) -> dict | None:
+        return None
+
+    def update_gauntlet_rule(self, rule_id: str, **fields: Any) -> bool:
+        return False
+
+    def deactivate_gauntlet_rule(self, rule_id: str) -> bool:
+        return False
+
+    def count_gauntlet_rules(
+        self,
+        persona: str | None = None,
+        active_only: bool = True,
+    ) -> int:
+        return 0

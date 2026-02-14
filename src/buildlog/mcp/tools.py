@@ -345,7 +345,7 @@ def buildlog_log_reward(
 
 
 def buildlog_rewards(
-    limit: int | None = None,
+    limit: int = 50,
     session_id: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
@@ -355,7 +355,9 @@ def buildlog_rewards(
     understanding learning progress.
 
     Args:
-        limit: Maximum number of events to return (most recent first)
+        limit: Maximum number of events to return (most recent first).
+            Defaults to 50 to stay within MCP token limits.
+            Pass 0 for all events (caution: may be large).
         session_id: Filter rewards to this session only
         buildlog_dir: Path to buildlog directory
 
@@ -372,7 +374,7 @@ def buildlog_rewards(
         buildlog_rewards(limit=10)  # Get 10 most recent events with stats
         buildlog_rewards(session_id="2026-02-06-auth")  # Session-specific
     """
-    result = get_rewards(Path(buildlog_dir), limit, session_id=session_id)
+    result = get_rewards(Path(buildlog_dir), limit or None, session_id=session_id)
 
     # Convert events to dicts
     return _ensure_message(
@@ -774,6 +776,7 @@ def buildlog_gauntlet_accept_risk(
 def buildlog_gauntlet_rules(
     persona: str | None = None,
     format: str = "json",
+    compact: bool = True,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Load gauntlet reviewer rules. Call before reviewing code to get rules.
@@ -784,12 +787,15 @@ def buildlog_gauntlet_rules(
     Args:
         persona: Filter to a specific persona, or None for all
         format: Output format (json, yaml, markdown)
+        compact: If True (default), return only id + rule + category
+            per rule. Set False for full fields (context, antipattern,
+            rationale, tags). Compact keeps responses under token limits.
         buildlog_dir: Path to buildlog directory
 
     Returns:
         Dict with formatted rules, total_rules, personas list
     """
-    result = get_gauntlet_rules(persona=persona, format=format)
+    result = get_gauntlet_rules(persona=persona, format=format, compact=compact)
     return _ensure_message(asdict(result))
 
 
@@ -1190,26 +1196,22 @@ def buildlog_gauntlet_list_personas(
     Returns:
         Dict with personas, total_rules, total_personas
     """
-    from buildlog.seeds import get_default_seeds_dir, load_all_seeds
+    from buildlog.seeds import load_rules
+    from buildlog.storage import get_backend
 
-    seeds_dir = get_default_seeds_dir()
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
 
-    if seeds_dir is None:
-        return {
-            "personas": {},
-            "total_rules": 0,
-            "total_personas": 0,
-            "error": ("No seed files found." " Check your buildlog installation."),
-        }
-
-    seeds = load_all_seeds(seeds_dir)
+    seeds = load_rules(backend=backend)
 
     if not seeds:
         return {
             "personas": {},
             "total_rules": 0,
             "total_personas": 0,
-            "error": "No seed files found in seeds directory.",
+            "error": "No rules found. Check your buildlog installation.",
         }
 
     personas_info = {
@@ -1420,6 +1422,13 @@ def buildlog_export(
 
     seeds_dir = get_default_seeds_dir() if include_rules_join else None
 
+    # When no output path, use a temp dir to avoid unbounded string returns
+    # that can exceed MCP token limits (same class of bug as #167).
+    if output_path is None:
+        import tempfile
+
+        output_path = Path(tempfile.mkdtemp(prefix="buildlog-export-"))
+
     exporter = JsonlExporter()
     summary = exporter.export(
         backend,
@@ -1437,7 +1446,7 @@ def buildlog_export(
         "format": format,
         "project_id": pid,
         "tables": table_list or EXPORTABLE_TABLES,
-        "output": str(output_path) if output_path else None,
+        "output": str(output_path),
         "summary": summary,
     }
 

@@ -88,7 +88,7 @@ def _make_ctx(mistake: Mistake | None = None, **overrides) -> EdgeMapperContext:
 
 class TestSchemaV2Migration:
     def test_schema_version_is_3(self):
-        assert SCHEMA_VERSION == 3
+        assert SCHEMA_VERSION == 4
 
     def test_fresh_install_has_v2_columns(self):
         """Fresh DB should have all v2 columns in mistakes table."""
@@ -98,7 +98,7 @@ class TestSchemaV2Migration:
 
         # Check schema_version
         row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
-        assert row[0] == 3
+        assert row[0] == 4
 
         # Check v2 columns exist
         cursor = conn.execute("PRAGMA table_info(mistakes)")
@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS mistakes (
         conn.row_factory = sqlite3.Row
         init_schema(conn)
         version = init_schema(conn)
-        assert version == 3
+        assert version == 4
 
 
 # ============================================================================
@@ -995,8 +995,8 @@ class TestSchemaV3Migration:
         conn.row_factory = sqlite3.Row
         version1 = init_schema(conn)
         version2 = init_schema(conn)
-        assert version1 == 3
-        assert version2 == 3
+        assert version1 == 4
+        assert version2 == 4
 
 
 # ============================================================================
