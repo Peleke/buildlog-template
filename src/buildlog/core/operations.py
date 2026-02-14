@@ -2083,6 +2083,29 @@ def end_session(
     except Exception:
         pass  # Never break end_session()
 
+    # --- Auto-reward: close the feedback loop automatically ---
+    # Without this, the bandit never learns because manual log_reward()
+    # calls are forgotten ~100% of the time.  Outcome logic:
+    #   - 0 repeated mistakes -> "accepted" (rules worked)
+    #   - any repeated mistakes -> "revision" (rules partially failed)
+    #
+    # IMPORTANT: Pass rules_active explicitly. The active session was
+    # already deleted above (line ~2032), so log_reward() can't look
+    # it up. Without explicit rules, the bandit never updates.
+    try:
+        auto_outcome = "accepted" if repeated == 0 else "revision"
+        log_reward(
+            buildlog_dir=buildlog_dir,
+            outcome=auto_outcome,  # type: ignore[arg-type]
+            rules_active=session.selected_rules,
+            error_class=session.error_class,
+            session_id=session.id,
+            source="auto:end_session",
+            notes=f"auto: {len(session_mistakes)} mistakes, {repeated} repeats",
+        )
+    except Exception:
+        pass  # Never break end_session()
+
     return EndSessionResult(
         session_id=session.id,
         duration_minutes=round(duration, 1),

@@ -58,8 +58,12 @@ class TestInitMcpGlobal:
         assert result.exit_code == 0
         assert (mock_home / ".claude.json").exists()
 
-    def test_global_flag_writes_correct_path(self, runner, mock_home):
-        """--global writes to ~/.claude.json, not local."""
+    def test_global_flag_writes_correct_path(
+        self, runner, mock_home, tmp_path, monkeypatch
+    ):
+        """--global writes to ~/.claude.json, not local .claude/settings.json."""
+        # Run from a temp dir so pre-existing .claude/settings.json doesn't interfere
+        monkeypatch.chdir(tmp_path)
         result = runner.invoke(main, ["init-mcp", "--global", "-y"])
         assert result.exit_code == 0
 
@@ -67,8 +71,8 @@ class TestInitMcpGlobal:
         global_settings = mock_home / ".claude.json"
         assert global_settings.exists()
 
-        # Local file should NOT exist
-        local_settings = Path(".claude") / "settings.json"
+        # Local file should NOT have been created by init-mcp
+        local_settings = tmp_path / ".claude" / "settings.json"
         assert not local_settings.exists()
 
     def test_global_flag_correct_mcp_config(self, runner, mock_home):

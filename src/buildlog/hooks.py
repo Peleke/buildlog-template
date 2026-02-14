@@ -20,7 +20,7 @@ if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
 fi
 """
 
-# Post-commit hook: nudge toward buildlog_commit
+# Post-commit hook: nudge toward buildlog_commit (or block if enforced)
 POST_COMMIT_HOOK = """\
 #!/bin/sh
 # buildlog: remind to use buildlog_commit instead of raw git commit
@@ -28,6 +28,24 @@ if [ -z "$BUILDLOG_COMMIT" ]; then
     echo ""
     echo "\\033[33m[buildlog] Tip: use 'buildlog commit -m \"...\"' instead of 'git commit'\\033[0m"
     echo "  buildlog_commit wraps git and auto-logs to your journal entry."
+fi
+"""
+
+# Pre-commit hook: enforce buildlog_commit (opt-in via BUILDLOG_ENFORCE=1)
+# Users toggle this on with: export BUILDLOG_ENFORCE=1
+# Or per-project in .envrc / .env / shell profile
+ENFORCE_COMMIT_HOOK = """\
+#!/bin/sh
+# buildlog: block bare git commit when enforcement is enabled
+# Set BUILDLOG_ENFORCE=1 to activate (e.g. in .envrc or shell profile)
+# buildlog_commit() sets BUILDLOG_COMMIT=1 to bypass this hook.
+if [ "${BUILDLOG_ENFORCE:-0}" = "1" ] && [ -z "$BUILDLOG_COMMIT" ]; then
+    echo ""
+    echo "\\033[31m[buildlog] git commit blocked — enforcement is active.\\033[0m"
+    echo "  Use: buildlog commit -m \\"your message\\""
+    echo "  Or:  BUILDLOG_COMMIT=1 git commit -m \\"your message\\""
+    echo "  To disable: unset BUILDLOG_ENFORCE"
+    exit 1
 fi
 """
 
@@ -145,6 +163,13 @@ def install_hooks(
         hooks_dir / "post-commit", POST_COMMIT_HOOK, installed, messages
     )
 
+    # --- Pre-commit: enforce buildlog_commit (opt-in via BUILDLOG_ENFORCE=1) ---
+    # This chains with the existing pre-commit hook. The env var check means it's
+    # a no-op unless the user explicitly opts in.
+    _install_standalone_hook(
+        hooks_dir / "pre-commit", ENFORCE_COMMIT_HOOK, installed, messages
+    )
+
     return {
         "installed": installed,
         "message": "; ".join(messages) if messages else "Hooks up to date",
@@ -162,7 +187,17 @@ def _install_standalone_hook(
 
     if hook_path.exists():
         existing = hook_path.read_text()
-        if _HOOK_MARKER in existing:
+        # Use the specific marker line from this hook (e.g. "# buildlog: prevent direct")
+        # to allow multiple buildlog hooks in the same file.
+        specific_marker = next(
+            (
+                line.strip()
+                for line in hook_content.splitlines()
+                if line.strip().startswith(_HOOK_MARKER)
+            ),
+            _HOOK_MARKER,
+        )
+        if specific_marker in existing:
             messages.append(f"{hook_name}: buildlog hook already installed")
             return
         # Chain: append our hook after existing content (strip shebang line)
