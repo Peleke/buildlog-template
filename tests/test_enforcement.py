@@ -209,6 +209,26 @@ class TestAutoRewardOnEndSession:
         assert result.session_id is not None
         assert result.duration_minutes >= 0
 
+    def test_auto_reward_has_rules_active(self, tmp_path: Path):
+        """Auto-reward must pass rules_active explicitly (session is already deleted)."""
+        from buildlog.core import end_session, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        start_session(buildlog_dir, error_class="test")
+        end_session(buildlog_dir)
+
+        from buildlog.storage import get_backend
+
+        backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
+        rewards = backend.load_events(project_id, "rewards")
+        auto_rewards = [r for r in rewards if r.get("source") == "auto:end_session"]
+        assert len(auto_rewards) == 1
+        # rules_active should be a list (possibly empty if no rules selected,
+        # but NOT missing/None which would mean the bandit got nothing)
+        assert isinstance(auto_rewards[0].get("rules_active"), list)
+
     def test_auto_reward_has_session_id(self, tmp_path: Path):
         """Auto-reward should be linked to the correct session."""
         from buildlog.core import end_session, start_session

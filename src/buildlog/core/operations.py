@@ -2086,17 +2086,19 @@ def end_session(
     # --- Auto-reward: close the feedback loop automatically ---
     # Without this, the bandit never learns because manual log_reward()
     # calls are forgotten ~100% of the time.  Outcome logic:
-    #   - 0 repeated mistakes → "accepted" (rules worked)
-    #   - any repeated mistakes → "revision" (rules partially failed)
-    auto_reward_outcome: str | None = None
+    #   - 0 repeated mistakes -> "accepted" (rules worked)
+    #   - any repeated mistakes -> "revision" (rules partially failed)
+    #
+    # IMPORTANT: Pass rules_active explicitly. The active session was
+    # already deleted above (line ~2032), so log_reward() can't look
+    # it up. Without explicit rules, the bandit never updates.
     try:
-        if repeated == 0:
-            auto_reward_outcome = "accepted"
-        else:
-            auto_reward_outcome = "revision"
+        auto_outcome = "accepted" if repeated == 0 else "revision"
         log_reward(
             buildlog_dir=buildlog_dir,
-            outcome=auto_reward_outcome,  # type: ignore[arg-type]
+            outcome=auto_outcome,  # type: ignore[arg-type]
+            rules_active=session.selected_rules,
+            error_class=session.error_class,
             session_id=session.id,
             source="auto:end_session",
             notes=f"auto: {len(session_mistakes)} mistakes, {repeated} repeats",
