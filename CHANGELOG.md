@@ -7,6 +7,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.18.2] - 2026-02-14
+
+### Fixed
+- **Enforcement wiring**: `install_hooks()` now adds enforcement to `.pre-commit-config.yaml` as a local hook (yaml path). The pre-commit framework uses `exec`, so appending to `.git/hooks/pre-commit` was dead code.
+- **Always-on enforcement**: `BUILDLOG_ENFORCE` defaults to `1` (opt-out with `0`), not `0` (opt-in). Bare `git commit` is blocked everywhere.
+- Claude Code `PreToolUse` hook preserved as agent-level enforcement surface
+- Removed dead `TestInstallClaudeHooks` tests from previous approach
+- Updated dogfood tests for always-on semantics (7 real-git-repo tests)
+- CLI reference docs updated with enforcement section
+
 ## [0.18.1] - 2026-02-14
 
 ### Added
