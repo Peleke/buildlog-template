@@ -38,7 +38,6 @@ def _(mo):
     if _src.exists() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
 
-    # Get SQLite backend for event data
     try:
         from buildlog.storage import get_backend
 
@@ -82,6 +81,7 @@ def _(mo, stats):
 
     _categories = stats.insights.by_category
     _total = stats.insights.total
+    _output = None
 
     if _total > 0:
         _names = [c.replace("_", " ").title() for c in _categories]
@@ -108,17 +108,18 @@ def _(mo, stats):
         _ax.spines["right"].set_visible(False)
         plt.tight_layout()
 
-        mo.vstack(
+        _output = mo.vstack(
             [
+                mo.md("## Insights by Category"),
                 mo.as_html(_fig),
                 mo.md(f"*{_total} insights across {len(_categories)} categories*"),
             ]
         )
     else:
-        mo.md(
+        _output = mo.md(
             "## Insights\n\nNo insights yet. Run `buildlog distill` to extract patterns."
         )
-    return
+    _output
 
 
 @app.cell
@@ -132,6 +133,7 @@ def _(backend, mo, project_id):
         except Exception:
             pass
 
+    _output2 = None
     if _reward_events:
         _total_reward = 0.0
         _running_means = []
@@ -147,7 +149,6 @@ def _(backend, mo, project_id):
         _current_mean = _running_means[-1] if _running_means else 0.0
         _n = len(_reward_events)
 
-        # Line chart: running mean reward
         _fig2, (_ax_line, _ax_pie) = _plt2.subplots(1, 2, figsize=(10, 4))
 
         _ax_line.plot(
@@ -169,7 +170,6 @@ def _(backend, mo, project_id):
         _ax_line.spines["top"].set_visible(False)
         _ax_line.spines["right"].set_visible(False)
 
-        # Pie chart: outcome breakdown
         _pie_labels = []
         _pie_sizes = []
         _pie_colors = ["#059669", "#d97706", "#dc2626"]
@@ -191,7 +191,7 @@ def _(backend, mo, project_id):
 
         _plt2.tight_layout()
 
-        mo.vstack(
+        _output2 = mo.vstack(
             [
                 mo.md("## Learning Loop"),
                 mo.as_html(_fig2),
@@ -203,12 +203,12 @@ def _(backend, mo, project_id):
             ]
         )
     else:
-        mo.md(
+        _output2 = mo.md(
             "## Learning Loop\n\n"
             "No reward events yet. Use `buildlog reward --outcome accepted` after "
             "successful commits to start feeding the learning loop."
         )
-    return
+    _output2
 
 
 @app.cell
@@ -222,6 +222,7 @@ def _(backend, mo, project_id):
         except Exception:
             pass
 
+    _output3 = None
     if _sessions:
         _dates = []
         _rules_start = []
@@ -264,7 +265,7 @@ def _(backend, mo, project_id):
         _ax3.spines["right"].set_visible(False)
         _plt3.tight_layout()
 
-        mo.vstack(
+        _output3 = mo.vstack(
             [
                 mo.md("## Session History"),
                 mo.as_html(_fig3),
@@ -275,11 +276,11 @@ def _(backend, mo, project_id):
             ]
         )
     else:
-        mo.md(
+        _output3 = mo.md(
             "## Session History\n\n"
             "No sessions recorded yet. Use `buildlog experiment start` to begin tracking."
         )
-    return
+    _output3
 
 
 @app.cell
@@ -293,6 +294,7 @@ def _(backend, mo, project_id):
         except Exception:
             pass
 
+    _output4 = None
     if _mistakes:
         _error_classes: dict[str, int] = {}
         _repeats = 0
@@ -307,7 +309,6 @@ def _(backend, mo, project_id):
 
         _fig4, (_ax_bar, _ax_gauge) = _plt4.subplots(1, 2, figsize=(10, 4))
 
-        # Bar chart: by error class
         _ec_names = list(_error_classes.keys())
         _ec_counts = list(_error_classes.values())
         _sorted_idx = sorted(range(len(_ec_counts)), key=lambda k: _ec_counts[k])
@@ -322,7 +323,6 @@ def _(backend, mo, project_id):
         _ax_bar.spines["top"].set_visible(False)
         _ax_bar.spines["right"].set_visible(False)
 
-        # Donut chart: repeat vs novel
         _ax_gauge.pie(
             [_novel_pct, _repeat_pct],
             labels=[
@@ -338,7 +338,7 @@ def _(backend, mo, project_id):
 
         _plt4.tight_layout()
 
-        mo.vstack(
+        _output4 = mo.vstack(
             [
                 mo.md("## Mistake Analysis"),
                 mo.as_html(_fig4),
@@ -350,12 +350,12 @@ def _(backend, mo, project_id):
             ]
         )
     else:
-        mo.md(
+        _output4 = mo.md(
             "## Mistake Analysis\n\n"
             "No mistakes logged yet. When the gauntlet catches issues "
             "during sessions, they appear here."
         )
-    return
+    _output4
 
 
 @app.cell
@@ -371,6 +371,7 @@ def _(buildlog_dir, mo):
     except Exception:
         pass
 
+    _output5 = None
     if _bandit_stats:
         _sorted_arms = sorted(
             _bandit_stats.items(), key=lambda x: x[1].get("mean", 0), reverse=True
@@ -380,7 +381,7 @@ def _(buildlog_dir, mo):
         _means = []
         _ci_lows = []
         _ci_highs = []
-        _colors = []
+        _bar_colors = []
 
         for _rid, _arm in reversed(_sorted_arms):
             _mean = _arm.get("mean", 0)
@@ -394,20 +395,20 @@ def _(buildlog_dir, mo):
             _ci_highs.append(_ci[1] - _mean)
 
             if _obs == 0:
-                _colors.append("#9ca3af")  # gray: new
+                _bar_colors.append("#9ca3af")
             elif _mean >= 0.7:
-                _colors.append("#059669")  # green: confident
+                _bar_colors.append("#059669")
             elif _mean < 0.4:
-                _colors.append("#dc2626")  # red: demoted
+                _bar_colors.append("#dc2626")
             else:
-                _colors.append("#2563eb")  # blue: stable
+                _bar_colors.append("#2563eb")
 
         _fig5, _ax5 = _plt5.subplots(figsize=(10, max(4, len(_sorted_arms) * 0.4)))
         _ax5.barh(
             range(len(_rule_ids)),
             _means,
             xerr=[_ci_lows, _ci_highs],
-            color=_colors,
+            color=_bar_colors,
             edgecolor="none",
             height=0.6,
             capsize=3,
@@ -429,7 +430,7 @@ def _(buildlog_dir, mo):
         _ax5.spines["right"].set_visible(False)
         _plt5.tight_layout()
 
-        mo.vstack(
+        _output5 = mo.vstack(
             [
                 mo.md("## Bandit Arm Posteriors"),
                 mo.as_html(_fig5),
@@ -441,12 +442,12 @@ def _(buildlog_dir, mo):
             ]
         )
     else:
-        mo.md(
+        _output5 = mo.md(
             "## Bandit Arm Posteriors\n\n"
             "No bandit data available. The Thompson Sampling bandit starts tracking "
             "rules after the first session with reward events."
         )
-    return
+    _output5
 
 
 @app.cell
@@ -477,11 +478,12 @@ def _(mo, stats):
 {_warning_items}"""
         )
 
+    _output6 = None
     if _parts:
-        mo.md("## Health\n\n" + "\n\n".join(_parts))
+        _output6 = mo.md("## Health\n\n" + "\n\n".join(_parts))
     else:
-        mo.md("## Health\n\nNo warnings. Everything looks good.")
-    return
+        _output6 = mo.md("## Health\n\nNo warnings. Everything looks good.")
+    _output6
 
 
 if __name__ == "__main__":
