@@ -351,6 +351,8 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
 - **Reward Trend chart:** Running mean of reward values over time (line 208-254). A line chart with fill-to-zero. Two dashed reference lines: green at 0.7 (target) and red at 0.4 (investigate). **A healthy system shows the line above 0.7.** If it dips below 0.4, the review process needs attention.
 - **Outcome Distribution donut:** Proportions of accepted/revision/rejected outcomes (lines 264-289). **A healthy system is mostly green (accepted).**
 
+![Overview tab: 17 entries, 1d streak, 76% coverage, reward trend mean 0.922](proof/proof-01-marimo-overview.png)
+
 ### Tab 2: Sessions & Mistakes (lines 307-513)
 
 **Data source:** `backend.load_events(project_id, "sessions")` and `backend.load_events(project_id, "mistakes")`.
@@ -360,6 +362,8 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
 - **Mistake KPIs:** Total mistakes, repeat rate %, unique error classes (lines 416-428).
 - **Mistakes by Error Class:** Horizontal bar chart showing which error classes occur most (lines 434-452). **Tall bars = recurring problems the system hasn't solved yet.**
 - **Repeated Mistake Rate (RMR):** Line chart tracking the percentage of mistakes per session that were previously seen (lines 466-489). **This should trend downward.** A rising RMR means rules aren't preventing known mistakes.
+
+![Sessions tab: 7 total mistakes, 14% repeat rate, 5 error classes](proof/proof-02-sessions-mistakes.png)
 
 ### Tab 3: Bandit & Rules (lines 516-703)
 
@@ -375,6 +379,8 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
   - **`n=X` labels:** Number of observations. Low n = unreliable estimate.
 - **Rule Selection Frequency:** How often the bandit picks each rule across sessions (lines 660-687). **Popular rules with low posterior means = rules the bandit explored and found wanting.**
 
+![Bandit tab: 579 rules with Thompson Sampling posteriors](proof/proof-03-bandit-rules.png)
+
 ### Tab 4: Emissions (lines 706-949)
 
 **Data source:** `~/.buildlog/emissions/signal.jsonl` and `backend.load_emission_edges()`.
@@ -385,6 +391,8 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
 - **Artifacts by Type:** Bar chart of total artifact counts by type (lines 871-889).
 - **Edge Types donut:** Distribution of relationship types in stored edges (lines 900-929). Shows CONTAINS, BELONGS_TO, USES proportions.
 
+![Emissions tab: 6,703 emitted, 4,968 consumed, 0 pending, 49 edges](proof/proof-04-emissions.png)
+
 ### Tab 5: Insights & Health (lines 952-1119)
 
 **Data source:** `stats.insights`, `backend.conn.execute("SELECT ... FROM review_learnings ...")`.
@@ -393,6 +401,8 @@ Every `log_reward()`, `log_mistake()`, and `learn_from_review()` fires a structu
 - **Insights by Category:** Horizontal bars showing pattern counts from `buildlog distill` (lines 999-1022).
 - **Review Learnings chart:** Grouped horizontal bars — green (reinforced) vs red (contradicted) for each learning (lines 1039-1073). **High green with zero red = strong signal.** Red bars = rules that were later proven wrong.
 - **System Health:** Top source entries and quality warnings (lines 1087-1108).
+
+![Insights tab: 67 insights, 4 categories, 15 review learnings all reinforced](proof/proof-05-insights-health.png)
 
 ---
 
@@ -669,6 +679,8 @@ RETURN n.domain AS domain, count(*) AS cnt ORDER BY cnt DESC
 Shows buildlog alongside design-pattern domains (observer_pattern, factory_patterns, etc.). The gauntlet rule bridging connects experiential learning data to curated design knowledge.
 
 **In Memgraph Lab** (http://localhost:3000), you can visualize these as interactive graphs. Drag nodes, zoom, and see the web of relationships between sessions, mistakes, and rules.
+
+![Memgraph Lab: force-directed graph of buildlog domain, 24 nodes, 50 edges](proof/proof-06-memgraph-graph.png)
 
 ---
 
