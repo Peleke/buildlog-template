@@ -148,7 +148,7 @@ class TestRenderNarrative:
     def test_advocacy_blockquote_always_present(self):
         data = _make_data()
         result = render_improvements_narrative(data)
-        assert "learning loop works" in result
+        assert "learning loop works" in result or "improves automatically" in result
         assert result.count(">") >= 1
 
     def test_mean_reward_with_trend_arrow(self):

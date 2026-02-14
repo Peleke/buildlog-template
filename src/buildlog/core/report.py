@@ -11,12 +11,12 @@ from dataclasses import dataclass, field
 # Thresholds
 # ---------------------------------------------------------------------------
 
-# Threshold for declaring a rule has "earned confidence" — posterior mean
+# Threshold for declaring a rule has "earned confidence". Posterior mean
 # above this indicates the bandit has enough positive evidence to exploit.
 # 0.7 chosen to match Beta(7,3) ≈ 70% success rate baseline.
 _CONFIDENCE_THRESHOLD = 0.7
 
-# Threshold for demoting a rule — posterior mean below this suggests the
+# Threshold for demoting a rule. Posterior mean below this suggests the
 # rule is not helping. 0.4 = worse than random (Beta(1,1) prior = 0.5).
 _DEMOTION_THRESHOLD = 0.4
 
@@ -84,7 +84,7 @@ def classify_rule(mean: float, observations: int) -> str:
 def should_emit_report(data: ImprovementsReportData) -> bool:
     """Return False when there's nothing to show.
 
-    Empty report is anti-evidence for H1 — skip it.
+    Empty report is anti-evidence for H1, so skip it.
     """
     if (
         data.mistakes_caught == 0
@@ -123,11 +123,11 @@ def render_improvements_narrative(data: ImprovementsReportData) -> str:
         if data.repeated_mistakes > 0:
             repeat_note = f", {data.repeated_mistakes} were repeats"
         lines.append(
-            f"**{data.mistakes_caught} mistakes caught{repeat_note}** — "
+            f"**{data.mistakes_caught} mistakes caught{repeat_note}**: "
             f"the gauntlet flagged issues before they shipped."
         )
     else:
-        lines.append("**Clean session** — no mistakes were flagged.")
+        lines.append("**Clean session.** No mistakes were flagged.")
     lines.append("")
 
     # Rules earned/demoted
@@ -166,8 +166,8 @@ def render_improvements_narrative(data: ImprovementsReportData) -> str:
     # Advocacy blockquote
     lines.append(
         "> Every session that measures improvement is evidence that "
-        "the learning loop works. This is buildlog's thesis: "
-        "track, learn, improve — automatically."
+        "the learning loop works. buildlog tracks what changed, "
+        "learns which rules help, and improves automatically."
     )
 
     return "\n".join(lines)
