@@ -55,6 +55,13 @@ class SQLiteBackend:
         )
         self.conn.commit()
 
+    def list_projects(self) -> list[dict]:
+        """Return all registered projects as ``[{id, name, path}]``."""
+        rows = self.conn.execute(
+            "SELECT id, name, path FROM projects ORDER BY name"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def project_exists(self, project_id: str) -> bool:
         row = self.conn.execute(
             "SELECT 1 FROM projects WHERE id = ?", (project_id,)
