@@ -345,7 +345,7 @@ def buildlog_log_reward(
 
 
 def buildlog_rewards(
-    limit: int | None = None,
+    limit: int = 50,
     session_id: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
@@ -355,7 +355,9 @@ def buildlog_rewards(
     understanding learning progress.
 
     Args:
-        limit: Maximum number of events to return (most recent first)
+        limit: Maximum number of events to return (most recent first).
+            Defaults to 50 to stay within MCP token limits.
+            Pass 0 for all events (caution: may be large).
         session_id: Filter rewards to this session only
         buildlog_dir: Path to buildlog directory
 
@@ -372,7 +374,7 @@ def buildlog_rewards(
         buildlog_rewards(limit=10)  # Get 10 most recent events with stats
         buildlog_rewards(session_id="2026-02-06-auth")  # Session-specific
     """
-    result = get_rewards(Path(buildlog_dir), limit, session_id=session_id)
+    result = get_rewards(Path(buildlog_dir), limit or None, session_id=session_id)
 
     # Convert events to dicts
     return _ensure_message(
@@ -1420,6 +1422,13 @@ def buildlog_export(
 
     seeds_dir = get_default_seeds_dir() if include_rules_join else None
 
+    # When no output path, use a temp dir to avoid unbounded string returns
+    # that can exceed MCP token limits (same class of bug as #167).
+    if output_path is None:
+        import tempfile
+
+        output_path = Path(tempfile.mkdtemp(prefix="buildlog-export-"))
+
     exporter = JsonlExporter()
     summary = exporter.export(
         backend,
@@ -1437,7 +1446,7 @@ def buildlog_export(
         "format": format,
         "project_id": pid,
         "tables": table_list or EXPORTABLE_TABLES,
-        "output": str(output_path) if output_path else None,
+        "output": str(output_path),
         "summary": summary,
     }
 
