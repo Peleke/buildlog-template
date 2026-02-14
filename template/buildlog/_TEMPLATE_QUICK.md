@@ -13,7 +13,7 @@
 
 ## What I Learned
 
-### Improvements
+## Improvements
 
 - [One thing to do differently next time]
 - [One thing that worked well to repeat]

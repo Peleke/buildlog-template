@@ -1,15 +1,30 @@
-# 2026-02-02 — buildlog v0.10.0 "Install and Just Works"
+# Build Journal: v0.10.0 Prep — MCP Registration Fix + CI Publish Fix
 
-## The Goal
+**Date:** 2026-02-02
+**Duration:** 2 hours
 
-`pip install buildlog` → `buildlog init` → Claude Code automatically maintains entries, runs gauntlet reviews after commits, loads/uses rules, tracks experiments. Zero manual config.
+## What I Did
 
-## Implementation Plan
+Post-release cleanup day. Fixed the MCP bandit_status tool that was missing from the registration list and added installation docs (#67). Then fixed the CI npm publish workflow that was failing when the version already existed on the registry (#69).
 
-See plan transcript for full details. Key phases:
-1. Foundation: .buildlog/ template dir, bundle bragi, mcp as default dep
-2. Core Operations: get_gauntlet_rules, get_overview, create_entry, list_entries
-3. MCP Layer: 4 new tools, register, update docstrings
-4. Init + CLAUDE.md: constants.py, _init_mcp, init-mcp, mcp-test commands
-5. Docs: README, MCP guide, version bump
-6. Tests: ~51 new tests
+## Commits
+
+- `d30e901` fix(mcp): register bandit_status tool, add installation docs (#67)
+- `3ff7d7b` fix(ci): allow same npm version in publish workflow (#69)
+
+## What Went Wrong
+
+The bandit_status MCP tool was implemented but never registered in the server's tool list. This is a recurring pattern: implementing a feature but forgetting the wiring step. The CI publish failure was caused by npm erroring on duplicate versions instead of gracefully skipping.
+
+## What I Learned
+
+## Improvements
+
+### Workflow
+
+- Add a registration checklist to the MCP tool development workflow: implement, test, register, verify via list-tools
+- CI publish workflows should be idempotent: use `--ignore-existing` or equivalent to handle re-runs gracefully
+
+### Tool Usage
+
+- Always verify new MCP tools appear in `buildlog_status()` output before merging
