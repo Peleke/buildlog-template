@@ -156,6 +156,82 @@ class StorageBackend(Protocol):
         """
         ...
 
+    # -- Gauntlet rules (global, no project_id) -----------------------------
+
+    def load_gauntlet_rules(
+        self,
+        persona: str | None = None,
+        active_only: bool = True,
+    ) -> list[dict]:
+        """Load gauntlet rules, optionally filtered by persona and active status.
+
+        Args:
+            persona: Filter to a specific persona, or None for all.
+            active_only: If True, only return active rules.
+
+        Returns:
+            List of rule dictionaries.
+        """
+        ...
+
+    def save_gauntlet_rules_batch(
+        self,
+        rules: list[dict],
+        seed_file_hash: str | None = None,
+        seed_filename: str | None = None,
+    ) -> int:
+        """Upsert a batch of gauntlet rules.
+
+        Args:
+            rules: List of rule dicts with rule_id, persona, rule, category, etc.
+            seed_file_hash: SHA256 of the source YAML file.
+            seed_filename: Name of the source YAML file.
+
+        Returns:
+            Number of rules upserted.
+        """
+        ...
+
+    def get_gauntlet_rule(self, rule_id: str) -> dict | None:
+        """Load a single gauntlet rule by ID.
+
+        Returns:
+            Rule dictionary, or None if not found.
+        """
+        ...
+
+    def update_gauntlet_rule(self, rule_id: str, **fields: Any) -> bool:
+        """Update specific fields on a gauntlet rule.
+
+        Args:
+            rule_id: The rule to update.
+            **fields: Column names and new values.
+
+        Returns:
+            True if the rule was found and updated.
+        """
+        ...
+
+    def deactivate_gauntlet_rule(self, rule_id: str) -> bool:
+        """Soft-delete a gauntlet rule by setting active=0.
+
+        Returns:
+            True if the rule was found and deactivated.
+        """
+        ...
+
+    def count_gauntlet_rules(
+        self,
+        persona: str | None = None,
+        active_only: bool = True,
+    ) -> int:
+        """Count gauntlet rules matching the filter.
+
+        Returns:
+            Number of matching rules.
+        """
+        ...
+
 
 @runtime_checkable
 class Exporter(Protocol):
