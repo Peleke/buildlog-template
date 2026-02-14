@@ -625,6 +625,36 @@ class TestEmissionHealth:
 
 
 # ---------------------------------------------------------------------------
+# MCP tool wrapper
+# ---------------------------------------------------------------------------
+
+
+class TestMCPConsumeEmissions:
+    def test_buildlog_consume_emissions_happy_path(
+        self, tmp_emissions, backend, sample_mistake_manifest
+    ):
+        """MCP wrapper returns correct dict structure."""
+        from buildlog.mcp.tools import buildlog_consume_emissions
+
+        path = tmp_emissions.pending / "mistake_manifest_test_20260214T100000.json"
+        path.write_text(json.dumps(sample_mistake_manifest))
+
+        with (
+            patch(
+                "buildlog.emissions.consumer.get_emission_config",
+                return_value=tmp_emissions,
+            ),
+            patch("buildlog.storage.get_backend", return_value=(backend, "test")),
+        ):
+            result = buildlog_consume_emissions()
+
+        assert result["consumed"] == 1
+        assert result["edges_stored"] == 2
+        assert "message" in result
+        assert "Consumed 1" in result["message"]
+
+
+# ---------------------------------------------------------------------------
 # Session emission builder
 # ---------------------------------------------------------------------------
 
@@ -669,28 +699,24 @@ class TestSessionToEmission:
 
 
 def _setup_session(buildlog_dir: Path):
-    """Set up a minimal buildlog dir with an active session for end_session() tests."""
+    """Set up a minimal buildlog dir with an active session for end_session() tests.
+
+    Uses ``start_session()`` directly so that the session is stored under
+    the same project_id that ``end_session()`` (via ``_get_storage()``) will
+    resolve.  This mirrors the pattern used in ``test_bandit.py``.
+    """
+    from buildlog.core.operations import start_session
+
     buildlog_dir.mkdir(exist_ok=True)
-    # Need the CLAUDE.md and project structure
-    project_dir = buildlog_dir.parent
-    claude_md = project_dir / "CLAUDE.md"
-    if not claude_md.exists():
-        # buildlog_dir IS the project when using tmp_path directly
-        pass
 
-    from buildlog.core.operations import Session
-    from buildlog.storage import get_backend
+    # start_session loads promoted rules from .buildlog/promoted.json
+    inner_dir = buildlog_dir / ".buildlog"
+    inner_dir.mkdir(exist_ok=True)
+    promoted_path = inner_dir / "promoted.json"
+    if not promoted_path.exists():
+        promoted_path.write_text(json.dumps({"skill_ids": ["rule-a"]}))
 
-    backend, project_id = get_backend(buildlog_dir)
-    now = datetime.now(timezone.utc)
-    session = Session(
-        id=f"session-test-{now.strftime('%Y%m%d-%H%M%S')}",
-        started_at=now,
-        ended_at=None,
-        rules_at_start=["rule-a"],
-        selected_rules=["rule-a"],
-    )
-    backend.save_active_session(project_id, session.to_dict())
+    start_session(buildlog_dir, select_k=1)
 
 
 def _setup_buildlog_dir(buildlog_dir: Path):

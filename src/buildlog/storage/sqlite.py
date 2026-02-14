@@ -648,6 +648,9 @@ class SQLiteBackend:
 
     # -- Emission edges ------------------------------------------------------
 
+    # Whitelist of filterable columns for emission_edges queries.
+    _EMISSION_EDGE_FILTERS = frozenset({"project_id", "relation_type"})
+
     def store_emission_edges(self, edges: list[dict]) -> int:
         """Bulk insert emission edges, skipping duplicates. Returns count stored."""
         stored = 0

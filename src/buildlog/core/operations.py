@@ -2173,8 +2173,8 @@ def end_session(
     # IMPORTANT: Pass rules_active explicitly. The active session was
     # already deleted above (line ~2032), so log_reward() can't look
     # it up. Without explicit rules, the bandit never updates.
+    auto_outcome = "accepted" if repeated == 0 else "revision"
     try:
-        auto_outcome = "accepted" if repeated == 0 else "revision"
         log_reward(
             buildlog_dir=buildlog_dir,
             outcome=auto_outcome,  # type: ignore[arg-type]
@@ -2215,7 +2215,7 @@ def end_session(
                 session_mistakes,
                 duration,
                 repeated,
-                auto_outcome if "auto_outcome" in dir() else "accepted",
+                auto_outcome,
                 project_id,
             ),
             artifact_type="session_summary",

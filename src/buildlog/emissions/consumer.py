@@ -1,10 +1,10 @@
 """Consume pending emission artifacts into SQLite storage.
 
 Follows the B7 interop pattern: list → parse → classify → store → move.
-Edges from ``mistake_manifest`` and ``session_summary`` artifacts are stored
-in the ``emission_edges`` table.  ``reward_signal`` and ``learned_rules``
-artifacts are moved to processed/ without storage (already in SQLite via
-the primary write path).
+Edges from ``mistake_manifest``, ``session_summary``, and ``reward_signal``
+artifacts are extracted and stored in the ``emission_edges`` table.
+``learned_rules`` artifacts have no edges and are moved to processed/
+without edge storage.
 """
 
 from __future__ import annotations
@@ -114,6 +114,19 @@ def consume_pending_emissions(
         except Exception:
             backend = None
 
+    # Warn if backend is LegacyBackend (silently returns 0 from store_emission_edges)
+    try:
+        from buildlog.storage.legacy import LegacyBackend
+
+        if isinstance(backend, LegacyBackend):
+            logger.warning(
+                "LegacyBackend does not support edge storage. "
+                "Emissions will be consumed but edges won't be stored. "
+                "Run 'buildlog migrate' to upgrade to SQLite.",
+            )
+    except ImportError:
+        pass
+
     for path in pending_files:
         try:
             artifact_type = _classify_artifact_type(path.name)
@@ -125,11 +138,12 @@ def consume_pending_emissions(
             artifact = json.loads(text)
 
             # Extract and store edges for types that have them
+            artifact_edges_stored = 0
             if artifact_type in _EDGE_ARTIFACT_TYPES and backend is not None:
                 edges = _extract_edges(artifact, artifact_type, consumed_at)
                 if edges:
-                    stored = backend.store_emission_edges(edges)
-                    result.edges_stored += stored
+                    artifact_edges_stored = backend.store_emission_edges(edges)
+                    result.edges_stored += artifact_edges_stored
 
             # Move to processed
             dest = cfg.processed / path.name
@@ -143,7 +157,7 @@ def consume_pending_emissions(
                     "type": artifact_type,
                     "path": str(dest),
                     "ts": consumed_at,
-                    "edges_extracted": result.edges_stored,
+                    "edges_extracted": artifact_edges_stored,
                 }
                 with cfg.signal_log.open("a") as f:
                     f.write(json.dumps(signal_entry) + "\n")
