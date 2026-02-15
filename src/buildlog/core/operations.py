@@ -2405,26 +2405,28 @@ def end_session(
     except Exception:
         pass  # Never break end_session()
 
-    # --- Auto-reward: close the feedback loop automatically ---
-    # Without this, the bandit never learns because manual log_reward()
-    # calls are forgotten ~100% of the time.  Outcome logic:
-    #   - 0 repeated mistakes -> "accepted" (rules worked)
-    #   - any repeated mistakes -> "revision" (rules partially failed)
-    #
-    # IMPORTANT: Pass rules_active explicitly. The active session was
-    # already deleted above (line ~2032), so log_reward() can't look
-    # it up. Without explicit rules, the bandit never updates.
-    auto_outcome = "accepted" if repeated == 0 else "revision"
+    # --- Auto-reward: FALLBACK only ---
+    # Only fire if no explicit reward was already logged for this session.
+    # The PostToolUse merge hook or manual log_reward() is the REAL signal.
+    # Auto-reward is the fallback for sessions without explicit feedback.
+    auto_outcome = "revision"  # default for session emission
     try:
-        log_reward(
-            buildlog_dir=buildlog_dir,
-            outcome=auto_outcome,  # type: ignore[arg-type]
-            rules_active=session.selected_rules,
-            error_class=session.error_class,
-            session_id=session.id,
-            source="auto:end_session",
-            notes=f"auto: {len(session_mistakes)} mistakes, {repeated} repeats",
+        raw_rewards = backend.load_events(project_id, "rewards")
+        session_reward = next(
+            (e for e in raw_rewards if e.get("session_id") == session.id), None
         )
+        auto_outcome = session_reward["outcome"] if session_reward else "revision"
+        if not session_reward:
+            log_reward(
+                buildlog_dir=buildlog_dir,
+                outcome="revision",
+                rules_active=session.selected_rules,
+                error_class=session.error_class,
+                session_id=session.id,
+                source="auto:end_session",
+                revision_distance=0.5,
+                notes=f"auto-fallback: {len(session_mistakes)} mistakes, {repeated} repeats",
+            )
     except Exception:
         pass  # Never break end_session()
 
