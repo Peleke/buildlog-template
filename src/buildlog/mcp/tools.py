@@ -764,6 +764,7 @@ def buildlog_gauntlet_accept_risk(
         create_github_issues=create_github_issues,
         repo=repo,
         cwd=str(_project_root(buildlog_dir)) if buildlog_dir else None,
+        buildlog_dir=Path(buildlog_dir) if buildlog_dir else None,
     )
     return _ensure_message(asdict(result))
 

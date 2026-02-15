@@ -10,6 +10,48 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-tool-use.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-end.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "rules": [
+    "Always define interfaces before implementations"
+  ],
+  "_buildlog": {
+    "last_updated": "2026-02-14T20:27:12.870884",
+    "promoted_skill_ids": [
+      "arch-b0efab23fe"
     ]
   }
 }

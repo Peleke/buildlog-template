@@ -1879,6 +1879,22 @@ def _get_active_session_path(buildlog_dir: Path) -> Path:
     return buildlog_dir / ".buildlog" / "active_session.json"
 
 
+def _get_gauntlet_marker_path(buildlog_dir: Path) -> Path:
+    """Get path to gauntlet-cleared marker file."""
+    return buildlog_dir / ".buildlog" / "gauntlet_cleared"
+
+
+def _write_gauntlet_marker(buildlog_dir: Path) -> None:
+    """Write marker file indicating gauntlet has passed/risk accepted.
+
+    This marker is checked by the PreToolUse hook before allowing
+    `gh pr create`. It is deleted after PR creation succeeds.
+    """
+    marker = _get_gauntlet_marker_path(buildlog_dir)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(datetime.now(timezone.utc).isoformat() + "\n")
+
+
 def _generate_session_id(now: datetime) -> str:
     """Generate a unique session ID."""
     # Include microseconds for uniqueness when sessions are created quickly
@@ -3006,6 +3022,29 @@ def gauntlet_process_issues(
     majors = [i for i in issues if i.get("severity") == "major"]
     minors = [i for i in issues if i.get("severity") in ("minor", "nitpick", None)]
 
+    # --- Auto-log mistakes for criticals and majors ---
+    # If the gauntlet caught it, the agent made a mistake. Period.
+    # This feeds the bandit without relying on the agent to self-report.
+    #
+    # Severity mapping: gauntlet → mistake (different valid sets)
+    _GAUNTLET_TO_MISTAKE_SEVERITY = {"critical": "critical", "major": "high"}
+    for issue in criticals + majors:
+        try:
+            gauntlet_sev = issue.get("severity", "major")
+            mistake_sev = _GAUNTLET_TO_MISTAKE_SEVERITY.get(gauntlet_sev, "high")
+            desc = issue.get("description", issue.get("rule_learned", "Unknown"))
+            location = issue.get("location", "")
+            log_mistake(
+                buildlog_dir,
+                error_class=f"gauntlet_{gauntlet_sev}",
+                description=f"[{location}] {desc}" if location else str(desc),
+                severity=mistake_sev,
+            )
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "Auto-log mistake from gauntlet failed", exc_info=True
+            )
+
     # Persist learnings for this iteration
     learn_source = source or f"gauntlet:iteration-{iteration}"
     learn_result = learn_from_review(buildlog_dir, issues, learn_source)
@@ -3052,6 +3091,13 @@ def gauntlet_process_issues(
     else:
         action = "clean"
         message = f"Iteration {iteration}: All clear! No issues found."
+        # Write gauntlet-cleared marker for PR enforcement
+        try:
+            _write_gauntlet_marker(buildlog_dir)
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "Failed to write gauntlet marker", exc_info=True
+            )
 
     return GauntletLoopResult(
         action=action,
@@ -3083,6 +3129,7 @@ def gauntlet_accept_risk(
     create_github_issues: bool = False,
     repo: str | None = None,
     cwd: str | None = None,
+    buildlog_dir: Path | None = None,
 ) -> GauntletAcceptRiskResult:
     """Accept risk for remaining issues, optionally creating GitHub issues.
 
@@ -3091,6 +3138,7 @@ def gauntlet_accept_risk(
         create_github_issues: Whether to create GitHub issues for tracking.
         repo: Repository for GitHub issues (uses current repo if None).
         cwd: Working directory for subprocess calls.
+        buildlog_dir: Path to buildlog directory (for gauntlet marker).
 
     Returns:
         GauntletAcceptRiskResult with created issue info.
@@ -3172,6 +3220,15 @@ def gauntlet_accept_risk(
             except FileNotFoundError:
                 error = "gh CLI not found. Install GitHub CLI to create issues."
                 break
+
+    # Write gauntlet-cleared marker for PR enforcement
+    if buildlog_dir is not None:
+        try:
+            _write_gauntlet_marker(buildlog_dir)
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "Failed to write gauntlet marker in accept_risk", exc_info=True
+            )
 
     return GauntletAcceptRiskResult(
         accepted_issues=len(remaining_issues),
@@ -3758,8 +3815,42 @@ def commit(
     Returns:
         CommitResult with commit info and entry update status.
     """
+    import os
     import subprocess
     from datetime import date
+
+    # =========================================================================
+    # ENFORCEMENT: Block commit without active experiment session
+    # =========================================================================
+    # The entire learning loop depends on session-scoped data. Without an
+    # active session, the bandit never gets reward signals, and the system
+    # cannot prove convergence. This is the mechanical guarantee.
+    #
+    # Bypass: BUILDLOG_ENFORCE=0 (explicit opt-out)
+    # =========================================================================
+    enforce = os.environ.get("BUILDLOG_ENFORCE", "1") != "0"
+    if enforce and buildlog_dir.exists():
+        try:
+            backend, project_id = _get_storage(buildlog_dir)
+            session_data = backend.load_active_session(project_id)
+            if session_data is None:
+                return CommitResult(
+                    commit_hash="",
+                    commit_message="",
+                    files_changed=[],
+                    entry_path=None,
+                    entry_updated=False,
+                    message="",
+                    error=(
+                        "No active experiment session. "
+                        "Run `buildlog experiment start` first. "
+                        "The learning loop requires session-scoped tracking "
+                        "for bandit reward attribution. "
+                        "Set BUILDLOG_ENFORCE=0 to bypass."
+                    ),
+                )
+        except Exception:
+            pass  # Don't block commits if storage is broken
 
     run_kwargs: dict = {"cwd": cwd} if cwd else {}
 

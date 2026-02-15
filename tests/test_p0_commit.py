@@ -1,5 +1,6 @@
 """Exhaustive tests for the commit core operation and MCP tool."""
 
+import os
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -7,6 +8,16 @@ from unittest.mock import patch
 import pytest
 
 from buildlog.core.operations import CommitResult, _resolve_entry_path_core, commit
+
+# Disable session enforcement for these tests — commit functionality is the SUT,
+# not the learning loop. Enforcement is tested in test_learning_loop_enforcement.py.
+pytestmark = pytest.mark.usefixtures("_disable_commit_enforcement")
+
+
+@pytest.fixture(autouse=True)
+def _disable_commit_enforcement(monkeypatch):
+    """Bypass session check so commit tests exercise git logic, not enforcement."""
+    monkeypatch.setenv("BUILDLOG_ENFORCE", "0")
 
 
 class TestResolveEntryPathCore:
