@@ -2089,7 +2089,7 @@ def start_session(
     buildlog_dir: Path,
     error_class: str | None = None,
     notes: str | None = None,
-    select_k: int = 3,
+    select_k: int = 0,
 ) -> StartSessionResult:
     """Start a new experiment session with bandit-selected rules.
 
@@ -2112,7 +2112,7 @@ def start_session(
                     are evaluated per-context.
         notes: Optional notes about the session.
         select_k: Number of rules to select via Thompson Sampling.
-                 Default 3 balances coverage with attribution clarity.
+                 Default 0 means auto-calculate: max(10, 10% of pool).
 
     Returns:
         StartSessionResult with session ID, rules count, and selected rules.
@@ -2138,6 +2138,10 @@ def start_session(
     # =========================================================================
 
     selected_rules: list[str] = []
+
+    # Auto-calculate k if not explicitly set (select_k <= 0 means auto)
+    if select_k <= 0:
+        select_k = max(10, len(current_rules) // 10) if current_rules else 10
 
     if current_rules:
         # Initialize bandit
