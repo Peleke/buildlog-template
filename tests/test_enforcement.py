@@ -12,8 +12,8 @@ import pytest
 class TestAutoRewardOnEndSession:
     """Tests that end_session() auto-fires a reward signal."""
 
-    def test_auto_reward_accepted_on_clean_session(self, tmp_path: Path):
-        """Clean session (no repeats) should auto-log accepted reward."""
+    def test_auto_reward_fallback_on_clean_session(self, tmp_path: Path):
+        """Clean session (no explicit reward) should auto-log neutral revision fallback."""
         from buildlog.core import end_session, start_session
 
         buildlog_dir = tmp_path / "buildlog"
@@ -22,17 +22,18 @@ class TestAutoRewardOnEndSession:
         start_session(buildlog_dir, error_class="test")
         end_session(buildlog_dir)
 
-        # Verify reward was logged
+        # Verify reward was logged as neutral fallback
         from buildlog.storage import get_backend
 
         backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
         rewards = backend.load_events(project_id, "rewards")
         auto_rewards = [r for r in rewards if r.get("source") == "auto:end_session"]
         assert len(auto_rewards) == 1
-        assert auto_rewards[0]["outcome"] == "accepted"
+        assert auto_rewards[0]["outcome"] == "revision"
+        assert auto_rewards[0]["revision_distance"] == 0.5
 
     def test_auto_reward_revision_on_repeated_mistakes(self, tmp_path: Path):
-        """Session with repeated mistakes should auto-log revision reward."""
+        """Both sessions get neutral revision fallback (no explicit reward for either)."""
         from buildlog.core import end_session, log_mistake, start_session
 
         buildlog_dir = tmp_path / "buildlog"
@@ -56,11 +57,11 @@ class TestAutoRewardOnEndSession:
         backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
         rewards = backend.load_events(project_id, "rewards")
         auto_rewards = [r for r in rewards if r.get("source") == "auto:end_session"]
-        # First session clean → accepted, second session with repeat → revision
+        # Both sessions get neutral revision fallback (no explicit reward)
         assert len(auto_rewards) == 2
-        outcomes = [r["outcome"] for r in auto_rewards]
-        assert "accepted" in outcomes
-        assert "revision" in outcomes
+        for r in auto_rewards:
+            assert r["outcome"] == "revision"
+            assert r["revision_distance"] == 0.5
 
     def test_auto_reward_does_not_break_end_session(self, tmp_path: Path):
         """If reward logging fails, end_session() should still succeed."""
@@ -117,6 +118,93 @@ class TestAutoRewardOnEndSession:
         auto_rewards = [r for r in rewards if r.get("source") == "auto:end_session"]
         assert len(auto_rewards) == 1
         assert auto_rewards[0]["session_id"] == start_result.session_id
+
+    def test_auto_reward_skipped_when_explicit_reward_exists(self, tmp_path: Path):
+        """If an explicit reward was logged during the session, skip auto-reward."""
+        from buildlog.core import end_session, log_reward, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        start_session(buildlog_dir, error_class="test")
+        # Explicit reward during session
+        log_reward(buildlog_dir, outcome="accepted", source="hook:merge")
+        end_session(buildlog_dir)
+
+        from buildlog.storage import get_backend
+
+        backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
+        rewards = backend.load_events(project_id, "rewards")
+        # Only the explicit reward, no auto-reward
+        assert len(rewards) == 1
+        assert rewards[0]["source"] == "hook:merge"
+        auto_rewards = [r for r in rewards if r.get("source") == "auto:end_session"]
+        assert len(auto_rewards) == 0
+
+    def test_auto_reward_fires_when_no_explicit_reward(self, tmp_path: Path):
+        """When no explicit reward exists, auto-reward should fire."""
+        from buildlog.core import end_session, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        start_session(buildlog_dir, error_class="test")
+        # No log_reward() call
+        end_session(buildlog_dir)
+
+        from buildlog.storage import get_backend
+
+        backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
+        rewards = backend.load_events(project_id, "rewards")
+        assert len(rewards) == 1
+        assert rewards[0]["source"] == "auto:end_session"
+
+    def test_dedup_matches_on_session_id(self, tmp_path: Path):
+        """Dedup should not bleed across sessions — session B gets auto-reward."""
+        from buildlog.core import end_session, log_reward, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        # Session A: explicit reward → no auto-reward
+        start_session(buildlog_dir, error_class="test")
+        log_reward(buildlog_dir, outcome="accepted", source="hook:merge")
+        end_session(buildlog_dir)
+
+        # Session B: no explicit reward → auto-reward fires
+        start_session(buildlog_dir, error_class="test")
+        end_session(buildlog_dir)
+
+        from buildlog.storage import get_backend
+
+        backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
+        rewards = backend.load_events(project_id, "rewards")
+        auto_rewards = [r for r in rewards if r.get("source") == "auto:end_session"]
+        # Only session B got auto-reward
+        assert len(auto_rewards) == 1
+        explicit_rewards = [r for r in rewards if r.get("source") == "hook:merge"]
+        assert len(explicit_rewards) == 1
+
+    def test_auto_reward_fallback_uses_neutral_signal(self, tmp_path: Path):
+        """Auto-fallback must use revision with distance=0.5 → reward_value=0.5."""
+        from buildlog.core import end_session, start_session
+
+        buildlog_dir = tmp_path / "buildlog"
+        buildlog_dir.mkdir()
+
+        start_session(buildlog_dir, error_class="test")
+        end_session(buildlog_dir)
+
+        from buildlog.storage import get_backend
+
+        backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
+        rewards = backend.load_events(project_id, "rewards")
+        auto_rewards = [r for r in rewards if r.get("source") == "auto:end_session"]
+        assert len(auto_rewards) == 1
+        r = auto_rewards[0]
+        assert r["outcome"] == "revision"
+        assert r["revision_distance"] == 0.5
+        assert r["reward_value"] == 0.5
 
 
 class TestAutoMigrate:

@@ -398,7 +398,7 @@ def buildlog_rewards(
 def buildlog_experiment_start(
     error_class: str | None = None,
     notes: str | None = None,
-    select_k: int = 3,
+    select_k: int = 0,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Start a tracked session with Thompson Sampling rule selection.

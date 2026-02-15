@@ -136,7 +136,7 @@ def start_session(
     buildlog_dir: Path,
     error_class: str | None = None,
     notes: str | None = None,
-    select_k: int = 3,
+    select_k: int = 0,
     available_rules: list[str] | None = None,
     seed_rule_ids: set[str] | None = None,
     seed_confidence_map: dict[str, float] | None = None,
@@ -153,6 +153,7 @@ def start_session(
         error_class: Error class being targeted (context for bandits).
         notes: Optional notes about the session.
         select_k: Number of rules to select via Thompson Sampling.
+                 Default 0 means auto-calculate: max(10, 10% of pool).
         available_rules: Explicit list of candidate rule IDs. If None,
             reads promoted IDs from .buildlog/promoted.json.
         seed_rule_ids: Set of rule IDs that get boosted priors.
@@ -168,6 +169,10 @@ def start_session(
         if available_rules is not None
         else _get_current_rules(buildlog_dir)
     )
+
+    # Auto-calculate k if not explicitly set (select_k <= 0 means auto)
+    if select_k <= 0:
+        select_k = max(10, len(current_rules) // 10) if current_rules else 10
 
     selected_rules: list[str] = []
 
