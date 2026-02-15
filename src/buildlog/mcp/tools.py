@@ -970,8 +970,9 @@ def buildlog_gauntlet_loop(
 
     Returns:
         Dict with target, personas, max_iterations, stop_at,
-        instructions, issue_format, prompt, valid_rule_ids, message, error.
-        When compact=False, also includes rules_by_persona and rule_id_index.
+        instructions, issue_format, valid_rule_ids, message, error.
+        When compact=False, also includes prompt, rules_by_persona,
+        and rule_id_index.
     """
     result = gauntlet_loop_config(
         target=target,
@@ -988,6 +989,10 @@ def buildlog_gauntlet_loop(
         # The prompt already contains all rules formatted for the LLM.
         # rules_by_persona is redundant and massive with many personas.
         d.pop("rules_by_persona", None)
+        # The prompt itself is ~14k tokens of re-formatted rules.
+        # The caller has valid_rule_ids and instructions — prompt is
+        # only useful if pasting verbatim (use compact=False for that).
+        d.pop("prompt", None)
 
         # Caller only needs the list of valid IDs (for valid_rule_ids
         # param on buildlog_gauntlet_issues), not per-rule metadata.

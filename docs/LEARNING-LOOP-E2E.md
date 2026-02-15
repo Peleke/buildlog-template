@@ -107,7 +107,7 @@ The agent reviews target code using persona-based rules. `buildlog_gauntlet_loop
 
 ### Code path
 
-1. **MCP wrapper:** `src/buildlog/mcp/tools.py:940-996` — `buildlog_gauntlet_loop()` delegates to `gauntlet_loop_config()`.
+1. **MCP wrapper:** `src/buildlog/mcp/tools.py:940-998` — `buildlog_gauntlet_loop()` delegates to `gauntlet_loop_config()`. When `compact=True` (default), strips `prompt`, `rules_by_persona`, and replaces `rule_id_index` with `valid_rule_ids`.
 
 2. **Config generation:** `src/buildlog/core/operations.py:4060-4188` — `gauntlet_loop_config()`:
    - **Line 4102:** `load_rules()` — loads seed rules from DB or YAML.

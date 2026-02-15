@@ -7,6 +7,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.18.4] - 2026-02-15
+
+### Fixed
+- **Gauntlet loop compact mode**: `buildlog_gauntlet_loop()` now strips the `prompt` field (~14k tokens) when `compact=True` (default). Previously only `rules_by_persona` was stripped. The caller has `valid_rule_ids` and `instructions` — use `compact=False` to get the full prompt.
+
 ## [0.18.2] - 2026-02-14
 
 ### Fixed
