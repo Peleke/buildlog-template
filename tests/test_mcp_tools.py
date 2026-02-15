@@ -131,8 +131,9 @@ class TestBuildlogPromote:
 
         assert result["target"] == "settings_json"
 
-    def test_accepts_skill_target(self, tmp_path):
+    def test_accepts_skill_target(self, tmp_path, monkeypatch):
         """Should accept target='skill' for Anthropic Agent Skills format."""
+        monkeypatch.chdir(tmp_path)
         buildlog_dir = tmp_path / "buildlog"
         buildlog_dir.mkdir()
 
@@ -155,17 +156,12 @@ class TestBuildlogPromote:
         assert result["error"] is None
         assert skill_id in result["promoted_ids"]
 
-        # Verify SKILL.md was created
+        # Verify SKILL.md was created (promote writes to CWD/.claude/)
         skill_file = Path(".claude/skills/buildlog-learned/SKILL.md")
         assert skill_file.exists()
         content = skill_file.read_text()
         assert "---\n" in content  # YAML frontmatter
         assert "name: buildlog-learned" in content
-
-        # Cleanup
-        import shutil
-
-        shutil.rmtree(".claude", ignore_errors=True)
 
 
 class TestBuildlogReject:

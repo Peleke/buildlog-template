@@ -261,6 +261,11 @@ class TestBuildlogCommitEnvVar:
         buildlog_dir = tmp_path / "buildlog"
         buildlog_dir.mkdir()
 
+        # Session required for commit to proceed (learning loop enforcement)
+        from buildlog.core import start_session
+
+        start_session(buildlog_dir, error_class="test")
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=1, stderr="not a git repo", stdout=""
@@ -269,7 +274,12 @@ class TestBuildlogCommitEnvVar:
 
             commit(buildlog_dir, ["-m", "test"])
 
-            # First call is 'git commit'
-            call_args = mock_run.call_args_list[0]
-            env = call_args.kwargs.get("env", {})
+            # Find the git commit call (may not be first due to session check)
+            git_commit_calls = [
+                c
+                for c in mock_run.call_args_list
+                if c.args and "git" in c.args[0] and "commit" in c.args[0]
+            ]
+            assert git_commit_calls, "No git commit subprocess call found"
+            env = git_commit_calls[0].kwargs.get("env", {})
             assert env.get("BUILDLOG_COMMIT") == "1"

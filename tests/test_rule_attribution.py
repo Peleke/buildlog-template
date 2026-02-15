@@ -456,11 +456,16 @@ class TestGauntletProcessIssuesCitations:
                 iteration=1,
                 valid_rule_ids={"valid:rule:0"},
             )
-            mock_log.assert_called_once()
-            call_kwargs = mock_log.call_args
-            assert call_kwargs[1]["error_class"] == "citation_hallucination"
-            assert "hallucinated:rule:99" in call_kwargs[1]["description"]
-            assert call_kwargs[1]["severity"] == "minor"
+            # Called twice: once for citation hallucination, once for auto-mistake (major issue)
+            assert mock_log.call_count == 2
+            # First call: citation hallucination
+            hallucination_call = mock_log.call_args_list[0]
+            assert hallucination_call[1]["error_class"] == "citation_hallucination"
+            assert "hallucinated:rule:99" in hallucination_call[1]["description"]
+            assert hallucination_call[1]["severity"] == "minor"
+            # Second call: auto-logged gauntlet mistake
+            gauntlet_call = mock_log.call_args_list[1]
+            assert gauntlet_call[1]["error_class"] == "gauntlet_major"
 
 
 class TestGauntletProcessIssuesBanditCredit:

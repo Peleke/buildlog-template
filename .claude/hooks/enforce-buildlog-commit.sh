@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 # enforce-buildlog-commit.sh - Claude Code PreToolUse hook
-# Blocks bare `git commit` in Bash tool calls.
-# Forces agents to use buildlog_commit() which commits AND logs.
+#
+# Enforces TWO things:
+#   1. Blocks bare `git commit` → must use buildlog_commit()
+#   2. Blocks `gh pr create` without gauntlet-cleared marker
 #
 # Exceptions:
 #   - BUILDLOG_COMMIT=1 prefix (set by buildlog_commit() internally)
 #   - git commit --amend (fixup commits are fine)
-#   - git rebase (internally runs commit)
+#   - BUILDLOG_ENFORCE=0 (opt-out of all enforcement)
 
 set -euo pipefail
+
+# Global opt-out
+if [ "${BUILDLOG_ENFORCE:-1}" = "0" ]; then
+  exit 0
+fi
 
 INPUT=$(cat)
 
@@ -20,17 +27,14 @@ fi
 
 COMMAND=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null || echo "")
 
-# Check if it's a git commit command
+# --- Enforcement 1: Block bare git commit ---
 if printf '%s' "$COMMAND" | grep -qE '(^|&&|\||\;)\s*git\s+commit\b'; then
-  # Allow if BUILDLOG_COMMIT=1 is set (buildlog_commit() sets this)
   if printf '%s' "$COMMAND" | grep -qE 'BUILDLOG_COMMIT=1'; then
     exit 0
   fi
-  # Allow --amend (fixup commits)
   if printf '%s' "$COMMAND" | grep -qE 'git\s+commit\s+.*--amend'; then
     exit 0
   fi
-  # DENY
   cat <<'DENY_JSON'
 {
   "hookSpecificOutput": {
@@ -41,6 +45,24 @@ if printf '%s' "$COMMAND" | grep -qE '(^|&&|\||\;)\s*git\s+commit\b'; then
 }
 DENY_JSON
   exit 0
+fi
+
+# --- Enforcement 2: Block gh pr create without gauntlet ---
+if printf '%s' "$COMMAND" | grep -qE '(^|&&|\||\;)\s*gh\s+pr\s+create\b'; then
+  BUILDLOG_DIR="${CLAUDE_PROJECT_DIR:-.}/buildlog"
+  MARKER="$BUILDLOG_DIR/.buildlog/gauntlet_cleared"
+  if [ ! -f "$MARKER" ]; then
+    cat <<'DENY_JSON'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "PR creation blocked. Run the gauntlet first: buildlog_gauntlet_loop(target=\"src/\"). The gauntlet must pass clean (or accept risk) before creating a PR."
+  }
+}
+DENY_JSON
+    exit 0
+  fi
 fi
 
 exit 0
