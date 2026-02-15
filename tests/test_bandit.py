@@ -554,6 +554,47 @@ class TestBanditIntegration:
         assert len(result.selected_rules) == 2
         assert all(r in ["r1", "r2", "r3"] for r in result.selected_rules)
 
+    def test_session_start_auto_calculates_k(self, temp_dir):
+        """select_k=0 (default) auto-calculates as max(10, 10% of pool).
+
+        Regression test: previously core/operations.start_session hardcoded
+        select_k=3, ignoring the auto-calc logic that only existed in
+        engine/experiments.start_session (which nothing called).
+        """
+        from buildlog.core.operations import start_session
+
+        buildlog_dir = temp_dir
+        inner_dir = buildlog_dir / ".buildlog"
+        inner_dir.mkdir()
+
+        # Create 50 rules — auto-calc should give max(10, 50//10) = 10
+        rule_ids = [f"rule_{i}" for i in range(50)]
+        promoted_path = inner_dir / "promoted.json"
+        promoted_path.write_text(json.dumps({"skill_ids": rule_ids}))
+
+        result = start_session(buildlog_dir, error_class="general")
+
+        # Default select_k=0 should auto-calc to 10 (max(10, 50//10))
+        assert len(result.selected_rules) == 10
+        assert all(r in rule_ids for r in result.selected_rules)
+
+    def test_session_start_auto_calc_scales_with_pool(self, temp_dir):
+        """Auto-calc k scales to 10% for large pools (>100 rules)."""
+        from buildlog.core.operations import start_session
+
+        buildlog_dir = temp_dir
+        inner_dir = buildlog_dir / ".buildlog"
+        inner_dir.mkdir()
+
+        # Create 200 rules — auto-calc should give max(10, 200//10) = 20
+        rule_ids = [f"rule_{i}" for i in range(200)]
+        promoted_path = inner_dir / "promoted.json"
+        promoted_path.write_text(json.dumps({"skill_ids": rule_ids}))
+
+        result = start_session(buildlog_dir, error_class="general")
+
+        assert len(result.selected_rules) == 20
+
     def test_mistake_gives_negative_feedback(self, temp_dir):
         """log_mistake updates bandit with reward=0 for selected rules."""
         from buildlog.core.operations import log_mistake, start_session

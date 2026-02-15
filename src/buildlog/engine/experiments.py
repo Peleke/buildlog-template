@@ -32,6 +32,7 @@ from buildlog.core.operations import (
     SessionMetrics,
     StartSessionResult,
 )
+from buildlog.core.operations import start_session as _core_start_session
 from buildlog.storage import StorageBackend, get_backend
 
 __all__ = [
@@ -137,16 +138,16 @@ def start_session(
     error_class: str | None = None,
     notes: str | None = None,
     select_k: int = 0,
-    available_rules: list[str] | None = None,
-    seed_rule_ids: set[str] | None = None,
-    seed_confidence_map: dict[str, float] | None = None,
+    available_rules: list[str] | None = None,  # noqa: ARG001 — kept for API compat
+    seed_rule_ids: set[str] | None = None,  # noqa: ARG001 — kept for API compat
+    seed_confidence_map: (
+        dict[str, float] | None
+    ) = None,  # noqa: ARG001 — kept for API compat
 ) -> StartSessionResult:
     """Start a new experiment session with bandit-selected rules.
 
-    Unlike core/operations.start_session, this function accepts
-    ``available_rules`` directly rather than calling generate_skills().
-    If ``available_rules`` is None, falls back to reading promoted rule IDs
-    from .buildlog/promoted.json.
+    Delegates to ``core.operations.start_session`` — the single source of
+    truth for session creation and Thompson Sampling rule selection.
 
     Args:
         buildlog_dir: Path to buildlog directory.
@@ -154,60 +155,18 @@ def start_session(
         notes: Optional notes about the session.
         select_k: Number of rules to select via Thompson Sampling.
                  Default 0 means auto-calculate: max(10, 10% of pool).
-        available_rules: Explicit list of candidate rule IDs. If None,
-            reads promoted IDs from .buildlog/promoted.json.
-        seed_rule_ids: Set of rule IDs that get boosted priors.
+        available_rules: Deprecated — ignored; kept for API compat.
+        seed_rule_ids: Deprecated — ignored; core computes these internally.
+        seed_confidence_map: Deprecated — ignored; core computes these internally.
 
     Returns:
         StartSessionResult with session ID, rules count, and selected rules.
     """
-    now = datetime.now(timezone.utc)
-    session_id = _generate_session_id(now)
-
-    current_rules = (
-        available_rules
-        if available_rules is not None
-        else _get_current_rules(buildlog_dir)
-    )
-
-    # Auto-calculate k if not explicitly set (select_k <= 0 means auto)
-    if select_k <= 0:
-        select_k = max(10, len(current_rules) // 10) if current_rules else 10
-
-    selected_rules: list[str] = []
-
-    if current_rules:
-        bandit = get_learning_backend(buildlog_dir)
-
-        selected_rules = bandit.select(
-            candidates=current_rules,
-            context=error_class or "general",
-            k=min(select_k, len(current_rules)),
-            seed_rule_ids=seed_rule_ids or set(),
-            seed_confidence_map=seed_confidence_map,
-        )
-
-    session = Session(
-        id=session_id,
-        started_at=now,
-        rules_at_start=current_rules,
-        selected_rules=selected_rules,
+    return _core_start_session(
+        buildlog_dir,
         error_class=error_class,
         notes=notes,
-    )
-
-    backend, project_id = _get_storage(buildlog_dir)
-    backend.save_active_session(project_id, session.to_dict())  # type: ignore[arg-type]
-
-    return StartSessionResult(
-        session_id=session_id,
-        error_class=error_class,
-        rules_count=len(current_rules),
-        selected_rules=selected_rules,
-        message=(
-            f"Started session {session_id}: selected {len(selected_rules)}/"
-            f"{len(current_rules)} rules via Thompson Sampling"
-        ),
+        select_k=select_k,
     )
 
 
