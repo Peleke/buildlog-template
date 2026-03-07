@@ -7,6 +7,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-03-07
+
+### Added
+- **qortex-learning as default backend**: Thompson Sampling via `qortex-learning` with persistent async bridge (`QortexLearner` adapter). Falls back to builtin bandit if not installed.
+- **`gauntlet_credits` table (schema v6)**: Stores which rules were credited during gauntlet reviews in SQLite, enabling proper reward attribution.
+- **Closed feedback loop**: Gauntlet credits rules -> SQLite -> `log_reward()` reads credits -> qortex posteriors update -> better rule selection. Mechanically proven end-to-end.
+
+### Changed
+- **Gauntlet is the sole feedback source**: `log_reward()` reads from `gauntlet_credits` table instead of session-selected rules. Only rules demonstrably consulted during review get reinforced.
+- **Session ceremony is optional**: `log_mistake()` works without an active session (generates synthetic session ID).
+- **Python >= 3.11 required** (was >= 3.10).
+- **`qortex-learning>=0.1.0` is a required dependency** (was optional).
+- Complete README rewrite reflecting the closed loop architecture.
+
+### Fixed
+- **Context mismatch**: Gauntlet credited with `context=None`, `log_reward` used `"general"` — different partitions. Both now use `None`.
+- Dead code branch in `_run_async()` collapsed.
+- Redundant `import threading` inside `_get_bridge_loop()` removed.
+- Silent seed param drop in `QortexLearner.select()` now logged at DEBUG level.
+
 ## [0.18.4] - 2026-02-15
 
 ### Fixed
