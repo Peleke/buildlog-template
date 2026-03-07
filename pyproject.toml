@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "buildlog"
-version = "0.18.4"
+version = "0.19.0"
 description = "Engineering notebook for AI-assisted development"
 readme = "README.md"
 license = "MIT"
@@ -18,14 +18,13 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Documentation",
     "Topic :: Software Development :: Documentation",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "copier>=9.0.0",
     "click>=8.0.0",
@@ -34,6 +33,7 @@ dependencies = [
     "pymupdf>=1.26.7",
     "mcp>=1.0.0",
     "sqlite-vec>=0.1.6",
+    "qortex-learning>=0.1.0",
 ]
 
 [project.optional-dependencies]
@@ -70,9 +70,9 @@ llm = [
 ]
 # MCP server for Claude Code integration (now a default dependency, kept for backwards compat)
 mcp = []
-# qortex learning backend (pluggable Thompson Sampling with OTEL, credit propagation)
-qortex = [
-    "qortex>=0.3.6; python_version>='3.11'",
+# Full qortex package (KG, MCP, REST — for advanced integrations)
+qortex-full = [
+    "qortex>=0.8.0",
 ]
 # All optional features
 all = [
@@ -80,7 +80,7 @@ all = [
     "openai>=1.0.0",
     "ollama>=0.4.0",
     "anthropic>=0.40.0",
-    "qortex>=0.3.6; python_version>='3.11'",
+    "qortex>=0.8.0",
     "marimo>=0.19.5",
     "plotly>=6.5.2",
     "matplotlib>=3.5.0",
@@ -131,7 +131,7 @@ packages = ["src/buildlog"]
 
 [tool.black]
 line-length = 88
-target-version = ["py310", "py311", "py312", "py313"]
+target-version = ["py311", "py312", "py313"]
 include = '\.pyi?$'
 
 [tool.isort]
@@ -141,7 +141,7 @@ known_first_party = ["buildlog"]
 skip_gitignore = true
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = false
 warn_unused_ignores = false
 disallow_untyped_defs = false

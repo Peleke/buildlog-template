@@ -11,7 +11,7 @@ from pathlib import Path
 
 __all__ = ["SCHEMA_VERSION", "init_schema"]
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # ---------------------------------------------------------------------------
 # DDL statements
@@ -262,6 +262,22 @@ _MIGRATE_V4: str = _CREATE_GAUNTLET_RULES
 
 _MIGRATE_V5: str = _CREATE_EMISSION_EDGES
 
+# ---------------------------------------------------------------------------
+# v6 migration: gauntlet_credits table for feedback loop attribution
+# ---------------------------------------------------------------------------
+
+_MIGRATE_V6: str = """\
+CREATE TABLE IF NOT EXISTS gauntlet_credits (
+    project_id  TEXT NOT NULL REFERENCES projects(id),
+    timestamp   TEXT NOT NULL,
+    iteration   INTEGER NOT NULL,
+    rules       TEXT NOT NULL,  -- JSON array of credited rule IDs
+    PRIMARY KEY (project_id, timestamp)
+);
+CREATE INDEX IF NOT EXISTS idx_gauntlet_credits_ts
+    ON gauntlet_credits(project_id, timestamp DESC);
+"""
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -348,6 +364,16 @@ def init_schema(conn: sqlite3.Connection) -> int:
         conn.execute(
             "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
             (5,),
+        )
+        conn.commit()
+        current_version = 5
+
+    # Apply v6 migration: gauntlet_credits table
+    if current_version < 6:
+        conn.executescript(_MIGRATE_V6)
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+            (6,),
         )
         conn.commit()
 
