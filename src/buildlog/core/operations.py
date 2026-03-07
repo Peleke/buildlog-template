@@ -1228,13 +1228,25 @@ def log_reward(
 
     backend, project_id = _get_storage(buildlog_dir)
 
-    # Try to get rules and context from active session if not provided
+    # Prefer gauntlet-credited rules over session-selected rules.
+    # The gauntlet is the authoritative feedback source — it knows
+    # which rules were actually consulted during review.
+    if rules_active is None:
+        import json
+
+        credits_path = buildlog_dir / ".buildlog" / "last_gauntlet_credits.json"
+        if credits_path.exists():
+            try:
+                credits = json.loads(credits_path.read_text())
+                rules_active = credits.get("rules", [])
+            except Exception:
+                pass
+
+    # Fall back to session data for session_id and error_class
     session_data = backend.load_active_session(project_id)
     if session_data is not None:
         if session_id is None:
             session_id = session_data.get("id")
-        if rules_active is None:
-            rules_active = session_data.get("selected_rules", [])
         if error_class is None:
             error_class = session_data.get("error_class")
 
@@ -2581,13 +2593,14 @@ def log_mistake(
     backend, project_id = _get_storage(buildlog_dir)
 
     session_data = backend.load_active_session(project_id)
-    if session_data is None:
-        raise ValueError(
-            "No active session - start one with 'buildlog experiment start'"
+    if session_data is not None:
+        session_id = session_data["id"]
+    else:
+        # No active session — use a synthetic ID so gauntlet auto-logging
+        # and standalone mistake logging work without session ceremony.
+        session_id = (
+            f"no-session-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
         )
-
-    # Get current session
-    session_id = session_data["id"]
 
     now = datetime.now(timezone.utc)
     mistake_id = _generate_mistake_id(error_class, now)
@@ -2631,13 +2644,13 @@ def log_mistake(
     # Rules that repeatedly fail will become less likely to be selected.
     # =========================================================================
 
-    selected_rules = session_data.get("selected_rules", [])
+    selected_rules = session_data.get("selected_rules", []) if session_data else []
     if selected_rules:
         bandit = get_learning_backend(buildlog_dir)
 
-        # Use session's error_class as context, not the mistake's
-        # (they should match, but session context is authoritative)
-        bandit_context = session_data.get("error_class") or "general"
+        bandit_context = (
+            session_data.get("error_class") or "general" if session_data else "general"
+        )
 
         bandit.batch_update(
             rule_ids=selected_rules,
@@ -2655,7 +2668,7 @@ def log_mistake(
         gauntlet_map = _build_skill_to_gauntlet_map(buildlog_dir)
         manifest = _mistake_to_manifest(
             mistake=mistake,
-            session_data=session_data,
+            session_data=session_data or {},
             selected_rules=selected_rules,
             project_id=project_id,
             registry=DEFAULT_REGISTRY,
@@ -3069,6 +3082,27 @@ def gauntlet_process_issues(
         except Exception:
             logging.getLogger(__name__).debug(
                 "Bandit credit update failed", exc_info=True
+            )
+
+        # Persist credited rules so log_reward() can attribute feedback
+        # to gauntlet-cited rules instead of session-selected rules.
+        import json
+
+        credits_path = buildlog_dir / ".buildlog" / "last_gauntlet_credits.json"
+        try:
+            credits_path.parent.mkdir(parents=True, exist_ok=True)
+            credits_path.write_text(
+                json.dumps(
+                    {
+                        "rules": sorted(credited_rules),
+                        "iteration": iteration,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            )
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "Failed to persist gauntlet credits", exc_info=True
             )
 
     # Determine action
