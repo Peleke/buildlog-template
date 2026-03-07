@@ -279,11 +279,14 @@ class SQLiteBackend:
         "rewards": "reward_events",
         "sessions": "sessions",
         "mistakes": "mistakes",
+        "gauntlet_credits": "gauntlet_credits",
     }
 
     # Whitelist of valid SQL table names — f-string interpolation is only
     # safe for values in this set.
-    _VALID_SQL_TABLES = frozenset({"reward_events", "sessions", "mistakes"})
+    _VALID_SQL_TABLES = frozenset(
+        {"reward_events", "sessions", "mistakes", "gauntlet_credits"}
+    )
 
     def _resolve_table(self, table: str) -> str:
         resolved = self._EVENT_TABLE_MAP.get(table)
@@ -378,6 +381,20 @@ class SQLiteBackend:
                     record.get("severity"),
                 ),
             )
+        elif resolved == "gauntlet_credits":
+            self.conn.execute(
+                """\
+                INSERT INTO gauntlet_credits
+                    (project_id, timestamp, iteration, rules)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    project_id,
+                    record["timestamp"],
+                    record["iteration"],
+                    json.dumps(record.get("rules", [])),
+                ),
+            )
 
         self.conn.commit()
 
@@ -421,6 +438,7 @@ class SQLiteBackend:
             "reward_events": ["rules_active"],
             "sessions": ["rules_at_start", "rules_at_end", "selected_rules"],
             "mistakes": [],
+            "gauntlet_credits": ["rules"],
         }
 
         for col in json_cols.get(table, []):
