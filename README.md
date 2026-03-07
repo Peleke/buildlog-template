@@ -119,7 +119,7 @@ Each gauntlet citation followed by a reward acceptance increments alpha in the B
 
 ## Current Limits
 
-This is v0.19, not the end state.
+This is v0.20, not the end state.
 
 - **Extraction quality is uneven.** Regex extractors miss nuance; LLM extractors are accurate but expensive. The middle ground is still being found.
 - **Single-agent only.** Multi-agent coordination (shared learning across agents) is designed but not implemented.

@@ -7,6 +7,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-03-07
+
+### Changed
+- Version bump to 0.20.0 (v0.19.0 release failed due to missing CHANGELOG at tag time).
+
 ## [0.19.0] - 2026-03-07
 
 ### Added
