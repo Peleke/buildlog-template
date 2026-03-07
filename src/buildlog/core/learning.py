@@ -2,17 +2,20 @@
 
 Defines the ``LearningBackend`` protocol and two adapters:
 
-- ``BuiltinBandit``: wraps the existing ``ThompsonSamplingBandit`` (zero deps)
-- ``QortexLearner``: wraps ``qortex.learning.Learner`` (optional dep)
+- ``QortexLearner``: wraps ``qortex.learning.Learner`` (default)
+- ``BuiltinBandit``: wraps the existing ``ThompsonSamplingBandit`` (fallback)
 
 The ``get_learning_backend()`` factory reads ``BUILDLOG_LEARNING_BACKEND``
-env var to pick the backend.  Default is ``"builtin"``.
+env var to pick the backend.  Default is ``"qortex"``, falling back to
+``"builtin"`` if qortex-learning is not installed.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -83,6 +86,61 @@ class LearningBackend(Protocol):
 
 
 # ---------------------------------------------------------------------------
+# Sync-to-async bridge
+# ---------------------------------------------------------------------------
+
+# Persistent event loop for the qortex adapter. aiosqlite holds a thread
+# that references the event loop, so we can't create/destroy loops per call.
+_BRIDGE_LOOP: asyncio.AbstractEventLoop | None = None
+_BRIDGE_THREAD: "threading.Thread | None" = None
+
+
+def _get_bridge_loop() -> asyncio.AbstractEventLoop:
+    """Get or create a persistent event loop running in a background thread.
+
+    The loop stays alive for the process lifetime so aiosqlite connections
+    don't lose their event loop reference between calls.
+    """
+    global _BRIDGE_LOOP, _BRIDGE_THREAD
+    import threading
+
+    if _BRIDGE_LOOP is not None and _BRIDGE_LOOP.is_running():
+        return _BRIDGE_LOOP
+
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_forever, daemon=True)
+    thread.start()
+    _BRIDGE_LOOP = loop
+    _BRIDGE_THREAD = thread
+    return loop
+
+
+def _run_async(coro):
+    """Run an async coroutine from sync code.
+
+    Uses a persistent background event loop so aiosqlite connections
+    survive across multiple calls.
+    """
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+
+    if running is not None and running.is_running():
+        # Already in an async context (e.g. MCP server).
+        # Submit to the bridge loop in its background thread.
+        loop = _get_bridge_loop()
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        return future.result(timeout=30)
+    else:
+        # No loop running — still use the persistent bridge loop
+        # to keep aiosqlite happy across calls.
+        loop = _get_bridge_loop()
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        return future.result(timeout=30)
+
+
+# ---------------------------------------------------------------------------
 # Adapter: builtin ThompsonSamplingBandit
 # ---------------------------------------------------------------------------
 
@@ -149,15 +207,16 @@ class BuiltinBandit:
 
 
 # ---------------------------------------------------------------------------
-# Adapter: qortex Learner
+# Adapter: qortex Learner (async → sync bridge)
 # ---------------------------------------------------------------------------
 
 
 class QortexLearner:
-    """Adapter translating ``qortex.learning.Learner`` to buildlog's interface.
+    """Adapter translating ``qortex.learning.Learner`` to buildlog's sync interface.
 
-    All qortex imports are lazy — this class can be *defined* without
-    qortex installed; it only fails when actually instantiated.
+    qortex's Learner is fully async (since the REST/Starlette extraction).
+    This adapter bridges via ``_run_async()`` which handles both sync CLI
+    contexts and async MCP server contexts.
 
     Context translation: buildlog uses ``str`` (error class name),
     qortex uses ``dict``.  We wrap strings as ``{"error_class": value}``.
@@ -192,7 +251,9 @@ class QortexLearner:
         from qortex.learning import Arm
 
         arms = [Arm(id=c) for c in candidates]
-        result = self._learner.select(arms, context=self._ctx(context), k=k)  # type: ignore[attr-defined]
+        result = _run_async(
+            self._learner.select(arms, context=self._ctx(context), k=k)  # type: ignore[attr-defined]
+        )
         return [a.id for a in result.selected]
 
     def update(
@@ -203,11 +264,11 @@ class QortexLearner:
     ) -> None:
         from qortex.learning import ArmOutcome
 
-        # Pass outcome="" so Learner.observe() uses reward directly
-        # (avoids the ``if outcome.outcome and not outcome.reward`` branch).
-        self._learner.observe(  # type: ignore[attr-defined]
-            ArmOutcome(arm_id=rule_id, reward=reward, outcome=""),
-            context=self._ctx(context),
+        _run_async(
+            self._learner.observe(  # type: ignore[attr-defined]
+                ArmOutcome(arm_id=rule_id, reward=reward, outcome=""),
+                context=self._ctx(context),
+            )
         )
 
     def batch_update(
@@ -216,13 +277,18 @@ class QortexLearner:
         reward: float,
         context: str | None = None,
     ) -> None:
-        # Use observe() loop — works with any qortex version.
-        for rule_id in rule_ids:
-            self.update(rule_id, reward, context)
+        from qortex.learning import ArmOutcome
+
+        outcomes = [
+            ArmOutcome(arm_id=rid, reward=reward, outcome="") for rid in rule_ids
+        ]
+        _run_async(
+            self._learner.batch_observe(outcomes, context=self._ctx(context))  # type: ignore[attr-defined]
+        )
 
     def get_stats(self, context: str | None = None) -> dict[str, dict]:
         ctx = self._ctx(context)
-        posts = self._learner.posteriors(ctx)  # type: ignore[attr-defined]
+        posts = _run_async(self._learner.posteriors(ctx))  # type: ignore[attr-defined]
 
         stats: dict[str, dict] = {}
         for arm_id, info in posts.items():
@@ -264,13 +330,8 @@ class QortexLearner:
         k: int = 10,
     ) -> list[tuple[str, float]]:
         ctx = self._ctx(context)
-        posts = self._learner.posteriors(ctx)  # type: ignore[attr-defined]
-        ranked = sorted(
-            posts.items(),
-            key=lambda x: x[1].get("mean", 0),
-            reverse=True,
-        )
-        return [(arm_id, info["mean"]) for arm_id, info in ranked[:k]]
+        top = _run_async(self._learner.top_arms(ctx, k=k))  # type: ignore[attr-defined]
+        return [(arm_id, state.mean) for arm_id, state in top]
 
     def decay_arm(
         self,
@@ -279,23 +340,13 @@ class QortexLearner:
         context: str | None = None,
     ) -> bool:
         ctx = self._ctx(context)
-        state = self._learner.store.get(rule_id, ctx)  # type: ignore[attr-defined]
+        state = _run_async(self._learner.store.get(rule_id, ctx))  # type: ignore[attr-defined]
         if state.pulls == 0 and state.alpha == 1.0 and state.beta == 1.0:
             return False  # pristine prior — nothing to decay
 
-        excess_alpha = state.alpha - 1.0
-        excess_beta = state.beta - 1.0
-        from qortex.learning import ArmState
-
-        new_state = ArmState(
-            alpha=1.0 + excess_alpha * decay_factor,
-            beta=1.0 + excess_beta * decay_factor,
-            pulls=state.pulls,
-            total_reward=state.total_reward,
-            last_updated=state.last_updated,
+        _run_async(
+            self._learner.decay_arm(rule_id, decay_factor, ctx)  # type: ignore[attr-defined]
         )
-        self._learner.store.put(rule_id, new_state, ctx)  # type: ignore[attr-defined]
-        self._learner.store.save()  # type: ignore[attr-defined]
         return True
 
 
@@ -315,37 +366,41 @@ def get_learning_backend(
 
     Reads ``BUILDLOG_LEARNING_BACKEND`` env var:
 
-    - ``"builtin"`` (default): wraps ``ThompsonSamplingBandit``
-    - ``"qortex"``: wraps ``qortex.learning.Learner``
+    - ``"qortex"`` (default): wraps ``qortex.learning.Learner``
+    - ``"builtin"``: wraps ``ThompsonSamplingBandit`` (fallback)
+
+    If qortex-learning is not installed and backend is ``"qortex"``,
+    falls back to ``"builtin"`` with a warning.
     """
     _valid_backends = {"builtin", "qortex"}
-    backend_name = os.environ.get("BUILDLOG_LEARNING_BACKEND", "builtin")
+    backend_name = os.environ.get("BUILDLOG_LEARNING_BACKEND", "qortex")
 
     if backend_name not in _valid_backends:
         _log.warning(
-            "Unknown BUILDLOG_LEARNING_BACKEND=%r, falling back to 'builtin'",
+            "Unknown BUILDLOG_LEARNING_BACKEND=%r, falling back to 'qortex'",
             backend_name,
         )
-        backend_name = "builtin"
+        backend_name = "qortex"
 
     if backend_name == "qortex":
         try:
             from qortex.learning import Learner, LearnerConfig
+
+            config = LearnerConfig(
+                name=f"buildlog-{buildlog_dir.parent.name}",
+                seed_boost=seed_boost,
+                baseline_rate=0.1,
+            )
+            learner = Learner(config)
+            return QortexLearner(learner)  # type: ignore[return-value]
         except ImportError:
-            raise ImportError(
-                "qortex is required for the 'qortex' learning backend. "
-                "Install it with: pip install buildlog[qortex]"
-            ) from None
+            _log.warning(
+                "qortex-learning not installed, falling back to builtin bandit. "
+                "Install with: pip install qortex-learning",
+            )
+            backend_name = "builtin"
 
-        config = LearnerConfig(
-            name=f"buildlog-{buildlog_dir.parent.name}",
-            seed_boost=seed_boost,
-            baseline_rate=0.1,
-        )
-        learner = Learner(config)
-        return QortexLearner(learner)  # type: ignore[return-value]
-
-    # Default: builtin — use SQLite if available, else JSONL
+    # Fallback: builtin — use SQLite if available, else JSONL
     from buildlog.core.bandit import ThompsonSamplingBandit, resolve_bandit_persistence
 
     persistence = resolve_bandit_persistence(buildlog_dir)
