@@ -85,6 +85,8 @@ class LearningBackend(Protocol):
     ) -> bool: ...
 
 
+_log = logging.getLogger("buildlog.learning")
+
 # ---------------------------------------------------------------------------
 # Sync-to-async bridge
 # ---------------------------------------------------------------------------
@@ -102,7 +104,6 @@ def _get_bridge_loop() -> asyncio.AbstractEventLoop:
     don't lose their event loop reference between calls.
     """
     global _BRIDGE_LOOP, _BRIDGE_THREAD
-    import threading
 
     if _BRIDGE_LOOP is not None and _BRIDGE_LOOP.is_running():
         return _BRIDGE_LOOP
@@ -118,26 +119,12 @@ def _get_bridge_loop() -> asyncio.AbstractEventLoop:
 def _run_async(coro):
     """Run an async coroutine from sync code.
 
-    Uses a persistent background event loop so aiosqlite connections
-    survive across multiple calls.
+    Always submits to the persistent bridge loop so aiosqlite connections
+    survive across multiple calls — works from both sync and async contexts.
     """
-    try:
-        running = asyncio.get_running_loop()
-    except RuntimeError:
-        running = None
-
-    if running is not None and running.is_running():
-        # Already in an async context (e.g. MCP server).
-        # Submit to the bridge loop in its background thread.
-        loop = _get_bridge_loop()
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result(timeout=30)
-    else:
-        # No loop running — still use the persistent bridge loop
-        # to keep aiosqlite happy across calls.
-        loop = _get_bridge_loop()
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result(timeout=30)
+    loop = _get_bridge_loop()
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result(timeout=30)
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +235,11 @@ class QortexLearner:
         seed_rule_ids: set[str] | None = None,
         seed_confidence_map: dict[str, float] | None = None,
     ) -> list[str]:
+        if seed_rule_ids or seed_confidence_map:
+            _log.debug(
+                "QortexLearner ignores per-call seed params; "
+                "seed boosting is handled via LearnerConfig.seed_boost"
+            )
         from qortex.learning import Arm
 
         arms = [Arm(id=c) for c in candidates]
@@ -349,8 +341,6 @@ class QortexLearner:
         )
         return True
 
-
-_log = logging.getLogger("buildlog.learning")
 
 # ---------------------------------------------------------------------------
 # Factory
