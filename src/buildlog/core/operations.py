@@ -1232,15 +1232,13 @@ def log_reward(
     # The gauntlet is the authoritative feedback source — it knows
     # which rules were actually consulted during review.
     if rules_active is None:
-        import json
-
-        credits_path = buildlog_dir / ".buildlog" / "last_gauntlet_credits.json"
-        if credits_path.exists():
-            try:
-                credits = json.loads(credits_path.read_text())
-                rules_active = credits.get("rules", [])
-            except Exception:
-                pass
+        try:
+            credit_events = backend.load_events(project_id, "gauntlet_credits")
+            if credit_events:
+                latest = credit_events[-1]
+                rules_active = latest.get("rules", [])
+        except Exception:
+            pass
 
     # Fall back to session data for session_id and error_class
     session_data = backend.load_active_session(project_id)
@@ -1288,7 +1286,7 @@ def log_reward(
         bandit.batch_update(
             rule_ids=rules_active,
             reward=reward_value,
-            context=error_class or "general",
+            context=error_class,
         )
 
     # Count total events
@@ -3086,19 +3084,16 @@ def gauntlet_process_issues(
 
         # Persist credited rules so log_reward() can attribute feedback
         # to gauntlet-cited rules instead of session-selected rules.
-        import json
-
-        credits_path = buildlog_dir / ".buildlog" / "last_gauntlet_credits.json"
         try:
-            credits_path.parent.mkdir(parents=True, exist_ok=True)
-            credits_path.write_text(
-                json.dumps(
-                    {
-                        "rules": sorted(credited_rules),
-                        "iteration": iteration,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }
-                )
+            _backend, _project_id = _get_storage(buildlog_dir)
+            _backend.append_event(
+                _project_id,
+                "gauntlet_credits",
+                {
+                    "rules": sorted(credited_rules),
+                    "iteration": iteration,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
             )
         except Exception:
             logging.getLogger(__name__).debug(
