@@ -1,24 +1,16 @@
-<div align="center">
+> ⚠️ **Deprecation Notice**
+>
+> buildlog v1 is retired. It was an experimental RLHF lifecycle harness for Claude Code that captured programming mistakes, derived rules from human feedback, and dynamically injected them into context on commit. The learning loop worked, but the architecture was too tightly coupled to Claude Code's session model.
+>
+> A v2 is planned as a tightly scoped pipe layer in Rust, using [qortex](https://github.com/Peleke/qortex) as its backend. Design plan forthcoming.
+
+---
 
 # buildlog
 
 ### A measurable learning loop for AI-assisted work
 
-[![PyPI](https://img.shields.io/pypi/v/buildlog?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/buildlog/)
-[![Python](https://img.shields.io/pypi/pyversions/buildlog?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
-[![CI](https://img.shields.io/github/actions/workflow/status/Peleke/buildlog-template/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI)](https://github.com/Peleke/buildlog-template/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue?style=for-the-badge&logo=github)](https://peleke.github.io/buildlog-template/)
-
-**Track what works. Prove it. Drop what doesn't.**
-
-<img src="assets/hero-banner-perfectdeliberate.png" alt="buildlog - A measurable learning loop for AI-assisted work" width="800"/>
-
-> **RE: The art.** Yes, it's AI-generated. Yes, that's hypocritical for a project about rigor over vibes. Looking for an actual artist to pay for a real logo. If you know someone good, [open an issue](https://github.com/Peleke/buildlog-template/issues) or DM me. Budget exists.
-
-**[Read the full documentation](https://peleke.github.io/buildlog-template/)** | **[Landing page](https://launchpad-git-buildlog-kwayet-fs-projects.vercel.app)**
-
-</div>
+**[Documentation](https://peleke.github.io/buildlog-template/)**
 
 ---
 
