@@ -216,6 +216,7 @@ class TestGauntletAcceptRisk:
         assert result.github_issues_created == 0
         assert len(result.github_issue_urls) == 0
         assert result.error is None
+        assert result.checklist_items == 0
 
     def test_accepts_empty_issues(self):
         """Should handle empty issues list."""
@@ -223,33 +224,101 @@ class TestGauntletAcceptRisk:
 
         assert result.accepted_issues == 0
         assert result.github_issues_created == 0
+        assert result.checklist_items == 0
 
+    @patch("buildlog.core.operations._ensure_gauntlet_labels")
     @patch("subprocess.run")
-    def test_creates_github_issues_when_enabled(self, mock_run):
-        """Should create GitHub issues when enabled."""
-        mock_run.return_value.stdout = "https://github.com/test/repo/issues/1\n"
+    def test_creates_single_consolidated_issue(self, mock_run, mock_labels):
+        """Should create ONE GitHub issue with checklist, not N issues."""
+        mock_labels.return_value = {"major", "minor", "gauntlet/accepted-risk"}
+        mock_run.return_value.stdout = "https://github.com/test/repo/issues/42\n"
         mock_run.return_value.returncode = 0
 
         issues = [
             {
                 "severity": "major",
-                "description": "Test issue",
-                "rule_learned": "Test rule",
+                "description": "Missing validation",
+                "rule_learned": "Validate inputs",
+                "location": "src/api.py:10",
+            },
+            {
+                "severity": "minor",
+                "description": "Unused import",
+                "rule_learned": "Clean imports",
+                "location": "src/utils.py:1",
+            },
+            {
+                "severity": "minor",
+                "description": "Long function",
+                "rule_learned": "Keep functions short",
             },
         ]
 
-        result = gauntlet_accept_risk(issues, create_github_issues=True)
+        result = gauntlet_accept_risk(issues, create_github_issues=True, iteration=3)
 
-        assert result.accepted_issues == 1
+        assert result.accepted_issues == 3
         assert result.github_issues_created == 1
+        assert result.checklist_items == 3
         assert len(result.github_issue_urls) == 1
         assert "github.com" in result.github_issue_urls[0]
 
+        # Only ONE gh issue create call (label list is mocked out)
+        assert mock_run.call_count == 1
+        call_args = mock_run.call_args[0][0]
+        assert call_args[0:3] == ["gh", "issue", "create"]
+
+        # Verify body contains checklist format
+        body_idx = call_args.index("--body") + 1
+        body = call_args[body_idx]
+        assert "- [ ]" in body
+        assert "Missing validation" in body
+        assert "Unused import" in body
+        assert "### Major" in body
+        assert "### Minor" in body
+        assert "iteration 3" in body.lower()
+
+    @patch("buildlog.core.operations._ensure_gauntlet_labels")
     @patch("subprocess.run")
-    def test_handles_gh_cli_error(self, mock_run):
+    def test_checklist_body_includes_provenance(self, mock_run, mock_labels):
+        """Body should include iteration, date, rule info."""
+        mock_labels.return_value = {"critical", "gauntlet/accepted-risk"}
+        mock_run.return_value.stdout = "https://github.com/test/repo/issues/1\n"
+        mock_run.return_value.returncode = 0
+
+        issues = [
+            {
+                "severity": "critical",
+                "description": "SQL injection",
+                "rule_learned": "Parameterize queries",
+                "location": "src/db.py:42",
+                "rules_consulted": ["R-001", "R-002"],
+                "rule_reasoning": {
+                    "R-001": "Direct string concat",
+                    "R-002": "User input",
+                },
+            },
+        ]
+
+        gauntlet_accept_risk(
+            issues,
+            create_github_issues=True,
+            iteration=5,
+        )
+
+        call_args = mock_run.call_args[0][0]
+        body_idx = call_args.index("--body") + 1
+        body = call_args[body_idx]
+        assert "Iteration:** 5" in body
+        assert "Rules consulted: R-001, R-002" in body
+        assert "Reasoning:" in body
+
+    @patch("buildlog.core.operations._ensure_gauntlet_labels")
+    @patch("subprocess.run")
+    def test_handles_gh_cli_error(self, mock_run, mock_labels):
         """Should handle gh CLI errors gracefully."""
         from subprocess import CalledProcessError
 
+        mock_labels.return_value = {"major", "gauntlet/accepted-risk"}
         mock_run.side_effect = CalledProcessError(1, "gh", stderr="Not logged in")
 
         issues = [
@@ -266,9 +335,11 @@ class TestGauntletAcceptRisk:
         assert result.github_issues_created == 0
         assert result.error is not None
 
+    @patch("buildlog.core.operations._ensure_gauntlet_labels")
     @patch("subprocess.run")
-    def test_handles_missing_gh_cli(self, mock_run):
+    def test_handles_missing_gh_cli(self, mock_run, mock_labels):
         """Should handle missing gh CLI gracefully."""
+        mock_labels.return_value = set()
         mock_run.side_effect = FileNotFoundError()
 
         issues = [
@@ -285,9 +356,11 @@ class TestGauntletAcceptRisk:
         assert result.github_issues_created == 0
         assert "not found" in result.error.lower()
 
+    @patch("buildlog.core.operations._ensure_gauntlet_labels")
     @patch("subprocess.run")
-    def test_uses_custom_repo(self, mock_run):
+    def test_uses_custom_repo(self, mock_run, mock_labels):
         """Should use custom repo when specified."""
+        mock_labels.return_value = {"minor", "gauntlet/accepted-risk"}
         mock_run.return_value.stdout = "https://github.com/custom/repo/issues/1\n"
         mock_run.return_value.returncode = 0
 
@@ -297,10 +370,86 @@ class TestGauntletAcceptRisk:
 
         gauntlet_accept_risk(issues, create_github_issues=True, repo="custom/repo")
 
-        # Check that --repo was passed
+        # Check that --repo was passed to gh issue create
         call_args = mock_run.call_args[0][0]
         assert "--repo" in call_args
         assert "custom/repo" in call_args
+
+    @patch("subprocess.run")
+    def test_label_auto_creation(self, mock_run):
+        """Should auto-create missing labels, skip existing ones."""
+        import json as _json
+
+        # First call: gh label list returns only "minor" exists
+        label_list_result = type(
+            "R",
+            (),
+            {
+                "stdout": _json.dumps([{"name": "minor"}]),
+                "returncode": 0,
+            },
+        )()
+        # Subsequent calls: label create, then issue create
+        issue_create_result = type(
+            "R",
+            (),
+            {
+                "stdout": "https://github.com/test/repo/issues/99\n",
+                "returncode": 0,
+            },
+        )()
+
+        mock_run.return_value = issue_create_result
+
+        # Make label list return our custom result, rest succeed
+        def side_effect(cmd, **kwargs):
+            if cmd[1] == "label" and cmd[2] == "list":
+                return label_list_result
+            return issue_create_result
+
+        mock_run.side_effect = side_effect
+
+        issues = [
+            {"severity": "minor", "description": "Test minor"},
+            {"severity": "major", "description": "Test major"},
+        ]
+
+        result = gauntlet_accept_risk(issues, create_github_issues=True)
+
+        assert result.github_issues_created == 1
+        # Should have called: label list, label create (major),
+        # label create (gauntlet/accepted-risk), issue create
+        assert mock_run.call_count >= 3
+
+    @patch("subprocess.run")
+    def test_label_fallback_when_gh_unavailable(self, mock_run):
+        """Should still create issue without labels if label ops fail."""
+        # _ensure_gauntlet_labels will fail (FileNotFoundError on label list)
+        # but issue create should still work
+        call_count = {"n": 0}
+
+        def side_effect(cmd, **kwargs):
+            call_count["n"] += 1
+            if cmd[1] == "label":
+                raise FileNotFoundError("gh not found")
+            result = type(
+                "R",
+                (),
+                {
+                    "stdout": "https://github.com/test/repo/issues/1\n",
+                    "returncode": 0,
+                },
+            )()
+            return result
+
+        mock_run.side_effect = side_effect
+
+        issues = [{"severity": "minor", "description": "Test"}]
+        result = gauntlet_accept_risk(issues, create_github_issues=True)
+
+        # Issue should be created even though labels failed
+        assert result.github_issues_created == 1
+        assert result.error is None
 
 
 class TestGauntletLoopIntegration:

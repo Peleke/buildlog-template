@@ -2944,10 +2944,11 @@ class GauntletAcceptRiskResult:
 
     Attributes:
         accepted_issues: Number of issues accepted as risk
-        github_issues_created: Number of GitHub issues created (if enabled)
-        github_issue_urls: URLs of created GitHub issues
+        github_issues_created: Number of GitHub issues created (0 or 1)
+        github_issue_urls: URLs of created GitHub issues (0 or 1 element)
         message: Human-readable summary
         error: Error message if operation failed
+        checklist_items: Number of checklist items in the consolidated issue
     """
 
     accepted_issues: int
@@ -2955,6 +2956,7 @@ class GauntletAcceptRiskResult:
     github_issue_urls: list[str]
     message: str
     error: str | None = None
+    checklist_items: int = 0
 
 
 def gauntlet_process_issues(
@@ -3197,21 +3199,188 @@ def _sanitize_for_gh(text: str, max_len: int = 256) -> str:
     return sanitized.strip()
 
 
+# Label colours used by _ensure_gauntlet_labels
+_SEVERITY_LABEL_COLORS: dict[str, str] = {
+    "critical": "d73a4a",
+    "major": "e99d42",
+    "minor": "fbca04",
+    "nitpick": "cccccc",
+}
+
+_ACCEPTED_RISK_LABEL = "gauntlet/accepted-risk"
+_ACCEPTED_RISK_COLOR = "5319e7"
+
+
+def _ensure_gauntlet_labels(
+    severities: set[str],
+    repo: str | None = None,
+    cwd: str | None = None,
+) -> set[str]:
+    """Ensure severity + accepted-risk labels exist on the repo.
+
+    Pre-flights ``gh label list`` to discover existing labels, then creates
+    any missing ones.  Returns the set of labels that are safe to apply.
+    If ``gh`` is unavailable or any creation fails, proceeds silently —
+    never bails.
+    """
+    import subprocess
+
+    run_kwargs: dict = {"cwd": cwd} if cwd else {}
+    safe_labels: set[str] = set()
+
+    # Discover existing labels
+    existing: set[str] = set()
+    cmd_list = ["gh", "label", "list", "--json", "name", "--limit", "200"]
+    if repo:
+        cmd_list.extend(["--repo", repo])
+    try:
+        out = subprocess.run(
+            cmd_list,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=15,
+            **run_kwargs,
+        )
+        for entry in json.loads(out.stdout):
+            existing.add(entry.get("name", ""))
+    except Exception:
+        # gh not available or API error — proceed without labels
+        return safe_labels
+
+    # Labels we want: each severity + accepted-risk
+    desired: dict[str, str] = {}
+    for sev in severities:
+        colour = _SEVERITY_LABEL_COLORS.get(sev)
+        if colour:
+            desired[sev] = colour
+    desired[_ACCEPTED_RISK_LABEL] = _ACCEPTED_RISK_COLOR
+
+    for label_name, colour in desired.items():
+        if label_name in existing:
+            safe_labels.add(label_name)
+            continue
+        cmd_create = [
+            "gh",
+            "label",
+            "create",
+            label_name,
+            "--description",
+            "Gauntlet severity",
+            "--color",
+            colour,
+        ]
+        if repo:
+            cmd_create.extend(["--repo", repo])
+        try:
+            subprocess.run(
+                cmd_create,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=15,
+                **run_kwargs,
+            )
+            safe_labels.add(label_name)
+        except Exception:
+            # Label creation failed — skip this label, don't bail
+            pass
+
+    return safe_labels
+
+
+def _build_accept_risk_body(
+    grouped: dict[str, list[dict]],
+    iteration: int | None,
+    total: int,
+) -> str:
+    """Build the Markdown body for a consolidated accepted-risk issue."""
+    today = date.today().isoformat()
+
+    severity_counts = {sev: len(items) for sev, items in grouped.items() if items}
+    summary_parts = [f"{cnt} {sev}" for sev, cnt in severity_counts.items()]
+    severity_summary = ", ".join(summary_parts) if summary_parts else "none"
+
+    lines: list[str] = [
+        f"## Gauntlet Accepted Risk — {today}",
+        "",
+    ]
+    if iteration is not None:
+        lines.append(f"**Iteration:** {iteration} | **Total items:** {total}")
+    else:
+        lines.append(f"**Total items:** {total}")
+    lines.extend(
+        [
+            f"**Severity breakdown:** {severity_summary}",
+            "",
+            "---",
+        ]
+    )
+
+    for sev in ("critical", "major", "minor", "nitpick"):
+        items = grouped.get(sev, [])
+        if not items:
+            continue
+
+        lines.extend(["", f"### {sev.capitalize()} ({len(items)})", ""])
+
+        for item in items:
+            desc = _sanitize_for_gh(item.get("description", "Unknown"), 500)
+            location = _sanitize_for_gh(item.get("location", ""), 200)
+            rule = _sanitize_for_gh(item.get("rule_learned", ""), 300)
+            rules_consulted = item.get("rules_consulted", [])
+            rule_reasoning = item.get("rule_reasoning", {})
+
+            lines.append(f"- [ ] **{desc}**")
+            if location:
+                lines.append(f"  - Location: `{location}`")
+            if rule:
+                lines.append(f"  - Rule: {rule}")
+            if rules_consulted:
+                consulted_str = ", ".join(str(r) for r in rules_consulted)
+                lines.append(f"  - Rules consulted: {consulted_str}")
+            # Full reasoning only for critical/major
+            if sev in ("critical", "major") and rule_reasoning:
+                if isinstance(rule_reasoning, dict):
+                    reasoning_parts = [f"{k}: {v}" for k, v in rule_reasoning.items()]
+                    reasoning_str = "; ".join(reasoning_parts)
+                else:
+                    reasoning_str = str(rule_reasoning)
+                lines.append(f"  - Reasoning: {_sanitize_for_gh(reasoning_str, 500)}")
+
+    iter_suffix = f", iteration {iteration}" if iteration is not None else ""
+    lines.extend(
+        [
+            "",
+            "---",
+            f"_Created by buildlog gauntlet loop (accepted risk{iter_suffix})_",
+        ]
+    )
+
+    return "\n".join(lines)
+
+
 def gauntlet_accept_risk(
     remaining_issues: list[dict],
     create_github_issues: bool = False,
     repo: str | None = None,
     cwd: str | None = None,
     buildlog_dir: Path | None = None,
+    iteration: int | None = None,
 ) -> GauntletAcceptRiskResult:
-    """Accept risk for remaining issues, optionally creating GitHub issues.
+    """Accept risk for remaining issues, optionally creating a GitHub issue.
+
+    Creates a **single** consolidated GitHub issue with a task-list
+    checklist, grouped by severity (critical first).  Labels are
+    auto-created if missing.
 
     Args:
         remaining_issues: Issues being accepted as risk.
-        create_github_issues: Whether to create GitHub issues for tracking.
+        create_github_issues: Whether to create a GitHub issue for tracking.
         repo: Repository for GitHub issues (uses current repo if None).
         cwd: Working directory for subprocess calls.
         buildlog_dir: Path to buildlog directory (for gauntlet marker).
+        iteration: Gauntlet loop iteration number (for provenance).
 
     Returns:
         GauntletAcceptRiskResult with created issue info.
@@ -3220,79 +3389,84 @@ def gauntlet_accept_risk(
 
     github_urls: list[str] = []
     error: str | None = None
+    checklist_items = 0
 
     if create_github_issues and remaining_issues:
+        # Group issues by severity
+        severity_order = ("critical", "major", "minor", "nitpick")
+        grouped: dict[str, list[dict]] = {s: [] for s in severity_order}
         for issue in remaining_issues:
-            severity = issue.get("severity", "minor")
-            rule = issue.get("rule_learned", issue.get("description", "Unknown"))
-            description = issue.get("description", "")
-            location = issue.get("location", "")
+            sev = issue.get("severity", "minor")
+            if sev not in grouped:
+                sev = "minor"
+            grouped[sev].append(issue)
 
-            safe_severity = _sanitize_for_gh(str(severity), 20)
-            safe_rule = _sanitize_for_gh(str(rule), 200)
-            safe_description = _sanitize_for_gh(str(description), 1000)
-            safe_location = _sanitize_for_gh(str(location), 100)
+        checklist_items = len(remaining_issues)
 
-            # Build issue body
-            body_parts = [
-                f"**Severity:** {safe_severity}",
-                f"**Rule:** {safe_rule}",
-                "",
-                "## Description",
-                safe_description,
-            ]
-            if safe_location:
-                body_parts.extend(["", f"**Location:** `{safe_location}`"])
+        # Collect unique severities present
+        present_severities = {sev for sev, items in grouped.items() if items}
 
-            body_parts.extend(
-                [
-                    "",
-                    "---",
-                    "_Created by buildlog gauntlet loop (accepted risk)_",
-                ]
+        # Ensure labels exist (best-effort)
+        safe_labels = _ensure_gauntlet_labels(
+            present_severities,
+            repo=repo,
+            cwd=cwd,
+        )
+
+        # Build consolidated body
+        body = _build_accept_risk_body(grouped, iteration, len(remaining_issues))
+
+        # Build title with severity summary
+        sev_parts = []
+        for sev in severity_order:
+            cnt = len(grouped[sev])
+            if cnt:
+                sev_parts.append(f"{cnt} {sev}")
+        severity_summary = ", ".join(sev_parts)
+        title = (
+            f"[Gauntlet] {len(remaining_issues)} accepted-risk "
+            f"items ({severity_summary})"
+        )
+        # gh title max ~256
+        if len(title) > 250:
+            title = title[:247] + "..."
+
+        # Build label args
+        label_args: list[str] = []
+        for lbl in sorted(safe_labels):
+            label_args.extend(["--label", lbl])
+
+        cmd = [
+            "gh",
+            "issue",
+            "create",
+            "--title",
+            title,
+            "--body",
+            body,
+        ] + label_args
+        if repo:
+            cmd.extend(["--repo", repo])
+
+        run_kwargs: dict = {"cwd": cwd} if cwd else {}
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+                **run_kwargs,
             )
-
-            body = "\n".join(body_parts)
-            title = f"[Gauntlet/{safe_severity}] {safe_rule[:60]}"
-
-            # Create GitHub issue
-            cmd = [
-                "gh",
-                "issue",
-                "create",
-                "--title",
-                title,
-                "--body",
-                body,
-                "--label",
-                severity,
-            ]
-            if repo:
-                cmd.extend(["--repo", repo])
-
-            run_kwargs: dict = {"cwd": cwd} if cwd else {}
-            try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=30,
-                    **run_kwargs,
-                )
-                # gh issue create outputs the URL
-                url = result.stdout.strip()
-                if url:
-                    github_urls.append(url)
-            except subprocess.CalledProcessError as e:
-                # Don't fail entirely, just note the error
-                error = f"Failed to create some GitHub issues: {e.stderr}"
-            except subprocess.TimeoutExpired:
-                error = "GitHub issue creation timed out (30s limit)."
-                break
-            except FileNotFoundError:
-                error = "gh CLI not found. Install GitHub CLI to create issues."
-                break
+            url = result.stdout.strip()
+            if url:
+                github_urls.append(url)
+        except subprocess.CalledProcessError as e:
+            error = f"Failed to create GitHub issue: {e.stderr}"
+        except subprocess.TimeoutExpired:
+            error = "GitHub issue creation timed out (30s limit)."
+        except FileNotFoundError:
+            error = "gh CLI not found. Install GitHub CLI to create issues."
 
     # Write gauntlet-cleared marker for PR enforcement
     if buildlog_dir is not None:
@@ -3309,11 +3483,13 @@ def gauntlet_accept_risk(
         github_issue_urls=github_urls,
         message=(
             f"Accepted {len(remaining_issues)} issues as risk. "
-            f"Created {len(github_urls)} GitHub issues."
+            f"Created {len(github_urls)} GitHub issue(s) with "
+            f"{checklist_items} checklist items."
             if create_github_issues
             else f"Accepted {len(remaining_issues)} issues as risk."
         ),
         error=error,
+        checklist_items=checklist_items,
     )
 
 
