@@ -7,6 +7,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-03-11
+
+### Fixed
+- Stale tool counts in docs: LEARNING-LOOP-E2E.md (28→36), constants.py (34→36), llms-full.txt (34→36).
+- Missing `buildlog_posterior_history` and `buildlog_gauntlet_rule_lookup` from MCP integration guide tools table.
+
 ## [0.21.0] - 2026-03-11
 
 ### Added
@@ -421,7 +427,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `buildlog_status`, `buildlog_promote`, `buildlog_reject`, `buildlog_diff`
 - **Embedding Backends**: Token-based, sentence-transformers, OpenAI
 
-[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.21.1...HEAD
+[0.21.1]: https://github.com/Peleke/buildlog-template/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/Peleke/buildlog-template/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/Peleke/buildlog-template/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/Peleke/buildlog-template/compare/v0.13.1...v0.19.0
