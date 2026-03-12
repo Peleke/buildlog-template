@@ -7,6 +7,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-03-11
+
+### Added
+- **Category-aware repeat detection**: `_find_similar_prior_mistake()` now matches by `rules_consulted` overlap (strategy 3). Two gauntlet findings citing the same rule in the same error class across sessions are correctly flagged as repeats. RMR is no longer stuck at 0%.
+- **`rules_consulted` on Mistake**: `log_mistake()` accepts and persists `rules_consulted: list[str]` — the rule IDs that were active when the mistake was caught.
+- **`posterior_snapshots` table (schema v7)**: Captures alpha/beta/mean after each gauntlet credit for convergence tracking over time.
+- **`buildlog_posterior_history` MCP tool** (36 tools total): Query posterior evolution by rule ID, persona, or time range.
+- **`get_posterior_history()` core operation**: Returns snapshots grouped by rule with latest mean/alpha/beta summaries.
+- **Live E2E eval** (`test_rmr_e2e_live.py`): 4 scenarios with real SQLite — repeat detection, false positive rejection, posterior round-trip, full pipeline RMR=50%.
+
+### Changed
+- **Gauntlet error_class uses category, not severity**: `error_class=f"gauntlet_{category}"` (e.g., `gauntlet_security`) instead of `error_class=f"gauntlet_{severity}"`. This is what makes repeat detection work — same-category issues across sessions share an error class.
+- **Schema v6 → v7**: Adds `posterior_snapshots` table + `rules_consulted TEXT` column on `mistakes` table. Migration is idempotent.
+- **Docs reframed**: Gauntlet is presented as primary feedback mechanism; sessions/experiments are optional longitudinal tracking. Tool counts updated to 36, schema to v7.
+
+### Fixed
+- **RMR permanently 0%**: Root cause was all gauntlet criticals sharing `error_class="gauntlet_critical"` with descriptions too varied for hash/overlap matching. Fixed by category-aware error_class + rule overlap matching.
+
 ## [0.20.0] - 2026-03-07
 
 ### Changed
@@ -403,7 +421,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - `buildlog_status`, `buildlog_promote`, `buildlog_reject`, `buildlog_diff`
 - **Embedding Backends**: Token-based, sentence-transformers, OpenAI
 
-[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/Peleke/buildlog-template/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/Peleke/buildlog-template/compare/v0.20.0...v0.21.0
+[0.20.0]: https://github.com/Peleke/buildlog-template/compare/v0.19.0...v0.20.0
+[0.19.0]: https://github.com/Peleke/buildlog-template/compare/v0.13.1...v0.19.0
 [0.13.1]: https://github.com/Peleke/buildlog-template/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/Peleke/buildlog-template/compare/v0.12.0...v0.13.0
 [0.10.2]: https://github.com/Peleke/buildlog-template/compare/v0.10.1...v0.10.2
