@@ -78,6 +78,7 @@ Claude Code reads `~/.claude.json` for global MCP servers. The local `.claude/se
 | `buildlog_experiment_metrics` | Get per-session or aggregate mistake rates |
 | `buildlog_experiment_report` | Generate comprehensive report |
 | `buildlog_bandit_status` | Get Thompson Sampling bandit state and rule rankings |
+| `buildlog_posterior_history` | Query Beta posterior snapshots and evolution over time for rules |
 | `buildlog_gauntlet_issues` | Process gauntlet issues and determine next action |
 | `buildlog_gauntlet_accept_risk` | Accept risk for remaining issues |
 | `buildlog_gauntlet_rules` | Load gauntlet reviewer rules |
@@ -85,6 +86,7 @@ Claude Code reads `~/.claude.json` for global MCP servers. The local `.claude/se
 | `buildlog_gauntlet_loop` | Full gauntlet loop configuration |
 | `buildlog_gauntlet_list_personas` | List available reviewer personas |
 | `buildlog_gauntlet_generate` | Generate gauntlet rules from source text |
+| `buildlog_gauntlet_rule_lookup` | Look up details of specific gauntlet rules by ID |
 | `buildlog_commit` | Git commit with auto buildlog entry update |
 | `buildlog_distill` | Extract patterns from buildlog entries |
 | `buildlog_skills` | Generate skill set from entries |
