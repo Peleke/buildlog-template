@@ -739,33 +739,38 @@ def buildlog_gauntlet_accept_risk(
     create_github_issues: bool = False,
     repo: str | None = None,
     issues_file: str | None = None,
+    iteration: int | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Gauntlet returned "checkpoint_minors" or "checkpoint_majors" and user says "ship it"?
 
     Call this with the remaining_issues array from the last
     buildlog_gauntlet_issues() response. This is the exit ramp from the
-    gauntlet loop. Optionally set create_github_issues=True to file
-    tracking issues. Returns accepted_issues count, github_issue_urls list.
-    Response: ~300 tokens.
+    gauntlet loop. Optionally set create_github_issues=True to file a
+    **single consolidated GitHub issue** with a task-list checklist,
+    grouped by severity (critical first). Labels are auto-created on
+    the repo if they don't exist yet. Response: ~300 tokens.
 
     Provide remaining_issues inline OR via a JSON file path (not both).
 
     Args:
         remaining_issues: Issues being accepted as risk
-        create_github_issues: Whether to create GitHub issues for tracking
+        create_github_issues: Whether to create a GitHub issue for tracking.
+            Creates ONE issue with a checklist (not N separate issues).
         repo: Repository for GitHub issues (uses current repo if None)
         issues_file: Path to a JSON file containing the issues array.
             Mutually exclusive with 'remaining_issues'.
+        iteration: Gauntlet loop iteration number (for provenance in body).
 
     Returns:
-        Dict with accepted_issues, github_issues_created,
-        github_issue_urls, message
+        Dict with accepted_issues, github_issues_created (0 or 1),
+        github_issue_urls, checklist_items, message
 
     Example:
         buildlog_gauntlet_accept_risk(
             remaining_issues=[...],
-            create_github_issues=True
+            create_github_issues=True,
+            iteration=3,
         )
     """
     try:
@@ -779,6 +784,7 @@ def buildlog_gauntlet_accept_risk(
             "github_issue_urls": [],
             "message": "",
             "error": str(exc),
+            "checklist_items": 0,
         }
 
     from buildlog.core import gauntlet_accept_risk
@@ -789,6 +795,7 @@ def buildlog_gauntlet_accept_risk(
         repo=repo,
         cwd=str(_project_root(buildlog_dir)) if buildlog_dir else None,
         buildlog_dir=Path(buildlog_dir) if buildlog_dir else None,
+        iteration=iteration,
     )
     return _ensure_message(asdict(result))
 

@@ -280,6 +280,7 @@ class TestFlowGauntletLoop:
         result = gauntlet_accept_risk(remaining_issues=remaining)
         assert isinstance(result, GauntletAcceptRiskResult)
         assert result.accepted_issues >= 1
+        assert result.checklist_items == 0  # no github issues created
 
     def test_learn_from_review_persists(self, tmp_path):
         """Learning from review issues should persist to disk."""
