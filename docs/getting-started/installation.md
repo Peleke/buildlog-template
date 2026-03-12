@@ -46,7 +46,7 @@ This command:
 
 ```bash
 claude mcp list              # should show: buildlog - ✓ Connected
-buildlog mcp-test            # lists all 34 tools
+buildlog mcp-test            # lists all 36 tools
 buildlog overview            # works anywhere (shows "not initialized" if no buildlog/)
 ```
 

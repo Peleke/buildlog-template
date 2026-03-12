@@ -72,9 +72,12 @@ buildlog skills   # render current policy to agent files
 
 ### 6. Close the loop
 
-Track whether the selected rules are working. Run experiments, measure Repeated Mistake Rate (RMR) across sessions, and get statistical evidence -- not feelings -- about what improved.
+The gauntlet closes the loop automatically. Every gauntlet run credits the rules its reviewers cite, and `log_reward(outcome="accepted")` after PR approval updates the Thompson Sampling posteriors. No extra ceremony required.
+
+For teams that want longitudinal tracking across many sessions, buildlog also ships optional experiment/session commands that measure Repeated Mistake Rate (RMR) over time:
 
 ```bash
+# Optional — for longitudinal RMR tracking
 buildlog experiment start
 # ... work across sessions ...
 buildlog experiment end
@@ -109,12 +112,13 @@ Each gauntlet citation followed by a reward acceptance increments alpha in the B
 ## What Else Is In the Box
 
 - **LLM-backed extraction:** when regex isn't enough, the seed engine can use OpenAI, Anthropic, or Ollama to extract patterns from code and logs. Metered backend tracks token usage and cost.
-- **Global SQLite storage:** all buildlog data is stored in a single global database at `~/.buildlog/buildlog.db` (SQLite with WAL mode, schema v6). Project isolation via hashed project IDs derived from git remote URLs. Legacy per-project JSON/JSONL files are still supported as a fallback.
+- **Global SQLite storage:** all buildlog data is stored in a single global database at `~/.buildlog/buildlog.db` (SQLite with WAL mode, schema v7). Project isolation via hashed project IDs derived from git remote URLs. Legacy per-project JSON/JSONL files are still supported as a fallback.
 - **Migration and export:** `buildlog migrate` converts legacy JSON/JSONL files to the global database (idempotent, non-destructive). `buildlog export` dumps data back to JSONL for portability or backup.
 - **Ambient emission protocol:** mistakes and learned rules are automatically emitted as JSON artifacts to `~/.buildlog/emissions/pending/` for offline ingestion by downstream systems (knowledge graphs, analytics). Fire-and-forget -- emission failure never breaks the primary operation.
 - **Workflow enforcement:** `buildlog verify` checks your setup (CLAUDE.md workflow section, MCP registration, branch protection hooks) and `--fix` repairs it. `buildlog init` installs pre-commit hooks that prevent direct commits to main.
 - **Interactive dashboard:** `buildlog viz` launches a [marimo](https://marimo.io) notebook in your browser with live visualizations of reward trends, bandit posteriors, session history, mistake analysis, and insight breakdowns.
-- **MCP server:** buildlog exposes 35 tools as an MCP server so agents can query seeds, skills, and build history programmatically during sessions.
+- **Posterior history:** Every gauntlet credit and reward event snapshots the bandit's alpha/beta/mean for credited rules. Query evolution over time with `buildlog_posterior_history()` to verify convergence or detect stale rules.
+- **MCP server:** buildlog exposes 36 tools as an MCP server so agents can query seeds, skills, and build history programmatically during sessions.
 - **npm wrapper:** `npx @peleke.s/buildlog` for JS/TS projects. Thin shim that finds and invokes the Python CLI.
 
 ## Current Limits
@@ -123,7 +127,7 @@ This is v0.20, not the end state.
 
 - **Extraction quality is uneven.** Regex extractors miss nuance; LLM extractors are accurate but expensive. The middle ground is still being found.
 - **Single-agent only.** Multi-agent coordination (shared learning across agents) is designed but not implemented.
-- **Long-horizon learning is not modeled.** The bandit operates per-session. Longer arcs of competence building need richer policy models.
+- **Long-horizon learning is not modeled.** The bandit operates per-gauntlet-citation. Sessions are optional grouping containers. Longer arcs of competence building need richer policy models.
 
 ### What's next
 
@@ -202,7 +206,7 @@ pip install buildlog[all]         # everything
 ### Verify installation
 
 ```bash
-buildlog mcp-test          # verify all 35 tools are registered
+buildlog mcp-test          # verify all 36 tools are registered
 buildlog overview          # check project state (works without init in global mode)
 ```
 
@@ -213,6 +217,14 @@ buildlog init --defaults      # scaffold + MCP + CLAUDE.md
 buildlog new my-feature       # start a session
 # ... work ...
 buildlog commit -m "feat: add auth"
+buildlog gauntlet-loop --target src/  # review with curated personas
+buildlog log-reward --outcome accepted  # close the feedback loop
+```
+
+Sessions and experiments are optional. If you want longitudinal RMR tracking:
+
+```bash
+# Optional — for tracking RMR across many sessions
 buildlog experiment start
 # ... work across sessions ...
 buildlog experiment end
@@ -249,7 +261,7 @@ Sessions and experiments are optional. `log_mistake()` works without an active s
 | [CLI Reference](https://peleke.github.io/buildlog-template/guides/cli-reference/) | Every command documented |
 | [MCP Integration](https://peleke.github.io/buildlog-template/guides/mcp-integration/) | Claude Code setup and available tools |
 | [Storage Architecture](https://peleke.github.io/buildlog-template/guides/storage-architecture/) | Global SQLite backend, migration, and export |
-| [Experiments](https://peleke.github.io/buildlog-template/guides/experiments/) | Running and measuring experiments |
+| [Experiments](https://peleke.github.io/buildlog-template/guides/experiments/) | Optional longitudinal RMR tracking across sessions |
 | [Dashboard](https://peleke.github.io/buildlog-template/guides/dashboard/) | Interactive marimo dashboard (`buildlog viz`) |
 | [Review Gauntlet](https://peleke.github.io/buildlog-template/guides/review-gauntlet/) | Reviewer personas and the gauntlet loop |
 | [Multi-Agent Setup](https://peleke.github.io/buildlog-template/guides/multi-agent/) | Render rules to any AI coding agent |

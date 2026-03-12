@@ -35,9 +35,31 @@ buildlog status                          # See what's ready
 buildlog promote <skill-ids> --target skill  # Surface to agent
 ```
 
-## Stage 4: Measure
+## Stage 4: Review with the gauntlet
 
-Track what happens when rules are active.
+The gauntlet is the primary feedback mechanism. It runs curated reviewer personas against your code and credits rules that reviewers cite.
+
+```bash
+buildlog gauntlet-loop --target src/
+# Reviewers find issues, cite rules → rules get credited
+# Fix issues, re-run until clean
+```
+
+## Stage 5: Close the loop
+
+Log a reward signal after your work is reviewed and accepted. This updates the Thompson Sampling posteriors for every rule that was credited during the gauntlet.
+
+```python
+# Via MCP
+buildlog_log_reward(
+    outcome="accepted",
+    notes="PR merged after gauntlet review"
+)
+```
+
+## Optional: Longitudinal RMR tracking
+
+For teams that want to measure Repeated Mistake Rate across many sessions over time:
 
 ```bash
 buildlog experiment start --error-class "type-errors"
@@ -48,18 +70,7 @@ buildlog experiment end
 buildlog experiment report
 ```
 
-## Stage 5: Learn
-
-Log reward signals when rules help (or don't).
-
-```python
-# Via MCP
-buildlog_log_reward(
-    outcome="accepted",
-    rules_active=["arch-123"],
-    notes="Caught the bug before commit"
-)
-```
+This is not required for the learning loop to work. See the [Experiments guide](../guides/experiments.md) for details.
 
 ## The pipeline
 

@@ -19,7 +19,7 @@ Every claim on this page has a mechanical proof in that document.
 - **Capture** structured journal entries from work sessions, mistakes included
 - **Extract** entries into reusable engineering rules with semantic deduplication
 - **Select** rules via Thompson Sampling bandit, automatically surfacing the most effective per context
-- **Measure** Repeated Mistake Rate (RMR) across experiments with statistical rigor
+- **Measure** Repeated Mistake Rate (RMR) via category-aware repeat detection and rule overlap matching
 - **Review** code through curated reviewer personas (Security Karen, Test Terrorist, Bragi)
 - **Emit** structured artifacts to `~/.buildlog/emissions/` for downstream systems
 - **Bridge** into [qortex](https://github.com/Peleke/qortex) for cross-domain pattern discovery across projects
@@ -35,10 +35,16 @@ buildlog init-mcp --global -y  # register globally for all projects
 ## Quick start
 
 ```bash
-buildlog init                  # scaffold a project
-buildlog new my-feature        # capture a work session
-buildlog distill               # extract patterns
-buildlog skills                # deduplicate into rules
+buildlog init                         # scaffold a project
+buildlog new my-feature               # capture a work session
+buildlog commit -m "feat: add auth"   # commit with entry logging
+buildlog gauntlet-loop --target src/  # review with curated personas
+buildlog log-reward --outcome accepted  # close the feedback loop
+```
+
+For longitudinal RMR tracking across many sessions (optional):
+
+```bash
 buildlog experiment start      # begin tracked session (bandit selects rules)
 # ... work ...
 buildlog experiment end        # close session

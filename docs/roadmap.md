@@ -42,7 +42,7 @@ The hypothesis from the original roadmap proved out: clusters in embedding space
 | Full trace hierarchy (14 graph ops, vec layer, embeddings, learning) | Shipped | v0.5.0 |
 | Unified metrics pipeline (36 metrics, declarative schema, OTel + Prometheus) | Shipped | v0.5.0 |
 | Selective trace sampling (errors/slow always, normal at configurable rate) | Shipped | v0.5.0 |
-| MCP server (33 tools, 6 learning tools) | Shipped | v0.4.0 |
+| MCP server (36 tools, 6 learning tools) | Shipped | v0.4.0 |
 | Framework adapters (Agno, CrewAI, LangChain, Mastra) | Shipped | v0.4.0 |
 
 ### What's next

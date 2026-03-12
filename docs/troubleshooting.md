@@ -48,7 +48,7 @@ claude mcp list
 buildlog mcp-test
 ```
 
-This invokes the MCP server directly and lists all 34 tools. If it errors, the problem is in the server.
+This invokes the MCP server directly and lists all 36 tools. If it errors, the problem is in the server.
 
 **Fixes:**
 

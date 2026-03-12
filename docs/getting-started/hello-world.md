@@ -22,13 +22,13 @@ buildlog mcp-test
 ```
 
 ```
-Found 34 tools:
+Found 36 tools:
   buildlog_status
   buildlog_promote
   buildlog_reject
   buildlog_diff
   ...
-All 34 tools registered. OK.
+All 36 tools registered. OK.
 ```
 
 ## Step 2: Initialize in your project
@@ -182,43 +182,15 @@ Open your `CLAUDE.md`. You'll see a new section:
 
 Claude Code reads this file at session start. Your agent now has rules derived from your project history.
 
-## Step 8: Close the loop (optional but important)
+## Step 8: Close the loop with the gauntlet
 
-Start an experiment to track whether these rules help:
-
-```bash
-buildlog experiment start --error-class "setup-errors"
-```
-
-```
-Session started: session-20260213-143000
-Error class: setup-errors
-Selected 2 rules via Thompson Sampling:
-  arch-a1b2c3d4e5 (sampled: 0.82)
-  wf-f6g7h8i9j0   (sampled: 0.71)
-```
-
-Work on your project. If you make a mistake:
+The gauntlet is the primary feedback mechanism. It runs curated reviewer personas against your code and credits rules that reviewers cite.
 
 ```bash
-buildlog experiment log-mistake \
-  --error-class "setup-errors" \
-  --description "Started coding without checking buildlog overview"
+buildlog gauntlet-loop --target src/
 ```
 
-When the session ends:
-
-```bash
-buildlog experiment end
-```
-
-```
-Session ended: session-20260213-143000
-Duration: 45 minutes
-Mistakes logged: 1
-Repeated mistakes: 0
-RMR: 0.00%
-```
+The gauntlet finds issues, you fix them, and re-run until clean. Each credited rule citation updates the Thompson Sampling posteriors.
 
 After your work is reviewed and accepted:
 
@@ -226,9 +198,11 @@ After your work is reviewed and accepted:
 buildlog log-reward --outcome accepted
 ```
 
-The `accepted` outcome updates the Thompson Sampling bandit. Rules that were active during successful sessions get credit. Over time, the system learns which rules reduce mistakes.
+The `accepted` outcome shifts the bandit posteriors. Rules that were cited during gauntlet reviews get credit. Over time, the system converges on the rules that actually reduce mistakes in your codebase.
 
-You now have a working pipeline from journal entry to promoted rule, with experiment tracking to measure whether the rules help.
+For optional longitudinal RMR tracking across sessions, see the [Experiments guide](../guides/experiments.md).
+
+You now have a working pipeline from journal entry to promoted rule, with gauntlet review closing the feedback loop.
 
 ## Next steps
 
