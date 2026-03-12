@@ -974,7 +974,7 @@ def buildlog_gauntlet_prompt(
     result = generate_gauntlet_prompt(
         target=target,
         personas=personas,
-        buildlog_dir=Path(buildlog_dir) if select_k is not None else None,
+        buildlog_dir=Path(buildlog_dir),
         select_k=select_k,
     )
     return _ensure_message(asdict(result))
@@ -995,8 +995,8 @@ def buildlog_gauntlet_loop(
     Call once to initialize the review loop. Pass target="src/" (file or
     directory). Returns instructions (step-by-step loop protocol),
     valid_rule_ids (for citation validation in buildlog_gauntlet_issues()),
-    target, personas, stop_at, max_iterations. Response: ~1500 tokens with
-    compact=True (default). After this, review the code, then call
+    target, personas, stop_at, max_iterations. Response: ~900 tokens with
+    compact=True and select_k=10 (defaults). After this, review the code, then call
     buildlog_gauntlet_issues() with findings. Use buildlog_gauntlet_rule_lookup()
     mid-review to hydrate specific rules by ID. Do NOT also call
     gauntlet_rules() or gauntlet_prompt() — this tool includes both.
