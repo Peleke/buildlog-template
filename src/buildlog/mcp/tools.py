@@ -593,10 +593,11 @@ def buildlog_bandit_status(
     """Which rules does the bandit consider most effective right now?
 
     Call before buildlog_experiment_start() or after several reward cycles
-    to see learned beliefs. Returns summary (total contexts, arms,
+    to see learned beliefs. Response: ~500-3000 tokens depending on
+    context count. Returns summary (total contexts, arms,
     observations) and top_rules (top_k per context, each with mean,
-    variance, alpha, beta). Response: ~500-3000 tokens depending on
-    context count. Pass context="missing_test" to filter to one error class.
+    variance, alpha, beta). Pass context="missing_test" to filter to one
+    error class.
 
     Args:
         buildlog_dir: Path to buildlog directory
@@ -629,6 +630,8 @@ def buildlog_posterior_history(
     gauntlet credit or reward event. Use to plot convergence curves, detect
     stale rules, or verify that feedback is shifting posteriors.
     Response: ~100 tokens per snapshot, up to `limit` rows.
+    Default limit=200 = ~20k tokens max. Pass limit=20 for a quick
+    check (~2k tokens).
 
     Filter by rule_ids (exact match) or persona (prefix match, e.g.
     "security_karen"). Pass since="2026-03-01T00:00:00" to limit to
@@ -936,9 +939,9 @@ def buildlog_entry_list(
 ) -> dict:
     """Need to find a specific past entry or the full entry list?
 
-    Returns entries (list of {name, title} objects, most recent first)
-    and count. Response: ~100 tokens per entry, unbounded — 50 entries =
-    ~5000 tokens. No pagination. For just the count, use
+    WARNING: unbounded response. 50 entries = ~5000 tokens. Returns
+    entries (list of {name, title} objects, most recent first) and count.
+    ~100 tokens per entry, no pagination. For just the count, use
     buildlog_overview() instead.
 
     Args:
@@ -1126,14 +1129,15 @@ def buildlog_distill(
     llm: bool = False,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Step 1 of 4 in the learning pipeline (distill > skills > status > promote).
+    """Need raw extracted patterns without dedup or scoring?
 
     Parses the "## Improvements" section of each buildlog entry, groups
     findings by category. Returns entry_count, patterns (dict keyed by
     category, each a list of {text, source_entry, date}), statistics
     (total_patterns, by_category, by_month). Response: ~500-5000 tokens.
     Use since="2026-01-01" to bound. Most callers should skip this and
-    call buildlog_skills() directly — it runs distill internally.
+    call buildlog_skills() directly — it runs distill internally and
+    adds dedup + scoring (pipeline: distill > skills > status > promote).
 
     Args:
         since: Only entries from this date onward (YYYY-MM-DD)
@@ -1686,6 +1690,8 @@ def buildlog_update(
     return _ensure_message(asdict(result))
 
 
+# NOTE: Not registered as an MCP tool in server.py. Kept here for use by
+# automation scripts and the CLI — not exposed to agents via MCP.
 def buildlog_consume_emissions(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
