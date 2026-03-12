@@ -695,7 +695,43 @@ def buildlog_gauntlet_issues(
         source=source,
         valid_rule_ids=set(valid_rule_ids) if valid_rule_ids else None,
     )
-    return _ensure_message(asdict(result))
+
+    # --- Emit full issue detail (including rule_reasoning) for downstream ---
+    # The agent doesn't need rule_reasoning in the CLI response, but qortex
+    # and other consumers want it. Emit before compacting.
+    try:
+        from buildlog.emissions import emit_artifact
+        from buildlog.storage import get_backend
+
+        _, project_id = get_backend()
+        emit_artifact(
+            artifact={
+                "iteration": iteration,
+                "issues": resolved,
+                "action": result.action,
+                "rules_credited": result.rules_credited,
+                "sampling_delta": result.sampling_delta,
+            },
+            artifact_type="gauntlet_review",
+            project_id=project_id,
+        )
+    except Exception:
+        pass  # fire-and-forget
+
+    # --- Compact response: strip per-issue bulk, keep decision-relevant data ---
+    d = asdict(result)
+    for key in ("criticals", "majors", "minors"):
+        d[key] = [
+            {
+                "severity": iss.get("severity"),
+                "category": iss.get("category"),
+                "description": iss.get("description", ""),
+                "location": iss.get("location", ""),
+            }
+            for iss in d.get(key, [])
+        ]
+
+    return _ensure_message(d)
 
 
 def buildlog_gauntlet_accept_risk(
