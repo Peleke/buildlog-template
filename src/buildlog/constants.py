@@ -92,7 +92,7 @@ After every significant commit or feature completion:
 4. `buildlog_experiment_metrics()` — per-session or aggregate stats
 5. `buildlog_experiment_report()` — comprehensive report
 
-### Tool Reference (34 tools)
+### Tool Reference (36 tools)
 
 **Commit & Entries:**
 - `buildlog_commit(message, git_args, slug, no_entry)` — git commit with auto buildlog entry
@@ -117,6 +117,7 @@ After every significant commit or feature completion:
 - `buildlog_gauntlet_accept_risk(remaining_issues)` — accept risk
 - `buildlog_gauntlet_list_personas()` — list available reviewer personas
 - `buildlog_gauntlet_generate(source_text, persona, dry_run)` — generate rules from source text
+- `buildlog_gauntlet_rule_lookup(rule_ids)` — look up details of specific gauntlet rules by ID
 
 **Review Learning:**
 - `buildlog_learn_from_review(issues, source)` — persist review learnings

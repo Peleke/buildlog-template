@@ -34,7 +34,7 @@ A user runs `buildlog init` in any project. This creates the `buildlog/` directo
 
 1. **CLI entry:** `src/buildlog/cli.py:61` — `init()` creates the `buildlog/` directory via copier template, ensures `.buildlog/seeds/` exists (`cli.py:116-118`), and calls `_init_mcp()` to register the MCP server (`cli.py:159-165`).
 
-2. **MCP server registration:** `src/buildlog/mcp/server.py:44` — `mcp = FastMCP("buildlog")` creates the server instance. Lines 47-100 register every tool via `mcp.tool()` decorator. The server exposes 28 tools covering the full lifecycle.
+2. **MCP server registration:** `src/buildlog/mcp/server.py:44` — `mcp = FastMCP("buildlog")` creates the server instance. Lines 47-100 register every tool via `mcp.tool()` decorator. The server exposes 36 tools covering the full lifecycle.
 
 3. **Always-on config:** The user's `~/.claude/CLAUDE.md` includes the `buildlog (Always On)` section. Every Claude Code session, in any project, has access to `buildlog_overview()`, `buildlog_commit()`, `buildlog_gauntlet_loop()`, and `buildlog_log_reward()`. The MCP server starts automatically.
 
