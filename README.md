@@ -12,7 +12,7 @@
 
 **Track what works. Prove it. Drop what doesn't.**
 
-<img src="assets/hero-banner-perfectdeliberate.png" alt="buildlog - A measurable learning loop for AI-assisted work" width="800"/>
+<img src="https://raw.githubusercontent.com/Peleke/buildlog-template/main/assets/hero-banner-perfectdeliberate.png" alt="buildlog - A measurable learning loop for AI-assisted work" width="800"/>
 
 > **RE: The art.** Yes, it's AI-generated. Yes, that's hypocritical for a project about rigor over vibes. Looking for an actual artist to pay for a real logo. If you know someone good, [open an issue](https://github.com/Peleke/buildlog-template/issues) or DM me. Budget exists.
 
