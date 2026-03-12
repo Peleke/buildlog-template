@@ -465,7 +465,7 @@ class TestGauntletProcessIssuesCitations:
             assert hallucination_call[1]["severity"] == "minor"
             # Second call: auto-logged gauntlet mistake
             gauntlet_call = mock_log.call_args_list[1]
-            assert gauntlet_call[1]["error_class"] == "gauntlet_major"
+            assert gauntlet_call[1]["error_class"] == "gauntlet_security"
 
 
 class TestGauntletProcessIssuesBanditCredit:

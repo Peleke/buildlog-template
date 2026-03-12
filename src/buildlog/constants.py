@@ -125,6 +125,7 @@ After every significant commit or feature completion:
 - `buildlog_log_reward(outcome, rules_active)` — log feedback
 - `buildlog_rewards(limit)` — reward history
 - `buildlog_bandit_status(context)` — bandit state
+- `buildlog_posterior_history(rule_ids, persona, since)` — posterior evolution over time
 
 **Experiments:**
 - `buildlog_experiment_start(error_class)` — start session

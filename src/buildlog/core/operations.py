@@ -1704,6 +1704,7 @@ class MistakeDict(TypedDict, total=False):
     resolution_action: str | None
     context: str | None
     severity: str | None
+    rules_consulted: list[str] | None
 
 
 @dataclass
@@ -1727,6 +1728,7 @@ class Mistake:
         resolution_action: What fixed the mistake.
         context: What the agent was doing when it made the mistake.
         severity: low|medium|high|critical.
+        rules_consulted: Rule IDs that were active when this mistake was caught.
     """
 
     id: str
@@ -1737,6 +1739,7 @@ class Mistake:
     semantic_hash: str
     was_repeat: bool = False
     corrected_by_rule: str | None = None
+    rules_consulted: list[str] | None = None
     related_concepts: list[str] | None = None
     relation_to_prior: dict | None = None
     resolution_action: str | None = None
@@ -1756,6 +1759,8 @@ class Mistake:
         }
         if self.corrected_by_rule is not None:
             result["corrected_by_rule"] = self.corrected_by_rule
+        if self.rules_consulted is not None:
+            result["rules_consulted"] = self.rules_consulted
         if self.related_concepts is not None:
             result["related_concepts"] = self.related_concepts
         if self.relation_to_prior is not None:
@@ -1784,6 +1789,10 @@ class Mistake:
         if isinstance(relation_to_prior, str):
             relation_to_prior = json.loads(relation_to_prior)
 
+        rules_consulted: list[str] | None = data.get("rules_consulted")  # type: ignore[assignment]
+        if isinstance(rules_consulted, str):
+            rules_consulted = json.loads(rules_consulted)
+
         return cls(
             id=data["id"],
             session_id=data["session_id"],
@@ -1793,6 +1802,7 @@ class Mistake:
             semantic_hash=data["semantic_hash"],
             was_repeat=data.get("was_repeat", False),
             corrected_by_rule=data.get("corrected_by_rule"),
+            rules_consulted=rules_consulted,
             related_concepts=related_concepts,
             relation_to_prior=relation_to_prior,
             resolution_action=data.get("resolution_action"),
@@ -2065,10 +2075,14 @@ def _find_similar_prior_mistake(
     error_class: str,
     current_session_id: str,
     all_mistakes: list[Mistake],
+    rules_consulted: list[str] | None = None,
 ) -> Mistake | None:
     """Find a similar mistake from a prior session.
 
-    Uses semantic hash for similarity matching (simplified approach).
+    Three matching strategies (any one triggers a repeat):
+    1. Semantic hash match (identical normalized description)
+    2. High word overlap (>70% of words match)
+    3. Rule overlap (same rules caught issues in both sessions)
     """
     semantic_hash = _compute_semantic_hash(description)
 
@@ -2078,13 +2092,20 @@ def _find_similar_prior_mistake(
             mistake.session_id != current_session_id
             and mistake.error_class == error_class
         ):
-            # Check for semantic similarity (hash match or high description overlap)
+            # Strategy 1: exact semantic hash match
             if mistake.semantic_hash == semantic_hash:
                 return mistake
-            # Also check for high word overlap
+            # Strategy 2: high word overlap
             desc_words = set(description.lower().split())
             mistake_words = set(mistake.description.lower().split())
             if len(desc_words & mistake_words) / max(len(desc_words), 1) > 0.7:
+                return mistake
+            # Strategy 3: same rules caught issues in both sessions
+            if (
+                rules_consulted
+                and mistake.rules_consulted
+                and set(rules_consulted) & set(mistake.rules_consulted)
+            ):
                 return mistake
 
     return None
@@ -2525,6 +2546,7 @@ def log_mistake(
     error_class: str,
     description: str,
     corrected_by_rule: str | None = None,
+    rules_consulted: list[str] | None = None,
     related_concepts: list[str] | None = None,
     relation_to_prior: dict | None = None,
     resolution_action: str | None = None,
@@ -2607,7 +2629,11 @@ def log_mistake(
     raw_mistakes = backend.load_events(project_id, "mistakes")
     all_mistakes = [Mistake.from_dict(m) for m in raw_mistakes]  # type: ignore[arg-type]
     similar = _find_similar_prior_mistake(
-        description, error_class, session_id, all_mistakes
+        description,
+        error_class,
+        session_id,
+        all_mistakes,
+        rules_consulted=rules_consulted,
     )
 
     mistake = Mistake(
@@ -2619,6 +2645,7 @@ def log_mistake(
         semantic_hash=_compute_semantic_hash(description),
         was_repeat=similar is not None,
         corrected_by_rule=corrected_by_rule,
+        rules_consulted=rules_consulted,
         related_concepts=related_concepts,
         relation_to_prior=relation_to_prior,
         resolution_action=resolution_action,
@@ -2899,6 +2926,67 @@ def get_bandit_status(
     }
 
 
+def get_posterior_history(
+    buildlog_dir: Path,
+    rule_ids: list[str] | None = None,
+    persona: str | None = None,
+    since: str | None = None,
+    limit: int = 200,
+) -> dict:
+    """Load posterior evolution snapshots for convergence analysis.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        rule_ids: Filter to specific rule IDs.
+        persona: Filter to rules from a specific persona prefix.
+        since: ISO timestamp lower bound.
+        limit: Max rows per rule_id query.
+
+    Returns:
+        Dictionary with snapshots list and summary stats.
+    """
+    backend, project_id = _get_storage(buildlog_dir)
+
+    if rule_ids:
+        rule_ids = rule_ids[:20]  # Enforce documented limit
+        all_snaps: list[dict] = []
+        for rid in rule_ids:
+            all_snaps.extend(
+                backend.load_posterior_history(
+                    project_id, rule_id=rid, since=since, limit=limit
+                )
+            )
+    else:
+        all_snaps = backend.load_posterior_history(project_id, since=since, limit=limit)
+
+    # Filter by persona prefix if requested
+    if persona:
+        all_snaps = [
+            s for s in all_snaps if s.get("rule_id", "").startswith(f"{persona}:")
+        ]
+
+    # Build per-rule summary
+    by_rule: dict[str, list[dict]] = {}
+    for snap in all_snaps:
+        rid = snap.get("rule_id", "unknown")
+        by_rule.setdefault(rid, []).append(snap)
+
+    return {
+        "snapshots": all_snaps,
+        "rules_tracked": len(by_rule),
+        "total_snapshots": len(all_snaps),
+        "by_rule": {
+            rid: {
+                "count": len(snaps),
+                "latest_mean": snaps[-1]["mean"] if snaps else None,
+                "latest_alpha": snaps[-1]["alpha"] if snaps else None,
+                "latest_beta": snaps[-1]["beta"] if snaps else None,
+            }
+            for rid, snaps in by_rule.items()
+        },
+    }
+
+
 # =============================================================================
 # Gauntlet Loop Operations
 # =============================================================================
@@ -3049,18 +3137,22 @@ def gauntlet_process_issues(
     # This feeds the bandit without relying on the agent to self-report.
     #
     # Severity mapping: gauntlet → mistake (different valid sets)
+    # error_class uses category (security, testing, etc.) not just severity,
+    # so repeat detection can match across sessions by problem type.
     _GAUNTLET_TO_MISTAKE_SEVERITY = {"critical": "critical", "major": "high"}
     for issue in criticals + majors:
         try:
             gauntlet_sev = issue.get("severity", "major")
             mistake_sev = _GAUNTLET_TO_MISTAKE_SEVERITY.get(gauntlet_sev, "high")
+            category = issue.get("category", "general")
             desc = issue.get("description", issue.get("rule_learned", "Unknown"))
             location = issue.get("location", "")
             log_mistake(
                 buildlog_dir,
-                error_class=f"gauntlet_{gauntlet_sev}",
+                error_class=f"gauntlet_{category}",
                 description=f"[{location}] {desc}" if location else str(desc),
                 severity=mistake_sev,
+                rules_consulted=issue.get("rules_consulted"),
             )
         except Exception:
             logging.getLogger(__name__).debug(
@@ -3118,6 +3210,34 @@ def gauntlet_process_issues(
             logging.getLogger(__name__).debug(
                 "Bandit credit update failed", exc_info=True
             )
+
+        # --- Persist posterior snapshots for evolution charts ---
+        if stats_after:
+            try:
+                _snap_backend, _snap_pid = _get_storage(buildlog_dir)
+                ts = datetime.now(timezone.utc).isoformat()
+                batch_id = f"gauntlet-{iteration}-{ts}"
+                records = []
+                for rid in credited_rules:
+                    s = stats_after.get(rid)
+                    if s:
+                        records.append(
+                            {
+                                "rule_id": rid,
+                                "alpha": s["alpha"],
+                                "beta": s["beta"],
+                                "mean": s["mean"],
+                                "trigger": "gauntlet_credit",
+                                "iteration": iteration,
+                                "batch_id": batch_id,
+                            }
+                        )
+                if records:
+                    _snap_backend.append_posterior_snapshots(_snap_pid, records)
+            except Exception:
+                logging.getLogger(__name__).debug(
+                    "Posterior snapshot persist failed", exc_info=True
+                )
 
         # Persist credited rules so log_reward() can attribute feedback
         # to gauntlet-cited rules instead of session-selected rules.

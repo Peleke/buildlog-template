@@ -21,7 +21,7 @@ This writes to:
 
 ```bash
 claude mcp list           # should show: buildlog - ✓ Connected
-buildlog mcp-test         # lists all 34 tools, exits 0 if correct
+buildlog mcp-test         # lists all 36 tools, exits 0 if correct
 buildlog overview         # works anywhere (shows project state or "not initialized")
 ```
 

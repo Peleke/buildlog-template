@@ -11,7 +11,7 @@ from pathlib import Path
 
 __all__ = ["SCHEMA_VERSION", "init_schema"]
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # ---------------------------------------------------------------------------
 # DDL statements
@@ -279,6 +279,35 @@ CREATE INDEX IF NOT EXISTS idx_gauntlet_credits_ts
 """
 
 
+# v7 migration: rules_consulted on mistakes + posterior_snapshots table
+# ---------------------------------------------------------------------------
+
+_MIGRATE_V7_STMTS: list[str] = [
+    "ALTER TABLE mistakes ADD COLUMN rules_consulted TEXT;",  # JSON array
+]
+
+_MIGRATE_V7_DDL: str = """\
+CREATE TABLE IF NOT EXISTS posterior_snapshots (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  TEXT NOT NULL REFERENCES projects(id),
+    timestamp   TEXT NOT NULL,
+    rule_id     TEXT NOT NULL,
+    alpha       REAL NOT NULL,
+    beta        REAL NOT NULL,
+    mean        REAL NOT NULL,
+    trigger     TEXT NOT NULL,
+    iteration   INTEGER,
+    batch_id    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_posterior_snapshots_rule
+    ON posterior_snapshots(project_id, rule_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_posterior_snapshots_ts
+    ON posterior_snapshots(project_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_posterior_snapshots_batch
+    ON posterior_snapshots(project_id, batch_id);
+"""
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -374,6 +403,21 @@ def init_schema(conn: sqlite3.Connection) -> int:
         conn.execute(
             "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
             (6,),
+        )
+        conn.commit()
+        current_version = 6
+
+    # Apply v7 migration: rules_consulted on mistakes + posterior_snapshots
+    if current_version < 7:
+        for stmt in _MIGRATE_V7_STMTS:
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+        conn.executescript(_MIGRATE_V7_DDL)
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+            (7,),
         )
         conn.commit()
 

@@ -32,6 +32,7 @@ from buildlog.mcp.tools import (
     buildlog_log_reward,
     buildlog_migrate,
     buildlog_overview,
+    buildlog_posterior_history,
     buildlog_promote,
     buildlog_reject,
     buildlog_rewards,
@@ -66,6 +67,7 @@ mcp.tool()(buildlog_gauntlet_accept_risk)
 
 # Bandit tools
 mcp.tool()(buildlog_bandit_status)
+mcp.tool()(buildlog_posterior_history)
 
 # Entry & overview tools
 mcp.tool()(buildlog_gauntlet_rules)

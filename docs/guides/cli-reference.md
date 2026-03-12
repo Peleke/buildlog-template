@@ -54,7 +54,7 @@ Wired via `.claude/settings.json` under `hooks.PreToolUse`.
 buildlog init-mcp                # Register MCP in .claude/settings.json (local)
 buildlog init-mcp --global       # Register in ~/.claude.json (global)
 buildlog init-mcp --global -y    # Global, skip confirmation prompts
-buildlog mcp-test                # Verify all 34 tools are registered
+buildlog mcp-test                # Verify all 36 tools are registered
 ```
 
 ### Flags for `init-mcp`

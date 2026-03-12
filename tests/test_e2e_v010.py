@@ -54,6 +54,7 @@ class TestCLAUDEMDConstant:
             "buildlog_import_seed",
             "buildlog_ingest_seeds",
             "buildlog_verify",
+            "buildlog_posterior_history",
         ]
         for tool in tools:
             assert tool in CLAUDE_MD_BUILDLOG_SECTION, f"Missing tool: {tool}"
@@ -101,15 +102,15 @@ class TestE2EEntryWorkflow:
 
 
 class TestE2EMCPServer29Tools:
-    """Verify the MCP server has all 35 tools."""
+    """Verify the MCP server has all 36 tools."""
 
     @pytest.mark.asyncio
     async def test_server_has_35_tools(self):
-        """Server should list 35 tools, each callable."""
+        """Server should list 36 tools, each callable."""
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 35
+        assert len(tools) == 36
 
         # Each should have a name and description
         for tool in tools:

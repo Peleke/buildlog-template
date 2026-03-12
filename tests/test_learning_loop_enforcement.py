@@ -168,6 +168,7 @@ class TestGauntletAutoLogsMistakes:
             issues=[
                 {
                     "severity": "critical",
+                    "category": "security",
                     "description": "SQL injection in query builder",
                     "location": "src/db.py:42",
                     "rule_learned": "Always parameterize queries",
@@ -181,7 +182,7 @@ class TestGauntletAutoLogsMistakes:
             m for m in mistakes if m.get("error_class", "").startswith("gauntlet_")
         ]
         assert len(gauntlet_mistakes) == 1
-        assert gauntlet_mistakes[0]["error_class"] == "gauntlet_critical"
+        assert gauntlet_mistakes[0]["error_class"] == "gauntlet_security"
         assert "SQL injection" in gauntlet_mistakes[0]["description"]
 
     def test_major_auto_logs_mistake(self, tmp_path: Path):
@@ -200,6 +201,7 @@ class TestGauntletAutoLogsMistakes:
             issues=[
                 {
                     "severity": "major",
+                    "category": "error_handling",
                     "description": "Missing error handling",
                     "rule_learned": "Handle errors",
                 }
@@ -212,7 +214,7 @@ class TestGauntletAutoLogsMistakes:
             m for m in mistakes if m.get("error_class", "").startswith("gauntlet_")
         ]
         assert len(gauntlet_mistakes) == 1
-        assert gauntlet_mistakes[0]["error_class"] == "gauntlet_major"
+        assert gauntlet_mistakes[0]["error_class"] == "gauntlet_error_handling"
 
     def test_minor_does_not_log_mistake(self, tmp_path: Path):
         """Minor issues should NOT auto-log mistakes."""
