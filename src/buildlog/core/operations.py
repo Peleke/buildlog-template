@@ -2933,6 +2933,9 @@ class GauntletLoopResult:
     message: str
     rules_credited: list[str] = field(default_factory=list)
     citation_stats: dict = field(default_factory=dict)
+    learnings_novel: int = 0
+    learnings_reinforced: int = 0
+    sampling_delta: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -3072,11 +3075,43 @@ def gauntlet_process_issues(
     # --- Bandit update with per-rule credit (Touch 3) ---
     # Context=None → bandit default ("general"). Selection also uses None,
     # so credits and selections always hit the same arm partition.
+    #
+    # Capture before/after posteriors so we can report sampling_delta.
+    sampling_delta: dict[str, str] = {}
     if credited_rules:
         try:
             bandit = get_learning_backend(buildlog_dir)
+
+            # Snapshot means BEFORE update (keyed by rule_id)
+            try:
+                stats_before = bandit.get_stats(context=None)
+            except Exception:
+                stats_before = {}
+
             for rule_id in credited_rules:
                 bandit.update(rule_id, reward=1.0, context=None)
+
+            # Snapshot means AFTER update
+            try:
+                stats_after = bandit.get_stats(context=None)
+            except Exception:
+                stats_after = {}
+
+            # Compute per-persona average delta
+            persona_deltas: dict[str, list[float]] = {}
+            for rule_id in credited_rules:
+                persona = rule_id.split(":")[0] if ":" in rule_id else rule_id
+                mean_before = stats_before.get(rule_id, {}).get("mean", 0.5)
+                mean_after = stats_after.get(rule_id, {}).get("mean", 0.5)
+                delta = mean_after - mean_before
+                persona_deltas.setdefault(persona, []).append(delta)
+
+            for persona, deltas in persona_deltas.items():
+                avg = sum(deltas) / len(deltas) if deltas else 0.0
+                pct = avg * 100
+                sign = "+" if pct >= 0 else ""
+                sampling_delta[persona] = f"{sign}{pct:.1f}%"
+
         except Exception:
             logging.getLogger(__name__).debug(
                 "Bandit credit update failed", exc_info=True
@@ -3144,6 +3179,9 @@ def gauntlet_process_issues(
         message=message,
         rules_credited=sorted(credited_rules),
         citation_stats=citation_stats,
+        learnings_novel=len(learn_result.new_learnings),
+        learnings_reinforced=len(learn_result.reinforced_learnings),
+        sampling_delta=sampling_delta,
     )
 
 
