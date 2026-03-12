@@ -17,6 +17,7 @@ from buildlog.core import (
     end_session,
     gauntlet_generate,
     gauntlet_loop_config,
+    gauntlet_rule_lookup,
     generate_gauntlet_prompt,
     get_bandit_status,
     get_experiment_report,
@@ -950,7 +951,7 @@ def buildlog_gauntlet_loop(
     stop_at: str = "minors",
     auto_gh_issues: bool = False,
     compact: bool = True,
-    select_k: int | None = None,
+    select_k: int = 10,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
     """Ready to run a full gauntlet code review? Start here.
@@ -958,10 +959,11 @@ def buildlog_gauntlet_loop(
     Call once to initialize the review loop. Pass target="src/" (file or
     directory). Returns instructions (step-by-step loop protocol),
     valid_rule_ids (for citation validation in buildlog_gauntlet_issues()),
-    target, personas, stop_at, max_iterations. Response: ~2000 tokens with
-    compact=True (default), ~15000 with compact=False. After this, review
-    the code, then call buildlog_gauntlet_issues() with findings. Do NOT
-    also call gauntlet_rules() or gauntlet_prompt() — this tool includes both.
+    target, personas, stop_at, max_iterations. Response: ~1500 tokens with
+    compact=True (default). After this, review the code, then call
+    buildlog_gauntlet_issues() with findings. Use buildlog_gauntlet_rule_lookup()
+    mid-review to hydrate specific rules by ID. Do NOT also call
+    gauntlet_rules() or gauntlet_prompt() — this tool includes both.
 
     Args:
         target: Path to target code (e.g., "src/", "src/api.py")
@@ -970,8 +972,9 @@ def buildlog_gauntlet_loop(
         stop_at: Stop after clearing: "criticals", "majors", or "minors"
         auto_gh_issues: Create GitHub issues for accepted risk items
         compact: Omit bulky fields (default: True). Set False for full
-            prompt + rules_by_persona + rule_id_index (~15k tokens).
-        select_k: Max rules per persona via learning backend (None = all)
+            prompt + rules_by_persona + rule_id_index.
+        select_k: Top rules per persona via Thompson Sampling (default: 10).
+            Set to 0 for all rules (large prompt). 10 per persona ≈ 80 rules.
         buildlog_dir: Path to buildlog directory
 
     Returns:
@@ -984,8 +987,8 @@ def buildlog_gauntlet_loop(
         max_iterations=max_iterations,
         stop_at=stop_at,
         auto_gh_issues=auto_gh_issues,
-        buildlog_dir=Path(buildlog_dir) if select_k is not None else None,
-        select_k=select_k,
+        buildlog_dir=Path(buildlog_dir),
+        select_k=select_k if select_k > 0 else None,
     )
     d = asdict(result)
 
@@ -1004,6 +1007,28 @@ def buildlog_gauntlet_loop(
         d["valid_rule_ids"] = sorted(rule_id_index.keys())
 
     return _ensure_message(d)
+
+
+def buildlog_gauntlet_rule_lookup(
+    rule_ids: list[str],
+) -> dict:
+    """Reviewing code and need the full text of a rule behind an opaque ID?
+
+    Pass 1-10 rule IDs (e.g., ["bragi:02959dda", "loki:a1b2c3d4"]).
+    Returns each rule's full text, category, antipattern, rationale, and
+    context — everything the ID hides. Response: ~150 tokens per rule.
+    Call mid-review when buildlog_gauntlet_loop() gave you IDs but you
+    need the actual rule content to evaluate code against it. Do NOT call
+    this to get all rules — use buildlog_gauntlet_loop() for that.
+
+    Args:
+        rule_ids: List of rule IDs to look up (from valid_rule_ids)
+
+    Returns:
+        Dict with rules (list of rule details), found, missing, message
+    """
+    result = gauntlet_rule_lookup(rule_ids=rule_ids)
+    return _ensure_message(result)
 
 
 # =============================================================================

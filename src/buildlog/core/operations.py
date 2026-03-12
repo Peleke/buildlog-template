@@ -4098,6 +4098,70 @@ def select_gauntlet_rules(
     return filtered
 
 
+def gauntlet_rule_lookup(
+    rule_ids: list[str],
+) -> dict:
+    """Look up specific gauntlet rules by ID.
+
+    Returns the full rule details for requested IDs, useful for
+    hydrating rules mid-review without loading all rules upfront.
+
+    Args:
+        rule_ids: List of rule IDs to look up (e.g., ["security_karen:abc123"]).
+
+    Returns:
+        Dict with rules (list of matched rules with full details),
+        found count, missing IDs.
+    """
+    from buildlog.seeds import get_rule_id, load_rules
+    from buildlog.storage import get_backend
+
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
+
+    seeds = load_rules(backend=backend)
+    if not seeds:
+        return {
+            "rules": [],
+            "found": 0,
+            "missing": rule_ids,
+            "message": "No rules loaded.",
+        }
+
+    # Build ID → rule detail map
+    id_to_detail: dict[str, dict] = {}
+    for persona_name, sf in seeds.items():
+        for i, r in enumerate(sf.rules):
+            rid = get_rule_id(r, persona_name, i)
+            id_to_detail[rid] = {
+                "id": rid,
+                "persona": persona_name,
+                "rule": r.rule,
+                "category": r.category,
+                "antipattern": r.antipattern,
+                "rationale": r.rationale,
+                "context": r.context,
+            }
+
+    found = []
+    missing = []
+    for rid in rule_ids:
+        detail = id_to_detail.get(rid)
+        if detail:
+            found.append(detail)
+        else:
+            missing.append(rid)
+
+    return {
+        "rules": found,
+        "found": len(found),
+        "missing": missing,
+        "message": f"Found {len(found)}/{len(rule_ids)} rules.",
+    }
+
+
 def generate_gauntlet_prompt(
     target: str,
     personas: list[str] | None = None,

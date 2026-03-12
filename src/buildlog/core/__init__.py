@@ -40,6 +40,7 @@ from buildlog.core.operations import (
     gauntlet_generate,
     gauntlet_loop_config,
     gauntlet_process_issues,
+    gauntlet_rule_lookup,
     generate_gauntlet_prompt,
     get_bandit_status,
     get_experiment_report,
@@ -103,6 +104,7 @@ __all__ = [
     "get_bandit_status",
     # Gauntlet loop operations
     "gauntlet_process_issues",
+    "gauntlet_rule_lookup",
     "gauntlet_accept_risk",
     # Entry & overview operations
     "get_gauntlet_rules",
