@@ -1728,6 +1728,7 @@ class Mistake:
         resolution_action: What fixed the mistake.
         context: What the agent was doing when it made the mistake.
         severity: low|medium|high|critical.
+        rules_consulted: Rule IDs that were active when this mistake was caught.
     """
 
     id: str
@@ -2947,6 +2948,7 @@ def get_posterior_history(
     backend, project_id = _get_storage(buildlog_dir)
 
     if rule_ids:
+        rule_ids = rule_ids[:20]  # Enforce documented limit
         all_snaps: list[dict] = []
         for rid in rule_ids:
             all_snaps.extend(
