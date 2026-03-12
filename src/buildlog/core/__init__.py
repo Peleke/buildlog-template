@@ -46,6 +46,7 @@ from buildlog.core.operations import (
     get_experiment_report,
     get_gauntlet_rules,
     get_overview,
+    get_posterior_history,
     get_rewards,
     get_session_metrics,
     init_buildlog,
@@ -102,6 +103,7 @@ __all__ = [
     "get_session_metrics",
     "get_experiment_report",
     "get_bandit_status",
+    "get_posterior_history",
     # Gauntlet loop operations
     "gauntlet_process_issues",
     "gauntlet_rule_lookup",

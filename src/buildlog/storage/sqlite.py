@@ -355,14 +355,18 @@ class SQLiteBackend:
             if relation_to_prior is not None and not isinstance(relation_to_prior, str):
                 relation_to_prior = json.dumps(relation_to_prior)
 
+            rules_consulted = record.get("rules_consulted")
+            if rules_consulted is not None and not isinstance(rules_consulted, str):
+                rules_consulted = json.dumps(rules_consulted)
+
             self.conn.execute(
                 """\
                 INSERT OR REPLACE INTO mistakes
                     (project_id, id, session_id, timestamp, error_class,
                      description, semantic_hash, was_repeat, corrected_by_rule,
                      related_concepts, relation_to_prior, resolution_action,
-                     context, severity)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     context, severity, rules_consulted)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project_id,
@@ -379,6 +383,7 @@ class SQLiteBackend:
                     record.get("resolution_action"),
                     record.get("context"),
                     record.get("severity"),
+                    rules_consulted,
                 ),
             )
         elif resolved == "gauntlet_credits":
@@ -670,6 +675,60 @@ class SQLiteBackend:
             params,
         ).fetchone()
         return row[0]
+
+    # -- Posterior snapshots --------------------------------------------------
+
+    def append_posterior_snapshots(self, project_id: str, records: list[dict]) -> int:
+        """Batch insert posterior snapshots. Returns count inserted."""
+        ts = datetime.now(timezone.utc).isoformat()
+        count = 0
+        for rec in records:
+            self.conn.execute(
+                """\
+                INSERT INTO posterior_snapshots
+                    (project_id, timestamp, rule_id, alpha, beta, mean,
+                     trigger, iteration, batch_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    project_id,
+                    rec.get("timestamp", ts),
+                    rec["rule_id"],
+                    rec["alpha"],
+                    rec["beta"],
+                    rec["mean"],
+                    rec["trigger"],
+                    rec.get("iteration"),
+                    rec.get("batch_id"),
+                ),
+            )
+            count += 1
+        self.conn.commit()
+        return count
+
+    def load_posterior_history(
+        self,
+        project_id: str,
+        rule_id: str | None = None,
+        since: str | None = None,
+        limit: int = 500,
+    ) -> list[dict]:
+        """Load posterior snapshots ordered by timestamp ascending."""
+        clauses = ["project_id = ?"]
+        params: list[Any] = [project_id]
+        if rule_id is not None:
+            clauses.append("rule_id = ?")
+            params.append(rule_id)
+        if since is not None:
+            clauses.append("timestamp >= ?")
+            params.append(since)
+        where = " AND ".join(clauses)
+        params.append(limit)
+        rows = self.conn.execute(
+            f"SELECT * FROM posterior_snapshots WHERE {where} ORDER BY timestamp ASC LIMIT ?",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # -- Emission edges ------------------------------------------------------
 

@@ -23,6 +23,7 @@ from buildlog.core import (
     get_experiment_report,
     get_gauntlet_rules,
     get_overview,
+    get_posterior_history,
     get_rewards,
     get_session_metrics,
     init_buildlog,
@@ -613,6 +614,46 @@ def buildlog_bandit_status(
         buildlog_bandit_status(context="type-errors")
     """
     return get_bandit_status(Path(buildlog_dir), context, top_k)
+
+
+def buildlog_posterior_history(
+    rule_ids: list[str] | None = None,
+    persona: str | None = None,
+    since: str | None = None,
+    limit: int = 200,
+    buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
+) -> dict:
+    """How have the bandit's beliefs about specific rules changed over time?
+
+    Returns timestamped alpha/beta/mean snapshots captured after each
+    gauntlet credit or reward event. Use to plot convergence curves, detect
+    stale rules, or verify that feedback is shifting posteriors.
+    Response: ~100 tokens per snapshot, up to `limit` rows.
+
+    Filter by rule_ids (exact match) or persona (prefix match, e.g.
+    "security_karen"). Pass since="2026-03-01T00:00:00" to limit to
+    recent history. Call buildlog_bandit_status() first if you need
+    current point-in-time state instead of evolution over time.
+
+    Args:
+        rule_ids: Filter to specific rule IDs (max 20)
+        persona: Filter to rules from a specific persona prefix
+        since: ISO timestamp lower bound for snapshots
+        limit: Max snapshots to return (default 200)
+        buildlog_dir: Path to buildlog directory
+
+    Returns:
+        Dict with snapshots list, rules_tracked count, total_snapshots,
+        and by_rule summary (latest mean/alpha/beta per rule)
+    """
+    result = get_posterior_history(
+        Path(buildlog_dir),
+        rule_ids=rule_ids,
+        persona=persona,
+        since=since,
+        limit=limit,
+    )
+    return _ensure_message(result)
 
 
 # -----------------------------------------------------------------------------

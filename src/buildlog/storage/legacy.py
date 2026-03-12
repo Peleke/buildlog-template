@@ -230,6 +230,42 @@ class LegacyBackend:
         with open(path, "a") as f:
             f.write(json.dumps(record) + "\n")
 
+    # -- Posterior snapshots (JSONL fallback) --------------------------------
+
+    def append_posterior_snapshots(self, project_id: str, records: list[dict]) -> int:
+        self._ensure_dot()
+        path = self._dot / "posterior_snapshots.jsonl"
+        with open(path, "a") as f:
+            for rec in records:
+                f.write(json.dumps(rec) + "\n")
+        return len(records)
+
+    def load_posterior_history(
+        self,
+        project_id: str,
+        rule_id: str | None = None,
+        since: str | None = None,
+        limit: int = 500,
+    ) -> list[dict]:
+        path = self._dot / "posterior_snapshots.jsonl"
+        if not path.exists():
+            return []
+        results: list[dict] = []
+        for line in path.read_text().strip().split("\n"):
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if rule_id and rec.get("rule_id") != rule_id:
+                continue
+            if since and rec.get("timestamp", "") < since:
+                continue
+            results.append(rec)
+        results.sort(key=lambda r: r.get("timestamp", ""))
+        return results[:limit]
+
     # -- Gauntlet rules (no-op for legacy) ----------------------------------
 
     def load_gauntlet_rules(

@@ -238,6 +238,41 @@ class StorageBackend(Protocol):
         """
         ...
 
+    # -- Posterior snapshots -------------------------------------------------
+
+    def append_posterior_snapshots(self, project_id: str, records: list[dict]) -> int:
+        """Append a batch of posterior snapshots for evolution tracking.
+
+        Args:
+            project_id: Project identifier.
+            records: List of dicts with rule_id, alpha, beta, mean, trigger,
+                     and optional iteration, batch_id.
+
+        Returns:
+            Number of records inserted.
+        """
+        ...
+
+    def load_posterior_history(
+        self,
+        project_id: str,
+        rule_id: str | None = None,
+        since: str | None = None,
+        limit: int = 500,
+    ) -> list[dict]:
+        """Load posterior snapshots for evolution charts.
+
+        Args:
+            project_id: Project identifier.
+            rule_id: Filter to a specific rule, or None for all.
+            since: ISO timestamp lower bound.
+            limit: Maximum rows to return.
+
+        Returns:
+            List of snapshot dicts ordered by timestamp ascending.
+        """
+        ...
+
     # -- Emission edges -----------------------------------------------------
 
     def store_emission_edges(self, edges: list[dict]) -> int:
