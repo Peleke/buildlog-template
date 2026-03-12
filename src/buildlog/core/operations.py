@@ -2933,6 +2933,9 @@ class GauntletLoopResult:
     message: str
     rules_credited: list[str] = field(default_factory=list)
     citation_stats: dict = field(default_factory=dict)
+    learnings_novel: int = 0
+    learnings_reinforced: int = 0
+    sampling_delta: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -3072,11 +3075,43 @@ def gauntlet_process_issues(
     # --- Bandit update with per-rule credit (Touch 3) ---
     # Context=None → bandit default ("general"). Selection also uses None,
     # so credits and selections always hit the same arm partition.
+    #
+    # Capture before/after posteriors so we can report sampling_delta.
+    sampling_delta: dict[str, str] = {}
     if credited_rules:
         try:
             bandit = get_learning_backend(buildlog_dir)
+
+            # Snapshot means BEFORE update (keyed by rule_id)
+            try:
+                stats_before = bandit.get_stats(context=None)
+            except Exception:
+                stats_before = {}
+
             for rule_id in credited_rules:
                 bandit.update(rule_id, reward=1.0, context=None)
+
+            # Snapshot means AFTER update
+            try:
+                stats_after = bandit.get_stats(context=None)
+            except Exception:
+                stats_after = {}
+
+            # Compute per-persona average delta
+            persona_deltas: dict[str, list[float]] = {}
+            for rule_id in credited_rules:
+                persona = rule_id.split(":")[0] if ":" in rule_id else rule_id
+                mean_before = stats_before.get(rule_id, {}).get("mean", 0.5)
+                mean_after = stats_after.get(rule_id, {}).get("mean", 0.5)
+                delta = mean_after - mean_before
+                persona_deltas.setdefault(persona, []).append(delta)
+
+            for persona, deltas in persona_deltas.items():
+                avg = sum(deltas) / len(deltas) if deltas else 0.0
+                pct = avg * 100
+                sign = "+" if pct >= 0 else ""
+                sampling_delta[persona] = f"{sign}{pct:.1f}%"
+
         except Exception:
             logging.getLogger(__name__).debug(
                 "Bandit credit update failed", exc_info=True
@@ -3144,6 +3179,9 @@ def gauntlet_process_issues(
         message=message,
         rules_credited=sorted(credited_rules),
         citation_stats=citation_stats,
+        learnings_novel=len(learn_result.new_learnings),
+        learnings_reinforced=len(learn_result.reinforced_learnings),
+        sampling_delta=sampling_delta,
     )
 
 
@@ -4058,6 +4096,70 @@ def select_gauntlet_rules(
             )
 
     return filtered
+
+
+def gauntlet_rule_lookup(
+    rule_ids: list[str],
+) -> dict:
+    """Look up specific gauntlet rules by ID.
+
+    Returns the full rule details for requested IDs, useful for
+    hydrating rules mid-review without loading all rules upfront.
+
+    Args:
+        rule_ids: List of rule IDs to look up (e.g., ["security_karen:abc123"]).
+
+    Returns:
+        Dict with rules (list of matched rules with full details),
+        found count, missing IDs.
+    """
+    from buildlog.seeds import get_rule_id, load_rules
+    from buildlog.storage import get_backend
+
+    try:
+        backend, _ = get_backend()
+    except Exception:
+        backend = None
+
+    seeds = load_rules(backend=backend)
+    if not seeds:
+        return {
+            "rules": [],
+            "found": 0,
+            "missing": rule_ids,
+            "message": "No rules loaded.",
+        }
+
+    # Build ID → rule detail map
+    id_to_detail: dict[str, dict] = {}
+    for persona_name, sf in seeds.items():
+        for i, r in enumerate(sf.rules):
+            rid = get_rule_id(r, persona_name, i)
+            id_to_detail[rid] = {
+                "id": rid,
+                "persona": persona_name,
+                "rule": r.rule,
+                "category": r.category,
+                "antipattern": r.antipattern,
+                "rationale": r.rationale,
+                "context": r.context,
+            }
+
+    found = []
+    missing = []
+    for rid in rule_ids:
+        detail = id_to_detail.get(rid)
+        if detail:
+            found.append(detail)
+        else:
+            missing.append(rid)
+
+    return {
+        "rules": found,
+        "found": len(found),
+        "missing": missing,
+        "message": f"Found {len(found)}/{len(rule_ids)} rules.",
+    }
 
 
 def generate_gauntlet_prompt(

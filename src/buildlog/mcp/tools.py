@@ -17,6 +17,7 @@ from buildlog.core import (
     end_session,
     gauntlet_generate,
     gauntlet_loop_config,
+    gauntlet_rule_lookup,
     generate_gauntlet_prompt,
     get_bandit_status,
     get_experiment_report,
@@ -136,17 +137,20 @@ def buildlog_status(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     min_confidence: Literal["low", "medium", "high"] = "low",
 ) -> dict:
-    """Get current skills extracted from buildlog entries.
+    """Need to decide which learned rules to promote or reject?
 
-    Returns skills grouped by category with confidence scores.
-    Use this to see what patterns have emerged from your work.
+    Call after buildlog_skills() has run at least once. Returns a dict
+    with 4 category keys (architectural, workflow, tool_usage,
+    domain_knowledge), each containing 0-20 skill objects with id, rule,
+    confidence, frequency. Response: ~500-2000 tokens. If empty, no
+    skills exist yet — run buildlog_skills() first.
 
     Args:
         buildlog_dir: Path to buildlog directory (default: ./buildlog)
         min_confidence: Minimum confidence level to include
 
     Returns:
-        Dictionary with skills by category and summary statistics
+        Dict with skills_by_category, promoted_ids, rejected_ids, total_skills
     """
     result = status(Path(buildlog_dir), min_confidence)
     return _ensure_message(asdict(result))
@@ -157,9 +161,12 @@ def buildlog_promote(
     target: str = "claude_md",
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Promote selected skills to your agent's rule files.
+    """A skill scored high in buildlog_status() and you want it enforced permanently?
 
-    Writes selected skills to agent-specific rule files.
+    Call this to write 1+ skill IDs into the agent's rule file (CLAUDE.md,
+    .cursorrules, etc.). Returns a confirmation dict with skills_promoted
+    count and target file path. Response: ~200 tokens. Idempotent —
+    re-promoting an already-promoted skill is a no-op.
 
     Args:
         skill_ids: List of skill IDs to promote (e.g., ["arch-b0fcb62a1e"])
@@ -168,7 +175,7 @@ def buildlog_promote(
         buildlog_dir: Path to buildlog directory
 
     Returns:
-        Confirmation with promoted skills
+        Dict with skills_promoted, target_path, message
     """
     validated_ids = _validate_skill_ids(skill_ids)
     result = promote(Path(buildlog_dir), validated_ids, target)
@@ -179,16 +186,18 @@ def buildlog_reject(
     skill_ids: list[str],
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Mark skills as rejected so they won't be suggested again.
+    """A skill from buildlog_status() is wrong or noisy and should never surface again?
 
-    Rejected skills are stored in .buildlog/rejected.json
+    Call this with 1+ skill IDs. Writes them to .buildlog/rejected.json so
+    future buildlog_skills() and buildlog_status() runs exclude them.
+    Returns a dict with rejected_ids list. Response: ~100 tokens.
 
     Args:
         skill_ids: List of skill IDs to reject
         buildlog_dir: Path to buildlog directory
 
     Returns:
-        Confirmation with rejected skill IDs
+        Dict with rejected_ids, message
     """
     validated_ids = _validate_skill_ids(skill_ids)
     result = reject(Path(buildlog_dir), validated_ids)
@@ -198,15 +207,18 @@ def buildlog_reject(
 def buildlog_diff(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Show skills pending promotion or rejection.
+    """After running buildlog_skills(), need to see only skills you haven't decided on?
 
-    Useful for seeing what's new since your last review.
+    Call this instead of buildlog_status() to get just the pending queue.
+    Returns a dict with pending_skills list (each with id, rule, category,
+    confidence) and counts: pending, promoted, rejected. Response: ~200-800
+    tokens. If pending is 0, all skills have been triaged.
 
     Args:
         buildlog_dir: Path to buildlog directory
 
     Returns:
-        Dictionary with pending skills and counts
+        Dict with pending_skills, pending, promoted, rejected counts
     """
     result = diff(Path(buildlog_dir))
     return _ensure_message(asdict(result))
@@ -218,11 +230,13 @@ def buildlog_learn_from_review(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     issues_file: str | None = None,
 ) -> dict:
-    """Extract and persist learnings from code review feedback.
+    """Got code review feedback from a non-gauntlet source (PR review, manual audit)?
 
-    Call this after a review loop completes to persist learnings.
-    Each issue's rule_learned becomes a tracked learning that gains
-    confidence through reinforcement.
+    Call this after the review to persist each issue's rule_learned as a
+    tracked learning. Pass 1-50 issues inline or via JSON file. Returns a
+    dict with new_learnings count, reinforced_learnings count,
+    total_issues_processed. Response: ~300 tokens. For gauntlet reviews,
+    use buildlog_gauntlet_issues() instead — it calls this internally.
 
     Provide issues inline OR via a JSON file path (not both).
 
@@ -243,7 +257,7 @@ def buildlog_learn_from_review(
             Mutually exclusive with 'issues'.
 
     Returns:
-        Result with new_learnings, reinforced_learnings, total processed
+        Dict with new_learnings, reinforced_learnings, total_issues_processed
 
     Example:
         buildlog_learn_from_review(
@@ -285,17 +299,21 @@ def buildlog_log_reward(
     session_id: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Log outcome feedback for bandit learning (accepted/revision/rejected).
+    """PR merged or work reviewed? Close the feedback loop.
 
-    Call this after agent work to provide feedback on the outcome.
-    This enables learning which rules are effective in which contexts.
+    Call this after a gauntlet review cycle completes and the user
+    approves/rejects the work. Reads gauntlet-credited rules automatically
+    (from last_gauntlet_credits.json), so rules_active is usually omitted.
+    Updates Thompson Sampling posteriors for credited rules. Response: ~150
+    tokens with reward_id, reward_value, total_events.
 
     Args:
         outcome: Type of feedback:
             - "accepted": Work was accepted as-is (reward=1.0)
             - "revision": Work needed changes (reward=1-distance)
             - "rejected": Work was rejected entirely (reward=0.0)
-        rules_active: List of rule IDs that were in context during the work
+        rules_active: List of rule IDs that were in context during the work.
+            Auto-reads from gauntlet credits if omitted.
         revision_distance: How much correction was needed (0-1, 0=minor tweak, 1=complete redo)
         error_class: Category of error if applicable (e.g., "missing_test", "validation_boundary")
         notes: Optional notes about the feedback
@@ -307,16 +325,10 @@ def buildlog_log_reward(
 
     Example:
         # Work was accepted
-        buildlog_log_reward(outcome="accepted", rules_active=["arch-123", "wf-456"])
+        buildlog_log_reward(outcome="accepted")
 
-        # Work needed revision with session
-        buildlog_log_reward(
-            outcome="revision",
-            revision_distance=0.3,
-            error_class="missing_test",
-            session_id="2026-02-06-auth",
-            notes="Forgot to test error path"
-        )
+        # Work needed revision
+        buildlog_log_reward(outcome="revision", revision_distance=0.3)
 
         # Work was rejected
         buildlog_log_reward(outcome="rejected", notes="Completely wrong approach")
@@ -349,10 +361,12 @@ def buildlog_rewards(
     session_id: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Get reward events with summary statistics.
+    """Check reward history before deciding whether to adjust rules or run another review.
 
-    Returns recent reward events and aggregate statistics useful for
-    understanding learning progress.
+    Returns recent reward events and aggregate statistics. Response: ~200-1500
+    tokens depending on limit (default 50 events). Each event includes
+    outcome, reward_value, rules_active, timestamp. Summary includes
+    total_events, accepted/revision/rejected counts, mean_reward.
 
     Args:
         limit: Maximum number of events to return (most recent first).
@@ -362,13 +376,8 @@ def buildlog_rewards(
         buildlog_dir: Path to buildlog directory
 
     Returns:
-        Dict with:
-            - total_events: Total count of reward events
-            - accepted: Count of accepted outcomes
-            - revisions: Count of revision outcomes
-            - rejected: Count of rejected outcomes
-            - mean_reward: Average reward value
-            - events: List of recent events (limited)
+        Dict with total_events, accepted, revisions, rejected,
+        mean_reward, events list
 
     Example:
         buildlog_rewards(limit=10)  # Get 10 most recent events with stats
@@ -401,17 +410,16 @@ def buildlog_experiment_start(
     select_k: int = 0,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Start a tracked session with Thompson Sampling rule selection.
+    """OPTIONAL. Beginning a focused work block to measure mistake rates?
 
-    Begins tracking for a learning experiment. Uses Thompson Sampling
-    to select which rules will be "active" for this session based on
-    the error class context.
+    Call at the start of a coding session to get Thompson Sampling rule
+    selection. Pass error_class (e.g., "missing_test") and select_k (e.g., 5).
+    Returns session_id, selected_rules list, rules_count. Response: ~300
+    tokens. Must pair with buildlog_experiment_end() to finalize metrics.
 
-    The selected rules will receive feedback:
-    - Negative feedback (reward=0) when log_mistake() is called
-    - Explicit feedback when log_reward() is called
-
-    This teaches the bandit which rules are effective for which contexts.
+    Most workflows DON'T need this — buildlog_gauntlet_loop() and
+    buildlog_log_reward() work without an active session. Only use this
+    for longitudinal mistake-rate tracking.
 
     Args:
         error_class: Error class being targeted (e.g., "missing_test").
@@ -424,7 +432,7 @@ def buildlog_experiment_start(
         Dict with session_id, error_class, rules_count, selected_rules, message
 
     Example:
-        buildlog_start_session(error_class="type-errors", select_k=5)
+        buildlog_experiment_start(error_class="type-errors", select_k=5)
     """
     result = start_session(
         Path(buildlog_dir),
@@ -440,12 +448,12 @@ def buildlog_experiment_end(
     notes: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """End the current session and calculate metrics.
+    """Done with the session started by buildlog_experiment_start()?
 
-    Finalizes the session and calculates metrics including:
-    - Total mistakes logged
-    - Repeated mistakes (from prior sessions)
-    - Rules added during session
+    Call this to finalize it. Calculates duration_minutes, mistakes_logged,
+    repeated_mistakes, rules_at_start vs rules_at_end. Returns a single dict.
+    Response: ~250 tokens. Fails if no session is active. After this, use
+    buildlog_experiment_metrics() to query stored results.
 
     Args:
         entry_file: Corresponding buildlog entry file, if any
@@ -457,7 +465,7 @@ def buildlog_experiment_end(
         repeated_mistakes, rules_at_start, rules_at_end, message
 
     Example:
-        buildlog_end_session(entry_file="2026-01-21.md")
+        buildlog_experiment_end(entry_file="2026-01-21.md")
     """
     result = end_session(
         Path(buildlog_dir),
@@ -478,11 +486,13 @@ def buildlog_log_mistake(
     severity: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Log a mistake during the current session for RMR tracking.
+    """Agent just made or caught a mistake? Log it for repeat-detection.
 
-    Records the mistake and checks if it's a repeat of a prior mistake
-    (from earlier sessions). Enriched fields carry graph-ready metadata
-    that gets emitted as artifacts for downstream consumers like qortex.
+    Call immediately with error_class and description. Checks the mistake
+    DB for prior occurrences and flags repeats. Works with or without an
+    active session (generates synthetic session ID if none). Returns
+    mistake_id, was_repeat (bool), similar_prior (null or prior mistake_id).
+    Response: ~200 tokens.
 
     Args:
         error_class: Category of error (e.g., "missing_test")
@@ -504,9 +514,7 @@ def buildlog_log_mistake(
         buildlog_log_mistake(
             error_class="missing_test",
             description="Forgot to add unit tests for new helper function",
-            related_concepts=["testing", "helper_functions"],
             severity="medium",
-            resolution_action="Added pytest tests for all helper functions",
         )
     """
     result = log_mistake(
@@ -527,9 +535,13 @@ def buildlog_experiment_metrics(
     session_id: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Get per-session or aggregate mistake rates and rule changes.
+    """Need the repeated-mistake rate (RMR) for one specific session?
 
-    Returns mistake rates and rule changes for analysis.
+    Call with a session_id after buildlog_experiment_end(). Returns a single
+    dict: total_mistakes, repeated_mistakes, repeated_mistake_rate (float
+    0-1), rules_at_start, rules_at_end, rules_added. Response: ~200 tokens.
+    For a cross-session summary with error-class breakdowns, use
+    buildlog_experiment_report() instead.
 
     Args:
         session_id: Specific session ID, or None for aggregate metrics
@@ -540,8 +552,7 @@ def buildlog_experiment_metrics(
         repeated_mistake_rate, rules_at_start, rules_at_end, rules_added
 
     Example:
-        buildlog_session_metrics()  # Aggregate metrics
-        buildlog_session_metrics(session_id="session-20260121-140000")
+        buildlog_experiment_metrics(session_id="session-20260121-140000")
     """
     result = get_session_metrics(
         Path(buildlog_dir),
@@ -553,18 +564,19 @@ def buildlog_experiment_metrics(
 def buildlog_experiment_report(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Generate comprehensive report: summary, sessions, error classes.
+    """Need a cross-session view to see if mistake rates are trending down?
 
-    Returns summary statistics, per-session breakdown, and error class analysis.
+    Call after 2+ sessions have been completed via buildlog_experiment_end().
+    Returns a dict with 3 keys: summary (aggregate stats), sessions (list of
+    per-session dicts), error_classes (dict keyed by error_class with counts).
+    Response: ~500-5000 tokens depending on session count. For a single
+    session, use buildlog_experiment_metrics(session_id=...) instead.
 
     Args:
         buildlog_dir: Path to buildlog directory
 
     Returns:
-        Dict with:
-            - summary: Overall statistics
-            - sessions: Per-session breakdown
-            - error_classes: Breakdown by error class
+        Dict with summary, sessions list, error_classes breakdown
 
     Example:
         buildlog_experiment_report()
@@ -577,15 +589,13 @@ def buildlog_bandit_status(
     context: str | None = None,
     top_k: int = 10,
 ) -> dict:
-    """Get Thompson Sampling bandit state and rule rankings by context.
+    """Which rules does the bandit consider most effective right now?
 
-    Shows the bandit's learned beliefs about which rules are effective
-    for each error class context. Higher mean = bandit believes rule
-    is more effective.
-
-    The bandit uses Beta distributions to model uncertainty:
-    - High variance (wide CI) = uncertain, will explore more
-    - Low variance (narrow CI) = confident, will exploit
+    Call before buildlog_experiment_start() or after several reward cycles
+    to see learned beliefs. Returns summary (total contexts, arms,
+    observations) and top_rules (top_k per context, each with mean,
+    variance, alpha, beta). Response: ~500-3000 tokens depending on
+    context count. Pass context="missing_test" to filter to one error class.
 
     Args:
         buildlog_dir: Path to buildlog directory
@@ -593,10 +603,7 @@ def buildlog_bandit_status(
         top_k: Number of top rules to show per context
 
     Returns:
-        Dict with:
-            - summary: Total contexts, arms, observations
-            - top_rules: Best rules per context by expected value
-            - all_rules: Full stats if filtering by context
+        Dict with summary, top_rules per context, all_rules (if filtered)
 
     Example:
         # See all bandit state
@@ -621,11 +628,13 @@ def buildlog_gauntlet_issues(
     issues_file: str | None = None,
     valid_rule_ids: list[str] | None = None,
 ) -> dict:
-    """Process gauntlet issues and determine next action (fix/checkpoint/clean).
+    """Just finished reviewing code against gauntlet rules? Submit findings here.
 
-    Call this after running a gauntlet review. It categorizes issues by
-    severity, persists learnings, validates rule citations, and returns
-    the appropriate next action.
+    Call after each review iteration with the issues you found. Returns
+    the next action: "fix_criticals" (auto-fix and loop), "checkpoint_majors"
+    (ask user), "checkpoint_minors" (ask user), or "clean" (done). Also
+    persists learnings, validates rule citations, and credits rules for
+    the feedback loop. Response: ~500-2000 tokens depending on issue count.
 
     Provide issues inline OR via a JSON file path (not both).
 
@@ -646,37 +655,20 @@ def buildlog_gauntlet_issues(
         issues_file: Path to a JSON file containing the issues array.
             Mutually exclusive with 'issues'.
         valid_rule_ids: List of valid rule IDs for citation validation.
-            Pass the keys from rule_id_index (from gauntlet_loop_config).
+            Pass the valid_rule_ids from buildlog_gauntlet_loop().
             Hallucinated IDs are stripped and logged as mistakes.
 
     Returns:
-        Dict with:
-            - action: What to do next:
-                - "fix_criticals": Criticals remain, auto-fix and loop
-                - "checkpoint_majors": No criticals, majors remain (ask user)
-                - "checkpoint_minors": Only minors remain (ask user)
-                - "clean": No issues remain
-            - criticals: List of critical issues
-            - majors: List of major issues
-            - minors: List of minor/nitpick issues
-            - iteration: Current iteration number
-            - learnings_persisted: Number of learnings saved
-            - rules_credited: Validated rule IDs cited across issues
-            - citation_stats: Citation validation statistics
-            - message: Human-readable summary
+        Dict with action, criticals list, majors list, minors list,
+        iteration, learnings_persisted, rules_credited, citation_stats
 
     Example:
-        # After running gauntlet review
         result = buildlog_gauntlet_issues(
-            issues=[
-                {"severity": "critical", "category": "security",
-                 "rules_consulted": ["security_karen:rule:0"], ...},
-            ],
+            issues=[{"severity": "critical", "category": "security", ...}],
             iteration=1,
-            valid_rule_ids=["security_karen:rule:0", "security_karen:rule:1"]
+            valid_rule_ids=["security_karen:rule:0"]
         )
         # result["action"] tells you what to do next
-        # result["rules_credited"] shows which rules got credit
     """
     try:
         resolved = _resolve_file_or_inline(issues, issues_file, "issues")
@@ -703,7 +695,43 @@ def buildlog_gauntlet_issues(
         source=source,
         valid_rule_ids=set(valid_rule_ids) if valid_rule_ids else None,
     )
-    return _ensure_message(asdict(result))
+
+    # --- Emit full issue detail (including rule_reasoning) for downstream ---
+    # The agent doesn't need rule_reasoning in the CLI response, but qortex
+    # and other consumers want it. Emit before compacting.
+    try:
+        from buildlog.emissions import emit_artifact
+        from buildlog.storage import get_backend
+
+        _, project_id = get_backend()
+        emit_artifact(
+            artifact={
+                "iteration": iteration,
+                "issues": resolved,
+                "action": result.action,
+                "rules_credited": result.rules_credited,
+                "sampling_delta": result.sampling_delta,
+            },
+            artifact_type="gauntlet_review",
+            project_id=project_id,
+        )
+    except Exception:
+        pass  # fire-and-forget
+
+    # --- Compact response: strip per-issue bulk, keep decision-relevant data ---
+    d = asdict(result)
+    for key in ("criticals", "majors", "minors"):
+        d[key] = [
+            {
+                "severity": iss.get("severity"),
+                "category": iss.get("category"),
+                "description": iss.get("description", ""),
+                "location": iss.get("location", ""),
+            }
+            for iss in d.get(key, [])
+        ]
+
+    return _ensure_message(d)
 
 
 def buildlog_gauntlet_accept_risk(
@@ -713,10 +741,13 @@ def buildlog_gauntlet_accept_risk(
     issues_file: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Accept risk for remaining issues, optionally create GitHub issues.
+    """Gauntlet returned "checkpoint_minors" or "checkpoint_majors" and user says "ship it"?
 
-    Call this when the user decides to accept remaining issues as risk
-    (e.g., only minors remain and they want to move on).
+    Call this with the remaining_issues array from the last
+    buildlog_gauntlet_issues() response. This is the exit ramp from the
+    gauntlet loop. Optionally set create_github_issues=True to file
+    tracking issues. Returns accepted_issues count, github_issue_urls list.
+    Response: ~300 tokens.
 
     Provide remaining_issues inline OR via a JSON file path (not both).
 
@@ -728,21 +759,14 @@ def buildlog_gauntlet_accept_risk(
             Mutually exclusive with 'remaining_issues'.
 
     Returns:
-        Dict with:
-            - accepted_issues: Number of issues accepted
-            - github_issues_created: Number of GitHub issues created
-            - github_issue_urls: URLs of created issues
-            - message: Human-readable summary
-            - error: Error message if GitHub issue creation failed
+        Dict with accepted_issues, github_issues_created,
+        github_issue_urls, message
 
     Example:
-        # User accepts risk with minors, wants GitHub issues
-        result = buildlog_gauntlet_accept_risk(
+        buildlog_gauntlet_accept_risk(
             remaining_issues=[...],
             create_github_issues=True
         )
-        # Or via file:
-        result = buildlog_gauntlet_accept_risk(issues_file="/tmp/remaining.json")
     """
     try:
         resolved = _resolve_file_or_inline(
@@ -780,10 +804,13 @@ def buildlog_gauntlet_rules(
     compact: bool = True,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Load gauntlet reviewer rules. Call before reviewing code to get rules.
+    """Need the raw rule set for a manual review (not using the gauntlet loop)?
 
-    Returns rules from curated reviewer personas (security_karen,
-    test_terrorist, bragi, etc.) in the requested format.
+    Call before reviewing code manually. Returns formatted rules, total_rules,
+    personas list. WARNING: Full response is 2000-8000 tokens with all
+    personas. Use compact=True (default) and persona="security_karen" to
+    constrain. For the automated loop workflow, use buildlog_gauntlet_loop()
+    instead — it loads rules internally.
 
     Args:
         persona: Filter to a specific persona, or None for all
@@ -794,7 +821,7 @@ def buildlog_gauntlet_rules(
         buildlog_dir: Path to buildlog directory
 
     Returns:
-        Dict with formatted rules, total_rules, personas list
+        Dict with formatted_rules, total_rules, personas list
     """
     result = get_gauntlet_rules(persona=persona, format=format, compact=compact)
     return _ensure_message(asdict(result))
@@ -803,15 +830,19 @@ def buildlog_gauntlet_rules(
 def buildlog_overview(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Get project buildlog state at a glance. Call at session start for context.
+    """Starting a new conversation? Call this first, once, to orient.
 
-    Returns entry count, skill summary, active session, and render targets.
+    Returns entry_count (int), skill_count (int), active_session (null or
+    session_id), render_targets (list of configured output targets).
+    Response: ~200 tokens. Tells you whether a session is already active
+    (don't call experiment_start again) and whether skills exist (can skip
+    buildlog_skills()).
 
     Args:
         buildlog_dir: Path to buildlog directory
 
     Returns:
-        Dict with entries, skills, active_session, render_targets
+        Dict with entry_count, skill_count, active_session, render_targets
     """
     result = get_overview(Path(buildlog_dir))
     return _ensure_message(asdict(result))
@@ -823,9 +854,12 @@ def buildlog_entry_new(
     quick: bool = False,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Create a new buildlog journal entry for documenting work.
+    """Starting work on a new feature? Create a journal file before your first commit.
 
-    Creates a new dated entry from the template with slug sanitization.
+    Call once per task with a slug (e.g., "auth-api"). Creates
+    buildlog/YYYY-MM-DD-{slug}.md from template. Returns entry_path,
+    entry_name. Response: ~200 tokens. Idempotent — returns existing entry
+    if slug+date already exists. Use quick=True for a minimal template.
 
     Args:
         slug: Short identifier (e.g., 'auth-api', 'bugfix-login')
@@ -852,9 +886,12 @@ def buildlog_entry_new(
 def buildlog_entry_list(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """List all buildlog journal entries, most recent first.
+    """Need to find a specific past entry or the full entry list?
 
-    Returns entry names and titles extracted from first lines.
+    Returns entries (list of {name, title} objects, most recent first)
+    and count. Response: ~100 tokens per entry, unbounded — 50 entries =
+    ~5000 tokens. No pagination. For just the count, use
+    buildlog_overview() instead.
 
     Args:
         buildlog_dir: Path to buildlog directory
@@ -878,10 +915,13 @@ def buildlog_commit(
     extra_args: list[str] | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Commit code and append commit block to today's buildlog entry.
+    """Files staged and ready? Commit and log to today's buildlog entry.
 
-    Wraps git commit and updates the buildlog journal. Call after making
-    changes to record progress.
+    Call instead of raw git commit. Runs git commit -m and appends a
+    commit block to today's entry (creates entry from branch slug if none
+    exists). Returns commit_hash, files_changed count, entry_path.
+    Response: ~300 tokens. Set no_entry=True to skip journal update.
+    Fails if nothing is staged.
 
     Args:
         message: Commit message (passed as -m to git)
@@ -914,11 +954,13 @@ def buildlog_gauntlet_prompt(
     select_k: int | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Generate a gauntlet review prompt for target code.
+    """Need just the raw review prompt without loop infrastructure?
 
-    Creates a prompt combining reviewer persona rules with a target path.
-    Use this to kick off a gauntlet review: read the prompt, review the
-    target code, then report issues via buildlog_gauntlet_issues.
+    Call with a target path to get the formatted prompt for pasting into
+    a different agent or manual use. Returns prompt (string, typically
+    8000-15000 tokens), target, total_rules. WARNING: The prompt field
+    alone is 8k-15k tokens. For the standard review-fix-commit loop,
+    use buildlog_gauntlet_loop() instead — it manages the full workflow.
 
     Args:
         target: Path to target code (file or directory, e.g., "src/")
@@ -932,7 +974,7 @@ def buildlog_gauntlet_prompt(
     result = generate_gauntlet_prompt(
         target=target,
         personas=personas,
-        buildlog_dir=Path(buildlog_dir) if select_k is not None else None,
+        buildlog_dir=Path(buildlog_dir),
         select_k=select_k,
     )
     return _ensure_message(asdict(result))
@@ -945,14 +987,19 @@ def buildlog_gauntlet_loop(
     stop_at: str = "minors",
     auto_gh_issues: bool = False,
     compact: bool = True,
-    select_k: int | None = None,
+    select_k: int = 10,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Start the gauntlet review loop: get config, rules, and instructions.
+    """Ready to run a full gauntlet code review? Start here.
 
-    Returns everything needed to run the review-fix-repeat loop.
-    Workflow: call this -> review code -> buildlog_gauntlet_issues ->
-    follow action -> buildlog_commit -> repeat.
+    Call once to initialize the review loop. Pass target="src/" (file or
+    directory). Returns instructions (step-by-step loop protocol),
+    valid_rule_ids (for citation validation in buildlog_gauntlet_issues()),
+    target, personas, stop_at, max_iterations. Response: ~900 tokens with
+    compact=True and select_k=10 (defaults). After this, review the code, then call
+    buildlog_gauntlet_issues() with findings. Use buildlog_gauntlet_rule_lookup()
+    mid-review to hydrate specific rules by ID. Do NOT also call
+    gauntlet_rules() or gauntlet_prompt() — this tool includes both.
 
     Args:
         target: Path to target code (e.g., "src/", "src/api.py")
@@ -960,19 +1007,15 @@ def buildlog_gauntlet_loop(
         max_iterations: Max review-fix iterations (default: 10)
         stop_at: Stop after clearing: "criticals", "majors", or "minors"
         auto_gh_issues: Create GitHub issues for accepted risk items
-        compact: Omit bulky fields that are redundant with the prompt
-            (default: True). The prompt already contains all rules, so
-            ``rules_by_persona`` is stripped. ``rule_id_index`` is
-            replaced with ``valid_rule_ids`` (just the keys). Set to
-            False to get the full unabridged response.
-        select_k: Max rules per persona via learning backend (None = all)
+        compact: Omit bulky fields (default: True). Set False for full
+            prompt + rules_by_persona + rule_id_index.
+        select_k: Top rules per persona via Thompson Sampling (default: 10).
+            Set to 0 for all rules (large prompt). 10 per persona ≈ 80 rules.
         buildlog_dir: Path to buildlog directory
 
     Returns:
         Dict with target, personas, max_iterations, stop_at,
-        instructions, issue_format, valid_rule_ids, message, error.
-        When compact=False, also includes prompt, rules_by_persona,
-        and rule_id_index.
+        instructions, issue_format, valid_rule_ids, message, error
     """
     result = gauntlet_loop_config(
         target=target,
@@ -980,8 +1023,8 @@ def buildlog_gauntlet_loop(
         max_iterations=max_iterations,
         stop_at=stop_at,
         auto_gh_issues=auto_gh_issues,
-        buildlog_dir=Path(buildlog_dir) if select_k is not None else None,
-        select_k=select_k,
+        buildlog_dir=Path(buildlog_dir),
+        select_k=select_k if select_k > 0 else None,
     )
     d = asdict(result)
 
@@ -1002,6 +1045,28 @@ def buildlog_gauntlet_loop(
     return _ensure_message(d)
 
 
+def buildlog_gauntlet_rule_lookup(
+    rule_ids: list[str],
+) -> dict:
+    """Reviewing code and need the full text of a rule behind an opaque ID?
+
+    Pass 1-10 rule IDs (e.g., ["bragi:02959dda", "loki:a1b2c3d4"]).
+    Returns each rule's full text, category, antipattern, rationale, and
+    context — everything the ID hides. Response: ~150 tokens per rule.
+    Call mid-review when buildlog_gauntlet_loop() gave you IDs but you
+    need the actual rule content to evaluate code against it. Do NOT call
+    this to get all rules — use buildlog_gauntlet_loop() for that.
+
+    Args:
+        rule_ids: List of rule IDs to look up (from valid_rule_ids)
+
+    Returns:
+        Dict with rules (list of rule details), found, missing, message
+    """
+    result = gauntlet_rule_lookup(rule_ids=rule_ids)
+    return _ensure_message(result)
+
+
 # =============================================================================
 # P1: Learning pipeline tools
 # =============================================================================
@@ -1013,10 +1078,14 @@ def buildlog_distill(
     llm: bool = False,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Extract patterns from all buildlog entries.
+    """Step 1 of 4 in the learning pipeline (distill > skills > status > promote).
 
-    Parses the Improvements section of each entry and aggregates
-    insights by category with statistics.
+    Parses the "## Improvements" section of each buildlog entry, groups
+    findings by category. Returns entry_count, patterns (dict keyed by
+    category, each a list of {text, source_entry, date}), statistics
+    (total_patterns, by_category, by_month). Response: ~500-5000 tokens.
+    Use since="2026-01-01" to bound. Most callers should skip this and
+    call buildlog_skills() directly — it runs distill internally.
 
     Args:
         since: Only entries from this date onward (YYYY-MM-DD)
@@ -1095,10 +1164,14 @@ def buildlog_skills(
     llm: bool = False,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Generate agent-consumable skills from buildlog patterns.
+    """Step 2 of 4: refresh the skill set from recent buildlog entries.
 
-    Transforms distilled patterns into actionable rules with deduplication,
-    confidence scoring, and stable IDs. Foundation for promoting rules.
+    Call when new entries have been committed since last extraction. Runs
+    distill internally, deduplicates, assigns stable IDs and confidence
+    scores. Returns generated_at, source_entries count, total_skills count,
+    skills (dict by category, each a list of {id, rule, confidence,
+    frequency, sources}). Response: ~500-3000 tokens. After this, call
+    buildlog_status() or buildlog_diff() to review, then promote/reject.
 
     Args:
         min_frequency: Only include skills seen at least N times
@@ -1150,10 +1223,14 @@ def buildlog_stats(
     detailed: bool = False,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Show buildlog statistics and analytics.
+    """Worried journal entries are missing Improvements sections or frequency dropped?
 
-    Provides insights on entry counts, improvement coverage,
-    categories, streaks, and quality warnings.
+    Call for a quality audit of the buildlog corpus. Returns entries (total,
+    with_improvements, coverage_pct), streak (current, longest), warnings
+    (list of specific issues like "3 entries missing Improvements").
+    Response: ~400 tokens. Set detailed=True for top_sources breakdown
+    (~200 extra tokens). This is about JOURNAL quality — for mistake/reward
+    data use buildlog_experiment_report().
 
     Args:
         since: Only entries from this date onward (YYYY-MM-DD)
@@ -1161,8 +1238,7 @@ def buildlog_stats(
         buildlog_dir: Path to buildlog directory
 
     Returns:
-        Dict with entries, insights, top_sources, pipeline,
-        streak, warnings
+        Dict with entries, streak, warnings, pipeline coverage
     """
     from datetime import date as date_cls
 
@@ -1191,10 +1267,12 @@ def buildlog_stats(
 def buildlog_gauntlet_list_personas(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """List available gauntlet reviewer personas and rule counts.
+    """Want to see which reviewer personas exist before choosing for a gauntlet?
 
-    Shows all reviewer personas from seed files. Use to discover
-    what review perspectives are available before running a gauntlet.
+    Call before buildlog_gauntlet_loop(personas=[...]). Returns personas
+    (dict keyed by name, each with rules_count and version), total_rules,
+    total_personas. Response: ~200 tokens for 5-8 personas. This is a
+    lightweight lookup — for actual rules, use buildlog_gauntlet_rules().
 
     Args:
         buildlog_dir: Path to buildlog directory
@@ -1248,10 +1326,14 @@ def buildlog_gauntlet_generate(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
     source_file: str | None = None,
 ) -> dict:
-    """Generate seed rules from source text using LLM extraction.
+    """Have a standards doc or style guide that should become gauntlet rules?
 
-    Runs the seed engine pipeline to produce a YAML seed file
-    from arbitrary source content (docs, notes, standards).
+    Call with source text (inline or file path, typically 500-10000 chars)
+    and a persona name. Makes an LLM call to extract rules, writes a YAML
+    seed file to .buildlog/seeds/. Returns persona, rule_count, output_path.
+    Response: ~300 tokens. Set dry_run=True to preview without writing.
+    This creates NEW rules from prose — to import an existing YAML seed
+    file, use buildlog_import_seed().
 
     Provide source_text inline OR via a file path (not both).
 
@@ -1293,11 +1375,13 @@ def buildlog_migrate(
     dry_run: bool = False,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Migrate legacy JSON/JSONL files to the global SQLite database.
+    """Upgraded buildlog and seeing "legacy files detected" warnings?
 
-    Moves per-project data from buildlog/.buildlog/*.json(l) files into
-    ~/.buildlog/buildlog.db.  Original files are renamed to *.migrated
-    (not deleted).  Safe to run multiple times — idempotent.
+    Migrates .buildlog/*.json(l) files into ~/.buildlog/buildlog.db.
+    Originals renamed to *.migrated (not deleted). Returns lines (list
+    of migration log strings, typically 5-20) and summary. Response: ~300
+    tokens. Idempotent — safe to re-run. Set dry_run=True to preview.
+    This migrates DATA — to update TEMPLATES, use buildlog_update().
 
     Args:
         dry_run: If True, show what would happen without writing anything.
@@ -1327,10 +1411,14 @@ def buildlog_import_seed(
     target_dir: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Import an external seed file (e.g. from qortex) into the seeds directory.
+    """Have a specific YAML seed file (e.g., from qortex export) to add?
 
-    Copies the seed file, validates it, and optionally triggers bandit decay
-    if the graph_version has changed from a previous import.
+    Call with source="/path/to/file.yaml". Validates, copies to
+    .buildlog/seeds/, triggers bandit decay if graph_version changed.
+    Returns persona, rule_count, version_changed, decayed_rules.
+    Response: ~250 tokens. This imports ONE known file. To scan a
+    configured interop directory for multiple pending files, use
+    buildlog_ingest_seeds().
 
     Args:
         source: Path to the source YAML seed file.
@@ -1392,29 +1480,31 @@ def buildlog_export(
     include_manifest: bool = True,
     include_rules_join: bool = True,
 ) -> dict:
-    """Export data from the storage backend to files.
+    """Need to back up buildlog data or feed it to an external system?
 
-    Writes event data (rewards, sessions, mistakes, bandit_state,
-    learnings, skill_decisions) to JSONL files. Optionally generates
-    a manifest.json and rules.jsonl join table.
+    Writes JSONL files to output directory (default: temp dir). Use
+    tables="rewards,sessions" to limit scope (6 tables available:
+    rewards, sessions, mistakes, bandit_state, learnings, skill_decisions).
+    Returns format, project_id, tables, output path, summary with per-table
+    row counts. Response: ~300 tokens. Output files can be large — use
+    tables param to limit. Always writes to disk to avoid token blowout.
 
     Args:
         format: Output format (currently only 'jsonl').
-        output: Directory to write files into.  None = return as string.
-        project: Limit to a specific project ID.  None = current project
-            (or all if global DB).
-        tables: Comma-separated table names (e.g., "rewards,sessions,bandit_state").
+        output: Directory to write files into. None = temp directory.
+        project: Limit to a specific project ID. None = current project.
+        tables: Comma-separated table names (e.g., "rewards,sessions").
             None = all tables.
         buildlog_dir: Path to buildlog directory.
         include_manifest: Generate manifest.json with export metadata.
         include_rules_join: Generate rules.jsonl join table from seeds.
 
     Returns:
-        Dict with summary message and export details.
+        Dict with format, project_id, tables, output path, summary
 
     Example:
         buildlog_export(tables="rewards,sessions")
-        buildlog_export(output="./backup/", tables="bandit_state,skill_decisions")
+        buildlog_export(output="./backup/", tables="bandit_state")
     """
     from buildlog.seeds import get_default_seeds_dir
     from buildlog.storage import get_backend
@@ -1461,11 +1551,14 @@ def buildlog_ingest_seeds(
     source: str | None = None,
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Ingest pending seed files from external producers (e.g. qortex).
+    """Configured interop sources and want to pull in all pending seeds at once?
 
-    Scans configured seed source directories for pending YAML files,
-    validates them, imports into the local seeds directory, and moves
-    processed files. Supports multiple producers via ~/.buildlog/interop.yaml.
+    Call at session start or after a qortex KG update. Scans each source's
+    pending/ folder (configured in ~/.buildlog/interop.yaml), validates and
+    imports YAML files, moves processed files. Returns sources (list of
+    per-source results), total_ingested, total_failed, total_skipped.
+    Response: ~300 tokens. Use source="qortex" to limit to one producer.
+    To import a single known file, use buildlog_import_seed() instead.
 
     Args:
         source: Filter to a specific source name (e.g. "qortex").
@@ -1473,7 +1566,7 @@ def buildlog_ingest_seeds(
         buildlog_dir: Path to buildlog directory.
 
     Returns:
-        Dict with per-source ingest results.
+        Dict with sources list, total_ingested, total_failed, total_skipped
     """
     from dataclasses import asdict as _asdict
 
@@ -1497,10 +1590,13 @@ def buildlog_init(
     no_mcp: bool = False,
     project_dir: str = ".",
 ) -> dict:
-    """Initialize buildlog in a project directory.
+    """Setting up buildlog in a project for the first time?
 
-    Sets up buildlog/ with templates, optionally updates CLAUDE.md,
-    and registers the MCP server. Always runs non-interactively.
+    Call once per project. Creates buildlog/ with entry template, optionally
+    appends workflow section to CLAUDE.md, optionally registers MCP server
+    in .mcp.json. Returns initialized (bool), buildlog_dir, claude_md_updated,
+    mcp_registered. Response: ~200 tokens. Idempotent — safe to re-run.
+    To update an existing install to latest templates, use buildlog_update().
 
     Args:
         defaults: Use default values (always True for MCP)
@@ -1524,10 +1620,13 @@ def buildlog_init(
 def buildlog_update(
     project_dir: str = ".",
 ) -> dict:
-    """Update buildlog templates to the latest version.
+    """Just ran pip install --upgrade buildlog and want templates to match?
 
-    Runs copier update to pull the latest template changes.
-    Requires buildlog to have been initialized first.
+    Runs copier update on the buildlog/ directory. Returns updated (bool),
+    message (what changed or "already up to date"). Response: ~150 tokens.
+    Requires buildlog_init() to have been run first. This updates TEMPLATES
+    (entry format, CLAUDE.md sections) — to migrate DATA from legacy JSON
+    files, use buildlog_migrate().
 
     Args:
         project_dir: Project root directory (default: current directory)
@@ -1542,11 +1641,13 @@ def buildlog_update(
 def buildlog_consume_emissions(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Consume pending emission artifacts into edge storage.
+    """Emission artifacts piling up in ~/.buildlog/emissions/pending/?
 
-    Processes mistake manifests and session summaries into the
-    emission_edges table. Moves reward signals and learned rules
-    to processed/ (already stored via primary path).
+    Processes mistake manifests and session summaries into the emission_edges
+    table. Moves processed files to processed/. Returns consumed, failed,
+    skipped, edges_stored counts. Response: ~200 tokens. Call after several
+    sessions to batch-process accumulated artifacts. Typically called by
+    automation, not directly by agents.
 
     Args:
         buildlog_dir: Path to buildlog directory
@@ -1574,21 +1675,23 @@ def buildlog_consume_emissions(
 def buildlog_verify(
     buildlog_dir: str = DEFAULT_BUILDLOG_DIR,
 ) -> dict:
-    """Verify that the buildlog workflow is correctly set up.
+    """Buildlog commands failing or unsure if setup is complete?
 
-    Checks buildlog/ exists, CLAUDE.md has workflow section, MCP registered,
-    not on main branch, and pre-commit hook installed.
+    Runs 5-6 preflight checks: buildlog/ exists, CLAUDE.md has workflow
+    section, MCP registered, not on main branch, pre-commit hook installed.
+    Returns ok (bool), summary ("5/6 checks passed, 1 warning"),
+    passed/warnings/failed (each a list of {name, status, message}).
+    Response: ~400 tokens. Call after buildlog_init() or when debugging.
 
     Args:
         buildlog_dir: Path to buildlog directory (default: "buildlog")
 
     Returns:
-        Dict with passed, warnings, failed (lists of checks), ok (bool), summary (str).
-        Each check has: name, status ("passed"|"warning"|"failed"), message.
+        Dict with ok, summary, passed, warnings, failed check lists
 
     Example:
         buildlog_verify()
-        # => {"ok": true, "summary": "5/6 checks passed, 1 warnings", "passed": [...], ...}
+        # => {"ok": true, "summary": "5/6 checks passed, 1 warnings"}
     """
     project_dir = _project_root(buildlog_dir)
     result = verify_workflow(

@@ -22,6 +22,7 @@ from buildlog.mcp.tools import (
     buildlog_gauntlet_list_personas,
     buildlog_gauntlet_loop,
     buildlog_gauntlet_prompt,
+    buildlog_gauntlet_rule_lookup,
     buildlog_gauntlet_rules,
     buildlog_import_seed,
     buildlog_ingest_seeds,
@@ -76,6 +77,7 @@ mcp.tool()(buildlog_entry_list)
 mcp.tool()(buildlog_commit)
 mcp.tool()(buildlog_gauntlet_prompt)
 mcp.tool()(buildlog_gauntlet_loop)
+mcp.tool()(buildlog_gauntlet_rule_lookup)
 
 # P1: Learning pipeline
 mcp.tool()(buildlog_distill)

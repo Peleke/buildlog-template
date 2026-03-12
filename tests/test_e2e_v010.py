@@ -101,15 +101,15 @@ class TestE2EEntryWorkflow:
 
 
 class TestE2EMCPServer29Tools:
-    """Verify the MCP server has all 33 tools."""
+    """Verify the MCP server has all 35 tools."""
 
     @pytest.mark.asyncio
-    async def test_server_has_33_tools(self):
-        """Server should list 33 tools, each callable."""
+    async def test_server_has_35_tools(self):
+        """Server should list 35 tools, each callable."""
         from buildlog.mcp.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 34
+        assert len(tools) == 35
 
         # Each should have a name and description
         for tool in tools:
