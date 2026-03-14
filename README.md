@@ -12,8 +12,6 @@
 
 **Track what works. Prove it. Drop what doesn't.**
 
-<img src="https://raw.githubusercontent.com/Peleke/buildlog-template/main/assets/hero-banner-perfectdeliberate.png" alt="buildlog - A measurable learning loop for AI-assisted work" width="800"/>
-
 **[Read the full documentation](https://peleke.github.io/buildlog-template/)** | **[Landing page](https://launchpad-git-buildlog-kwayet-fs-projects.vercel.app)**
 
 </div>
