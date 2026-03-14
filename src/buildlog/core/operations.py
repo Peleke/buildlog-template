@@ -2116,6 +2116,50 @@ def _find_similar_prior_mistake(
 # -----------------------------------------------------------------------------
 
 
+def ensure_session(buildlog_dir: Path) -> str:
+    """Ensure an active session exists, creating a lightweight one if needed.
+
+    If an active session already exists, return its ID (no-op).
+    If not, create a minimal session with no Thompson Sampling overhead:
+    just an ID, timestamp, and empty selected_rules.  This lets
+    ``commit()`` and other session-dependent code proceed without
+    requiring manual ``experiment start`` ceremony.
+
+    Lightweight sessions are distinguishable by their empty
+    ``selected_rules`` and ``notes="auto"`` marker.
+
+    Returns:
+        The session ID (existing or newly created).
+    """
+    try:
+        backend, project_id = _get_storage(buildlog_dir)
+        session_data = backend.load_active_session(project_id)
+        if session_data is not None:
+            return session_data["id"]
+    except Exception:
+        pass  # Storage broken — create a new session anyway
+
+    now = datetime.now(timezone.utc)
+    session_id = _generate_session_id(now)
+
+    session = Session(
+        id=session_id,
+        started_at=now,
+        rules_at_start=[],
+        selected_rules=[],
+        error_class=None,
+        notes="auto",
+    )
+
+    try:
+        backend, project_id = _get_storage(buildlog_dir)
+        backend.save_active_session(project_id, session.to_dict())  # type: ignore[arg-type]
+    except Exception:
+        pass  # Best-effort — don't block the caller
+
+    return session_id
+
+
 def start_session(
     buildlog_dir: Path,
     error_class: str | None = None,
@@ -4189,35 +4233,19 @@ def commit(
     from datetime import date
 
     # =========================================================================
-    # ENFORCEMENT: Block commit without active experiment session
+    # SESSION: Ensure an active session exists (auto-create if needed)
     # =========================================================================
-    # The entire learning loop depends on session-scoped data. Without an
-    # active session, the bandit never gets reward signals, and the system
-    # cannot prove convergence. This is the mechanical guarantee.
+    # The learning loop uses session-scoped data for RMR boundaries.
+    # Instead of blocking, we auto-create a lightweight session when none
+    # exists.  Full Thompson Sampling sessions are created by explicit
+    # ``experiment start`` or the session-start hook — this is the fallback.
     #
-    # Bypass: BUILDLOG_ENFORCE=0 (explicit opt-out)
+    # Skip entirely with BUILDLOG_ENFORCE=0.
     # =========================================================================
     enforce = os.environ.get("BUILDLOG_ENFORCE", "1") != "0"
     if enforce and buildlog_dir.exists():
         try:
-            backend, project_id = _get_storage(buildlog_dir)
-            session_data = backend.load_active_session(project_id)
-            if session_data is None:
-                return CommitResult(
-                    commit_hash="",
-                    commit_message="",
-                    files_changed=[],
-                    entry_path=None,
-                    entry_updated=False,
-                    message="",
-                    error=(
-                        "No active experiment session. "
-                        "Run `buildlog experiment start` first. "
-                        "The learning loop requires session-scoped tracking "
-                        "for bandit reward attribution. "
-                        "Set BUILDLOG_ENFORCE=0 to bypass."
-                    ),
-                )
+            ensure_session(buildlog_dir)
         except Exception:
             pass  # Don't block commits if storage is broken
 

@@ -35,6 +35,7 @@ from buildlog.core.operations import (
     create_entry,
     diff,
     end_session,
+    ensure_session,
     find_skills_by_ids,
     gauntlet_accept_risk,
     gauntlet_generate,
@@ -97,6 +98,7 @@ __all__ = [
     "log_reward",
     "get_rewards",
     # Session tracking operations
+    "ensure_session",
     "start_session",
     "end_session",
     "log_mistake",
