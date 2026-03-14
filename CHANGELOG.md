@@ -7,6 +7,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-03-14
+
+### Added
+- **Bragi v3 — 7 new LLM detection rules** from deep research synthesis (ACL/COLING, Science Advances, PNAS, GPTZero, practitioner sources): contrastive negation overuse, epistemic flatness, throat-clearing fillers, sentence length uniformity / low burstiness, performative self-answered questions, nominalization, both-sides hedging.
+
+### Fixed
+- AX rubric pass on 4 tool descriptions scoring below 5/5.
+- Hero image now uses absolute URL so it renders on PyPI.
+- Removed stale AI art disclaimer from README.
+
 ## [0.21.1] - 2026-03-11
 
 ### Fixed
