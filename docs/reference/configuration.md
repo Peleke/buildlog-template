@@ -249,16 +249,16 @@ buildlog has optional dependency groups for features that need extra packages.
 
 | Extra | What it adds | Dependencies | Python |
 |-------|-------------|--------------|--------|
-| `embeddings` | Local sentence-transformers for semantic dedup | `sentence-transformers>=2.2.0` | 3.10+ |
-| `openai` | OpenAI embeddings for semantic dedup | `openai>=1.0.0` | 3.10+ |
-| `ollama` | Local LLM extraction via Ollama | `ollama>=0.4.0` | 3.10+ |
-| `anthropic` | Cloud LLM extraction via Anthropic Claude | `anthropic>=0.40.0` | 3.10+ |
-| `llm` | Both `ollama` and `anthropic` | both | 3.10+ |
+| `embeddings` | Local sentence-transformers for semantic dedup | `sentence-transformers>=2.2.0` | 3.11+ |
+| `openai` | OpenAI embeddings for semantic dedup | `openai>=1.0.0` | 3.11+ |
+| `ollama` | Local LLM extraction via Ollama | `ollama>=0.4.0` | 3.11+ |
+| `anthropic` | Cloud LLM extraction via Anthropic Claude | `anthropic>=0.40.0` | 3.11+ |
+| `llm` | Both `ollama` and `anthropic` | both | 3.11+ |
 | `qortex` | Pluggable learning backend with credit propagation | `qortex>=0.3.6` | 3.11+ |
-| `engine` | Documents the engine namespace (no extra deps) | none | 3.10+ |
-| `mcp` | Kept for backwards compat (MCP is now a default dep) | none | 3.10+ |
+| `engine` | Documents the engine namespace (no extra deps) | none | 3.11+ |
+| `mcp` | Kept for backwards compat (MCP is now a default dep) | none | 3.11+ |
 | `all` | Everything above | all of the above | 3.11+ |
-| `dev` | Development tools (pytest, black, mypy, etc.) | testing/linting stack | 3.10+ |
+| `dev` | Development tools (pytest, black, mypy, etc.) | testing/linting stack | 3.11+ |
 
 ### Base dependencies (always installed)
 
@@ -290,10 +290,10 @@ When promoting rules, the `--target` flag controls where rules are written:
 | Target | File | Agent |
 |--------|------|-------|
 | `claude_md` | `CLAUDE.md` | Claude Code |
-| `cursor` | `.cursorrules` | Cursor |
+| `cursor` | `.cursor/rules/buildlog-rules.mdc` | Cursor |
 | `copilot` | `.github/copilot-instructions.md` | GitHub Copilot |
-| `windsurf` | `.windsurfrules` | Windsurf |
-| `continue_dev` | `.continue/rules.md` | Continue.dev |
+| `windsurf` | `.windsurf/rules/buildlog-rules.md` | Windsurf |
+| `continue` | `.continue/rules/buildlog-rules.md` | Continue.dev |
 | `settings_json` | `.vscode/settings.json` | VS Code (generic) |
 | `skill` | Agent Skills format | Agent-agnostic |
 

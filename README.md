@@ -121,7 +121,7 @@ Each gauntlet citation followed by a reward acceptance increments alpha in the B
 
 ## Current Limits
 
-This is v0.20, not the end state.
+This is v0.22, not the end state.
 
 - **Extraction quality is uneven.** Regex extractors miss nuance; LLM extractors are accurate but expensive. The middle ground is still being found.
 - **Single-agent only.** Multi-agent coordination (shared learning across agents) is designed but not implemented.
@@ -151,7 +151,7 @@ pipx install buildlog         # or: uv tool install buildlog
 buildlog init-mcp --global -y # registers MCP + writes instructions to ~/.claude/CLAUDE.md
 ```
 
-That's it. Claude Code now has all 35 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
+That's it. Claude Code now has all 36 buildlog tools **and knows how to use them** in every project you open. No per-project setup needed.
 
 The `--global` flag:
 - Registers the MCP server in `~/.claude.json` (Claude Code's global config)

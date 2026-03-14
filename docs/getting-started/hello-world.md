@@ -4,7 +4,7 @@ This walkthrough takes you from zero to a promoted rule in a real project. The c
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - A git repository (any project works)
 - Claude Code installed (for MCP integration)
 

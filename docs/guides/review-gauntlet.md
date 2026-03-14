@@ -12,7 +12,7 @@ buildlog gauntlet list
 |---------|-------|-------|
 | **Security Karen** | OWASP Top 10, auth, injection, secrets | 13 |
 | **Test Terrorist** | Coverage, property-based, metamorphic, contracts | 21 |
-| **Bragi** | LLM prose pattern detection in markdown (em dashes, tricolons, performative honesty, etc.) | 9 |
+| **Bragi** | LLM prose pattern detection in markdown (em dashes, tricolons, performative honesty, etc.) | 27 |
 | **Ruthless Reviewer** | Code quality, FP principles | Coming soon |
 
 Each rule includes:

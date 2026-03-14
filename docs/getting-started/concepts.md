@@ -50,7 +50,7 @@ RMR is not the only metric that matters. But it's one we can measure, and measur
 
 buildlog is building toward **contextual bandits** for automatic rule selection.
 
-### What Exists Today (v0.8)
+### What Exists Today
 
 | Component | Description | Status |
 |-----------|-------------|--------|
@@ -58,8 +58,9 @@ buildlog is building toward **contextual bandits** for automatic rule selection.
 | Confidence scoring | Frequency + recency based | Implemented |
 | Reward logging | Accept/reject/revision signals | Implemented |
 | Experiment tracking | Sessions, mistakes, RMR calculation | Implemented |
-| Review gauntlet | Curated persona-based code review | Implemented |
+| Review gauntlet | Curated persona-based code review (3 personas, 61 rules) | Implemented |
 | Thompson Sampling | Automatic rule selection via bandit | Implemented |
+| Posterior history | Per-rule convergence tracking over time | Implemented |
 
 ### Thompson Sampling Bandit
 
@@ -87,9 +88,9 @@ buildlog is building toward **contextual bandits** for automatic rule selection.
 | Confidence scoring | Frequency + recency decay | Implemented |
 | Semantic hashing | Mistake deduplication for RMR | Implemented |
 | Reward signals | Binary feedback infrastructure | Implemented |
-| Thompson Sampling | Rule selection under uncertainty | Implemented (v0.8) |
-| Beta-Bernoulli model | Posterior updates from binary reward | Implemented (v0.8) |
-| Contextual bandits | Context-dependent rule selection | Implemented (v0.8) |
+| Thompson Sampling | Rule selection under uncertainty | Implemented |
+| Beta-Bernoulli model | Posterior updates from binary reward | Implemented |
+| Contextual bandits | Context-dependent rule selection | Implemented |
 | Regret bounds | O(sqrt(KT log K)) theoretical guarantee | Follows from TS |
 
 We're not inventing new math. We're applying proven frameworks to a new domain.

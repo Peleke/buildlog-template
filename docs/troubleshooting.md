@@ -52,7 +52,7 @@ This invokes the MCP server directly and lists all 36 tools. If it errors, the p
 
 **Fixes:**
 
-1. Check your Python version. buildlog requires 3.10+:
+1. Check your Python version. buildlog requires 3.11+:
    ```bash
    python3 --version
    ```
