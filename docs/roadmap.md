@@ -2,74 +2,58 @@
 
 ## Where buildlog is heading
 
-buildlog started as a Thompson Sampling contextual bandit for engineering rule selection. Three layers turn it into something bigger: a system that discovers *what you know* across projects, finds patterns you didn't design, and gets contextually sharper over time.
+buildlog is an agentic learning loop for AI coding tools. It captures what your agent gets right and wrong, selects which rules to surface with Thompson Sampling, and measures whether they reduce mistakes. v0.23 ships the core loop end-to-end. What follows is about making it sharper, faster, and cross-project.
 
-Layers 1 and 2 build on the [global SQLite backend](guides/storage-architecture.md) shipped in v0.11.0. Layer 3 is implemented by [qortex](https://github.com/Peleke/qortex), which ships the knowledge graph, bandit learning, and full observability stack.
+## Recently Shipped
 
-## Layer 1: Embedding Persistence
+| Feature | Version | What it does |
+|---------|---------|-------------|
+| Bragi v3 | v0.22 | 27 LLM prose detection rules from ACL/COLING, PNAS, GPTZero research |
+| `ensure_session()` | v0.23 | `buildlog_commit()` no longer blocks without manual `experiment start`. New users can install and commit immediately. |
+| Gauntlet credit system | v0.21 | Rule citations in gauntlet findings drive posterior updates. Solves credit assignment. |
+| Posterior history | v0.21 | Every gauntlet credit snapshots alpha/beta/mean per rule. Query convergence over time. |
+| Category-aware RMR | v0.21 | Repeat detection uses `rules_consulted` overlap, not just description similarity. |
+| Multi-agent render | v0.18 | Same rules render to CLAUDE.md, .cursor/rules/, copilot-instructions.md, .windsurf/rules/, .continue/rules/, settings.json. |
+| Global SQLite | v0.11 | Single database at ~/.buildlog/buildlog.db. WAL mode. Project isolation via SHA-256. |
+| Ambient emission protocol | v0.18 | Fire-and-forget JSON artifacts to ~/.buildlog/emissions/pending/ for downstream systems. |
 
-**Status:** Complete. Shipped in qortex v0.3.x.
+## In Progress
 
-Embeddings are persisted in vector indices (NumpyVectorIndex for dev, SqliteVecIndex for production) alongside metadata. KNN similarity search replaces pairwise recomputation. Three embedding backends supported: sentence-transformers (local, 384d), OpenAI, and Ollama -- all traced with `@traced` spans reporting model, batch size, and cache hit rates.
+### Dashboard visualization fixes ([#243](https://github.com/Peleke/buildlog-template/issues/243))
 
-## Layer 2: Cross-Project Convergence
+Four charts need work: rule labels should show human-readable text instead of `domain:hash`, RMR chart needs a minimum-count filter, error class chart conflates severity with category, rule growth chart is uninformative. All presentation-layer fixes in the marimo notebook.
 
-**Status:** Complete. Shipped in qortex v0.3.x.
+### Session decoupling Phase 2-3 ([#237](https://github.com/Peleke/buildlog-template/issues/237))
 
-On every new rule ingest, KNN search finds semantically similar rules across the entire graph. Reinforcement via edge promotion: online cosine-similarity edges that survive observation get promoted to persistent KG structure. Cross-project salience tracked through:
+Phase 1 shipped in v0.23 (`ensure_session()`). Remaining:
 
-- Which domains/projects discovered the rule
-- Edge confidence and observation count
-- Thompson Sampling posteriors per context partition
-- Whether the rule was human-validated or machine-extracted
+- **Phase 2**: Harden session-start hooks — log failures instead of swallowing them
+- **Phase 3**: Session-independent RMR — compute directly from mistakes table with time windows, no session context required
 
-The **KG coverage ratio** (visible in Grafana) tracks what percentage of the retrieval neighborhood is persistent vs online edges. Coverage trending upward means the graph is crystallizing.
+## Planned
 
-## Layer 3: Knowledge Graph + Adaptive Learning
+### Track-and-Stop ([#236](https://github.com/Peleke/buildlog-template/issues/236))
 
-**Status:** Shipped (v0.5.0). Active development continues.
+Optimal stopping for rule convergence. Rules that have converged (posterior CI width below threshold) stop consuming gauntlet citations. Based on Garivier & Kaufmann (2016). Frees exploration budget for uncertain rules. Includes schema migration (v8), convergence indicators in the dashboard, and integration with the gauntlet credit system.
 
-The hypothesis from the original roadmap proved out: clusters in embedding space correspond to emergent concepts, and edges between them encode structure that pure cosine similarity misses. qortex implements this as a full knowledge graph with Personalized PageRank, Thompson Sampling bandits, credit propagation, and a complete observability stack.
+### Cross-project convergence
 
-### What's shipped
+Detect rules independently rediscovered across projects. Track cross-project salience. When the same pattern surfaces in three repos, that's a signal. Builds on the [global SQLite backend](guides/storage-architecture.md) and the emission protocol.
 
-| Component | Status | Version |
-|-----------|--------|---------|
-| Knowledge graph (InMemoryBackend + MemgraphBackend) | Shipped | v0.2.0 |
-| Thompson Sampling bandit (select, observe, posteriors, context partitioning) | Shipped | v0.3.4 |
-| Credit propagation (causal DAG, feedback flows to ancestor concepts) | Shipped, flag-gated | v0.3.4 |
-| qortex-observe (standalone observability package) | Shipped | v0.5.0 |
-| Full trace hierarchy (14 graph ops, vec layer, embeddings, learning) | Shipped | v0.5.0 |
-| Unified metrics pipeline (36 metrics, declarative schema, OTel + Prometheus) | Shipped | v0.5.0 |
-| Selective trace sampling (errors/slow always, normal at configurable rate) | Shipped | v0.5.0 |
-| MCP server (36 tools, 6 learning tools) | Shipped | v0.4.0 |
-| Framework adapters (Agno, CrewAI, LangChain, Mastra) | Shipped | v0.4.0 |
+### Emergent rule graphs
 
-### What's next
+Cluster embeddings into concept nodes. Derive edges from co-occurrence and bandit correlation. Contextual bandits with embedding-space context vectors (LinUCB). The embedding persistence layer is already shipped via qortex; this is the graph structure on top.
 
-**1. qortex-observe PyPI publish** ([qortex#108](https://github.com/Peleke/qortex/issues/108))
+### L-MVA: Learned Minimal Viable Agent ([qortex#96](https://github.com/Peleke/qortex/issues/96))
 
-Publish `qortex-observe` as a standalone PyPI package so any consumer (openclaw, langchain-qortex, mastra-qortex) gets metrics + traces by calling `configure()`. Includes standalone CI, consumer migration, and a portable Docker Compose observability stack (Grafana + Prometheus + Jaeger + OTel Collector).
+Outer bandit that discovers the minimum token budget maintaining quality, per task, per domain. Inner bandit picks rules under that budget. Both update from the same reward signal.
 
-**2. L-MVA: Learned Minimal Viable Agent** ([qortex#96](https://github.com/Peleke/qortex/issues/96))
+## Related Issues
 
-The outer bandit that discovers the minimum token budget maintaining quality, per task, per domain. An `InferenceTrace` event captures every selection: which rules, what budget tier, what reward. A `BudgetLearner` wraps the existing `Learner`: outer bandit picks budget tier, inner bandit picks rules under that budget. Both update from the same reward signal. This is the pitch: "the system learns how much context it needs."
-
-Thompson Sampling works for both inner and outer bandits today. UCB1 and Track-and-Stop (SOCP-optimal allocation) are Strategy plugins that can drop in later without touching the BudgetLearner architecture.
-
-**3. Production deployment: triple interface** ([qortex#63](https://github.com/Peleke/qortex/issues/63))
-
-Single FastAPI app serving GraphQL (`/graphql`, federation v2 for MindMirror mesh), REST (`/api/v1/`), and MCP (`/mcp`, streamable HTTP for AI agents). All three wrap the same `LocalQortexClient`. One container, one Dockerfile, one health check. This is the biggest platform unlock -- qortex becomes a real service, not just a library.
-
-**4. Causal DAG** ([qortex#3](https://github.com/Peleke/qortex/issues/3))
-
-Credit propagation is already wired and flag-gated. The missing piece is structural causal discovery from graph topology. Deferred until L-MVA and deployment are solid, since the causal DAG feeds into credit assignment which feeds the bandit.
-
-## Related
-
-- [#100](https://github.com/Peleke/buildlog-template/issues/100) -- sqlite-vec + emergent rule graphs: full design document
-- [#87](https://github.com/Peleke/buildlog-template/issues/87) -- qortex knowledge graph integration
-- [qortex#108](https://github.com/Peleke/qortex/issues/108) -- qortex-observe PyPI publish
-- [qortex#96](https://github.com/Peleke/qortex/issues/96) -- L-MVA (BudgetLearner)
-- [qortex#63](https://github.com/Peleke/qortex/issues/63) -- Production deployment (triple interface)
-- [qortex#3](https://github.com/Peleke/qortex/issues/3) -- Causal DAG
+- [#243](https://github.com/Peleke/buildlog-template/issues/243) — Dashboard visualization bugs (4 charts)
+- [#237](https://github.com/Peleke/buildlog-template/issues/237) — Session decoupling (Phase 2-3)
+- [#236](https://github.com/Peleke/buildlog-template/issues/236) — Track-and-Stop optimal stopping
+- [#100](https://github.com/Peleke/buildlog-template/issues/100) — sqlite-vec + emergent rule graphs
+- [#87](https://github.com/Peleke/buildlog-template/issues/87) — qortex knowledge graph integration
+- [qortex#96](https://github.com/Peleke/qortex/issues/96) — L-MVA (BudgetLearner)
+- [qortex#63](https://github.com/Peleke/qortex/issues/63) — Production deployment (triple interface)
