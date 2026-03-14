@@ -142,7 +142,7 @@ The qortex backend is API-compatible with builtin. All MCP tools, CLI commands, 
 | Arm decay | Direct parameter manipulation | Via qortex's `ArmState` dataclass |
 | Credit propagation | None (standalone) | Shared across qortex consumers |
 | OTEL tracing | None | Available if qortex is configured for it |
-| Python requirement | 3.10+ | 3.11+ |
+| Python requirement | 3.11+ | 3.11+ |
 
 ### Context translation
 

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - A virtual environment (PEP 668 blocks system-level installs)
 
 ## Install
