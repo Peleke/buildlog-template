@@ -4,9 +4,11 @@
 #
 # v2: Expanded with Wikipedia "Signs of AI writing" catalog (2026-02-07)
 # Source: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
+# v3: Deep-research LLM detection synthesis (2026-03-14)
+# Sources: ACL/COLING, Science Advances, PNAS, GPTZero, Ole Reissmann, et al.
 
 persona: bragi
-version: 2
+version: 3
 
 rules:
   # ── Original v1 rules ──────────────────────────────────────────────
@@ -171,3 +173,67 @@ rules:
     references:
       - url: "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing#Undue_emphasis_on_notability,_attribution,_and_media_coverage"
         title: "Wikipedia: Signs of AI writing — Notability assertions"
+
+  # ── v3 rules (from deep-research LLM-detection synthesis, 2026-03-14) ──
+
+  - rule: "Contrastive negation overuse"
+    category: prose
+    context: "Persuasive paragraphs, positioning statements, value propositions"
+    antipattern: "'It's not X, it's Y', 'not a webapp, an MCP server', 'not your instructions, but what you approve' — the RLHF-favorite pivot structure used more than once per page"
+    rationale: "Antithesis is a legitimate device. Once. When every other paragraph deploys 'not X, Y' it stops being rhetoric and becomes a tic. One per page max. If you need to contrast, restructure: state what the thing is, let the reader infer what it isn't."
+    references:
+      - url: "https://olereissmann.com/contrastive-negation-used-to-be-a-rhetorical-device-now-it-screams-i-used-chatgpt/"
+        title: "Ole Reissmann: Contrastive negation screams ChatGPT"
+
+  - rule: "Epistemic flatness"
+    category: prose
+    context: "Any multi-paragraph piece mixing established facts with speculation or opinion"
+    antipattern: "Every claim at the same confidence level. No difference between 'this is how TCP works' and 'we think this might improve convergence'. Uniform authority across certainties and uncertainties."
+    rationale: "Human experts modulate confidence constantly. 'I know X. Y seems likely. Z is pure speculation.' The variation in conviction is itself information. If every sentence reads at the same confidence, the text has no epistemic texture and reads as generated."
+    references:
+      - url: "https://gist.github.com/lmmx/d91de290ea4e6d9631e32c2dd43da413"
+        title: "AI Tells Rubric — epistemic flatness as fundamental category"
+
+  - rule: "Throat-clearing fillers"
+    category: prose
+    context: "Sentence openers, paragraph transitions, any preamble before the actual point"
+    antipattern: "'It's worth noting that', 'It's important to understand that', 'In today's fast-paced world', 'At its core', 'Here's the thing', 'The key takeaway is', 'When it comes to', 'Let that sink in', 'In the ever-evolving landscape of'"
+    rationale: "These phrases contain zero information. They are runway before takeoff. Delete them and start with the actual point. If the sentence still works without the opener, the opener was filler."
+    references:
+      - url: "https://www.hanalarockwriting.com/post/10-common-chatgpt-isms-what-to-watch-out-for-when-writing-content-with-ai-infographics"
+        title: "Hana LaRock: 10 Common ChatGPT-isms"
+
+  - rule: "Sentence length uniformity (low burstiness)"
+    category: prose
+    context: "Any passage longer than three paragraphs"
+    antipattern: "Every sentence between 15-25 words. No fragments. No long, winding explorations. Metronomic regularity that the reader's subconscious registers as 'wrong' even when they can't say why."
+    rationale: "Human thought is uneven. Short bursts of certainty. Long winding qualifications. Fragments for punch. If a passage has no sentence under 8 words and none over 30, it lacks burstiness and reads as machine-generated."
+    references:
+      - url: "https://gptzero.me/news/perplexity-and-burstiness-what-is-it/"
+        title: "GPTZero: Perplexity and Burstiness"
+      - url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11874169/"
+        title: "PNAS 2025: Do LLMs Write Like Humans?"
+
+  - rule: "Performative self-answered questions"
+    category: prose
+    context: "Paragraph transitions, section openers, persuasive passages"
+    antipattern: "'The result? More people are...', 'So what does this mean? It means...', 'Why does this matter? Because...', 'The question is: can we? The answer is yes.' — asking and immediately answering your own question as a transition device"
+    rationale: "This is a copywriting bucket brigade technique that LLMs deploy mechanically as a paragraph connector. Humans pose questions when genuinely exploring uncertainty. If the answer immediately follows, the question was decorative."
+
+  - rule: "Nominalization (verb-to-noun inflation)"
+    category: prose
+    context: "Any sentence using abstract noun forms of common verbs"
+    antipattern: "'the implementation of' instead of 'implementing', 'the utilization of' instead of 'using', 'the development of' instead of 'developing', 'the establishment of' instead of 'establishing'"
+    rationale: "LLMs nominalize at 1.5-2x the human rate. It inflates sentence length, buries the actor, and makes prose feel bureaucratic. Use the verb. 'We implemented X' not 'the implementation of X was undertaken.'"
+    references:
+      - url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11422446/"
+        title: "Contrasting Linguistic Patterns in Human and LLM-Generated Text"
+
+  - rule: "Both-sides hedging (false balance)"
+    category: prose
+    context: "Opinion pieces, technical decisions, any passage where one position is clearly stronger"
+    antipattern: "'While X has merit, it's also true that Y', 'On one hand... on the other hand...', 'There are valid arguments on both sides' — reflexively presenting counterpoints to every claim, even when evidence overwhelmingly supports one position"
+    rationale: "RLHF trains models to be safe and inoffensive. The result is text that manages to sound enthusiastic and devoid of opinion simultaneously. Take a position. Dismiss bad arguments. Commit to claims. The willingness to be wrong is a marker of human authorship."
+    references:
+      - url: "https://arxiv.org/html/2411.15287v1"
+        title: "Sycophancy in Large Language Models"
