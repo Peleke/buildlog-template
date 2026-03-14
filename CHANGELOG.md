@@ -7,6 +7,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-03-14
+
+### Added
+- **`ensure_session()`** — auto-creates a lightweight session when none exists. `buildlog_commit()` no longer blocks without manual `experiment start`. New users can `pip install buildlog` and commit immediately.
+
+### Changed
+- **`commit()` enforcement block** replaced with `ensure_session()` call. The old behavior (block and return error) is gone. Lightweight sessions are distinguishable by `notes="auto"` and `selected_rules=[]`.
+
+### Fixed
+- **`__version__` synced** to 0.22.0 (was stuck at 0.21.1).
+- **Python 3.10+ → 3.11+** across 6 docs files to match `requires-python`.
+- **Render target paths** in configuration.md now match actual renderer code (`.cursorrules` → `.cursor/rules/buildlog-rules.mdc`, etc.).
+- **Bragi rule count** updated from 9 → 27 in review-gauntlet.md.
+- **README**: "35 tools" → 36, "v0.20" → v0.22.
+- **Stale v0.8 markers** removed from concepts.md.
+
 ## [0.22.0] - 2026-03-14
 
 ### Added
