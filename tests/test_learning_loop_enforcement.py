@@ -14,17 +14,25 @@ import pytest
 class TestCommitBlocksWithoutSession:
     """commit() must block when no active experiment session exists."""
 
-    def test_commit_blocked_without_active_session(self, tmp_path: Path):
-        """commit() returns error when no session is active."""
+    def test_commit_auto_creates_session_without_active_session(self, tmp_path: Path):
+        """commit() auto-creates a lightweight session when none is active."""
         from buildlog.core.operations import commit
+        from buildlog.storage import get_backend
 
         buildlog_dir = tmp_path / "buildlog"
         buildlog_dir.mkdir()
         (buildlog_dir / ".buildlog").mkdir()
 
         result = commit(buildlog_dir, git_args=["-m", "test"])
-        assert result.error is not None
-        assert "No active experiment session" in result.error
+        # May fail at git, but must NOT fail at session check
+        if result.error:
+            assert "No active experiment session" not in result.error
+
+        # A lightweight session was auto-created
+        backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
+        session_data = backend.load_active_session(project_id)
+        assert session_data is not None
+        assert session_data.get("notes") == "auto"
 
     def test_commit_allowed_with_active_session(self, tmp_path: Path):
         """commit() proceeds when a session is active."""
