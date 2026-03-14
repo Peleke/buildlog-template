@@ -1174,9 +1174,14 @@ def _(
         [
             _header,
             _insight_kpis,
-            mo.hstack([_insights_chart, _learnings_chart], widths=[0.45, 0.55]),
+            mo.hstack(
+                [
+                    mo.vstack([_insights_chart, _health_md]),
+                    _learnings_chart,
+                ],
+                widths=[0.45, 0.55],
+            ),
             _learnings_note,
-            _health_md,
         ]
     )
     return (insights_tab,)
