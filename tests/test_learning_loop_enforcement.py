@@ -14,8 +14,8 @@ import pytest
 class TestCommitBlocksWithoutSession:
     """commit() must block when no active experiment session exists."""
 
-    def test_commit_auto_creates_session_without_active_session(self, tmp_path: Path):
-        """commit() auto-creates a lightweight session when none is active."""
+    def test_commit_does_not_create_session(self, tmp_path: Path):
+        """commit() no longer creates sessions — decoupled from session lifecycle."""
         from buildlog.core.operations import commit
         from buildlog.storage import get_backend
 
@@ -28,11 +28,10 @@ class TestCommitBlocksWithoutSession:
         if result.error:
             assert "No active experiment session" not in result.error
 
-        # A lightweight session was auto-created
+        # No session should be created — commit is a git op, not a learning op
         backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
         session_data = backend.load_active_session(project_id)
-        assert session_data is not None
-        assert session_data.get("notes") == "auto"
+        assert session_data is None
 
     def test_commit_allowed_with_active_session(self, tmp_path: Path):
         """commit() proceeds when a session is active."""
@@ -50,19 +49,22 @@ class TestCommitBlocksWithoutSession:
         if result.error:
             assert "No active experiment session" not in result.error
 
-    def test_commit_bypass_with_enforce_zero(self, tmp_path: Path):
-        """BUILDLOG_ENFORCE=0 bypasses session check."""
+    def test_commit_without_enforce_env_var(self, tmp_path: Path):
+        """BUILDLOG_ENFORCE is no longer used in commit (decoupled)."""
         from buildlog.core.operations import commit
+        from buildlog.storage import get_backend
 
         buildlog_dir = tmp_path / "buildlog"
         buildlog_dir.mkdir()
         (buildlog_dir / ".buildlog").mkdir()
 
-        with patch.dict(os.environ, {"BUILDLOG_ENFORCE": "0"}):
-            result = commit(buildlog_dir, git_args=["-m", "test"])
-            # Should NOT block for session — might fail at git, that's fine
-            if result.error:
-                assert "No active experiment session" not in result.error
+        # Even without BUILDLOG_ENFORCE, commit should not create sessions
+        result = commit(buildlog_dir, git_args=["-m", "test"])
+        if result.error:
+            assert "No active experiment session" not in result.error
+
+        backend, project_id = get_backend(buildlog_dir, project_root=tmp_path)
+        assert backend.load_active_session(project_id) is None
 
     def test_commit_session_check_failure_does_not_block(self, tmp_path: Path):
         """If storage is broken, don't block commits."""
