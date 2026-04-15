@@ -31,6 +31,7 @@ from buildlog.core.operations import (
     Session,
     SessionMetrics,
     StartSessionResult,
+    _require_active_session,
 )
 from buildlog.core.operations import start_session as _core_start_session
 from buildlog.storage import StorageBackend, get_backend
@@ -187,11 +188,8 @@ def end_session(
     """
     backend, project_id = _get_storage(buildlog_dir)
 
-    session_data = backend.load_active_session(project_id)
-    if session_data is None:
-        raise ValueError("No active session to end")
-
-    session = Session.from_dict(session_data)  # type: ignore[arg-type]
+    # Zombie sessions get upgraded before ending (TS selection populated).
+    session = _require_active_session(buildlog_dir, auto_start=False)
 
     now = datetime.now(timezone.utc)
     session.ended_at = now
@@ -244,13 +242,9 @@ def log_mistake(
     """
     backend, project_id = _get_storage(buildlog_dir)
 
-    session_data = backend.load_active_session(project_id)
-    if session_data is None:
-        raise ValueError(
-            "No active session - start one with 'buildlog experiment start'"
-        )
-
-    session_id = session_data["id"]
+    # Auto-create session if none exists — guarantees Thompson Sampling.
+    session = _require_active_session(buildlog_dir)
+    session_id = session.id
 
     now = datetime.now(timezone.utc)
     mistake_id = _generate_mistake_id(error_class, now)
@@ -275,14 +269,14 @@ def log_mistake(
 
     backend.append_event(project_id, "mistakes", mistake.to_dict())  # type: ignore[arg-type]
 
-    selected_rules = session_data.get("selected_rules", [])
+    selected_rules = session.selected_rules
     if selected_rules:
         bandit = get_learning_backend(buildlog_dir)
-        context = session_data.get("error_class") or "general"
+        bandit_context = session.error_class or "general"
         bandit.batch_update(
             rule_ids=selected_rules,
             reward=0.0,
-            context=context,
+            context=bandit_context,
         )
 
     message = f"Logged mistake: {error_class}"
@@ -331,14 +325,17 @@ def log_reward(
 
     backend, project_id = _get_storage(buildlog_dir)
 
-    session_data = backend.load_active_session(project_id)
-    if session_data is not None:
+    # auto_start=False: reward is terminal, don't create a session.
+    try:
+        session = _require_active_session(buildlog_dir, auto_start=False)
         if session_id is None:
-            session_id = session_data.get("id")
+            session_id = session.id
         if rules_active is None:
-            rules_active = session_data.get("selected_rules", [])
+            rules_active = session.selected_rules
         if error_class is None:
-            error_class = session_data.get("error_class")
+            error_class = session.error_class
+    except ValueError:
+        pass  # No active session — fine for log_reward
 
     event = RewardEvent(
         id=reward_id,

@@ -4,6 +4,10 @@
 
 Capture what works. Measure whether it actually helped. Drop what didn't.
 
+
+!!! note "Why buildlog-template?"
+    This is buildlog, the canonical tool. The repo is named `buildlog-template` because it is designed to be forked directly into any project. The installable package is `buildlog`.
+
 ---
 
 buildlog extracts decision patterns from your AI-assisted work and uses a [Thompson Sampling contextual bandit](theory/index.md) to surface rules that reduce mistakes, then tracks whether they did. The feedback loop is statistical, not vibes-based.

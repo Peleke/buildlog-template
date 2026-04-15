@@ -1240,13 +1240,17 @@ def log_reward(
         except Exception:
             pass
 
-    # Fall back to session data for session_id and error_class
-    session_data = backend.load_active_session(project_id)
-    if session_data is not None:
+    # Fall back to active session for session_id and error_class.
+    # auto_start=False: reward is a terminal event, don't create a session.
+    # Zombie sessions get upgraded so selected_rules are available.
+    try:
+        session = _require_active_session(buildlog_dir, auto_start=False)
         if session_id is None:
-            session_id = session_data.get("id")
+            session_id = session.id
         if error_class is None:
-            error_class = session_data.get("error_class")
+            error_class = session.error_class
+    except ValueError:
+        pass  # No active session — fine for log_reward
 
     event = RewardEvent(
         id=reward_id,
@@ -1650,9 +1654,8 @@ class Session:
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
             "rules_at_start": self.rules_at_start,
             "rules_at_end": self.rules_at_end,
+            "selected_rules": self.selected_rules,
         }
-        if self.selected_rules:
-            result["selected_rules"] = self.selected_rules
         if self.entry_file is not None:
             result["entry_file"] = self.entry_file
         if self.error_class is not None:
@@ -2116,48 +2119,92 @@ def _find_similar_prior_mistake(
 # -----------------------------------------------------------------------------
 
 
-def ensure_session(buildlog_dir: Path) -> str:
-    """Ensure an active session exists, creating a lightweight one if needed.
+def _require_active_session(
+    buildlog_dir: Path,
+    *,
+    auto_start: bool = True,
+) -> Session:
+    """Return the active session, upgrading zombies and auto-creating if needed.
 
-    If an active session already exists, return its ID (no-op).
-    If not, create a minimal session with no Thompson Sampling overhead:
-    just an ID, timestamp, and empty selected_rules.  This lets
-    ``commit()`` and other session-dependent code proceed without
-    requiring manual ``experiment start`` ceremony.
+    This is the SINGLE enforcement point for session-dependent operations.
+    It guarantees the returned Session has Thompson Sampling selection
+    (non-empty ``selected_rules`` when rules exist in the pool).
 
-    Lightweight sessions are distinguishable by their empty
-    ``selected_rules`` and ``notes="auto"`` marker.
+    Zombie detection: a session with ``notes="auto"`` and empty
+    ``selected_rules`` while the rule pool is non-empty is a zombie
+    created by the old ``ensure_session()``.  These are upgraded in-place
+    by running Thompson Sampling and updating storage.
+
+    Args:
+        buildlog_dir: Path to buildlog directory.
+        auto_start: If True (default), create a real session via
+            ``start_session()`` when none exists.  If False, raise
+            ``ValueError`` when no active session is found.
 
     Returns:
-        The session ID (existing or newly created).
+        The active Session object with ``selected_rules`` populated.
+
+    Raises:
+        ValueError: If ``auto_start=False`` and no active session exists.
     """
-    try:
-        backend, project_id = _get_storage(buildlog_dir)
-        session_data = backend.load_active_session(project_id)
-        if session_data is not None:
-            return session_data["id"]
-    except Exception:
-        pass  # Storage broken — create a new session anyway
+    backend, project_id = _get_storage(buildlog_dir)
+    session_data = backend.load_active_session(project_id)
 
-    now = datetime.now(timezone.utc)
-    session_id = _generate_session_id(now)
+    if session_data is not None:
+        session = Session.from_dict(session_data)  # type: ignore[arg-type]
 
-    session = Session(
-        id=session_id,
-        started_at=now,
-        rules_at_start=[],
-        selected_rules=[],
-        error_class=None,
-        notes="auto",
+        # --- Zombie upgrade path ---
+        # Detect: notes="auto" AND empty selected_rules AND rules exist
+        if session.notes == "auto" and not session.selected_rules:
+            current_rules = _get_current_rules(buildlog_dir)
+            if current_rules:
+                bandit = get_learning_backend(buildlog_dir)
+                seed_rule_ids, seed_confidence_map = _get_seed_rule_ids(buildlog_dir)
+                select_k = max(10, len(current_rules) // 10)
+
+                session.selected_rules = bandit.select(
+                    candidates=current_rules,
+                    context=session.error_class or "general",
+                    k=min(select_k, len(current_rules)),
+                    seed_rule_ids=seed_rule_ids,
+                    seed_confidence_map=seed_confidence_map or None,
+                )
+                session.rules_at_start = current_rules
+                session.notes = "auto:upgraded"
+
+                backend.save_active_session(
+                    project_id, session.to_dict()  # type: ignore[arg-type]
+                )
+
+        return session
+
+    # No active session
+    if not auto_start:
+        raise ValueError("No active session to end")
+
+    # Create a real session via start_session() — full Thompson Sampling
+    start_session(buildlog_dir, notes="auto:created")
+    # Re-load the freshly saved session
+    session_data = backend.load_active_session(project_id)
+    return Session.from_dict(session_data)  # type: ignore[arg-type]
+
+
+def ensure_session(buildlog_dir: Path) -> str:
+    """Deprecated: use ``_require_active_session()`` instead.
+
+    Kept for backward compatibility.  Returns session ID (string).
+    """
+    import warnings
+
+    warnings.warn(
+        "ensure_session() is deprecated.  Session-dependent operations now "
+        "use _require_active_session() internally, which guarantees "
+        "Thompson Sampling.",
+        DeprecationWarning,
+        stacklevel=2,
     )
-
-    try:
-        backend, project_id = _get_storage(buildlog_dir)
-        backend.save_active_session(project_id, session.to_dict())  # type: ignore[arg-type]
-    except Exception:
-        pass  # Best-effort — don't block the caller
-
-    return session_id
+    session = _require_active_session(buildlog_dir)
+    return session.id
 
 
 def start_session(
@@ -2410,12 +2457,10 @@ def end_session(
     """
     backend, project_id = _get_storage(buildlog_dir)
 
-    session_data = backend.load_active_session(project_id)
-    if session_data is None:
-        raise ValueError("No active session to end")
-
-    # Load active session
-    session = Session.from_dict(session_data)  # type: ignore[arg-type]
+    # auto_start=False: ending a nonexistent session is an error.
+    # Zombie sessions get upgraded (TS selection) before ending, so the
+    # auto-reward path at the bottom gets real selected_rules.
+    session = _require_active_session(buildlog_dir, auto_start=False)
 
     # Update session with end info
     now = datetime.now(timezone.utc)
@@ -2656,15 +2701,12 @@ def log_mistake(
 
     backend, project_id = _get_storage(buildlog_dir)
 
-    session_data = backend.load_active_session(project_id)
-    if session_data is not None:
-        session_id = session_data["id"]
-    else:
-        # No active session — use a synthetic ID so gauntlet auto-logging
-        # and standalone mistake logging work without session ceremony.
-        session_id = (
-            f"no-session-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
-        )
+    # Require a real session — auto-create via Thompson Sampling if needed.
+    # No more synthetic "no-session-*" IDs: every mistake must be attributed
+    # to a real session so the bandit gets negative feedback.
+    session = _require_active_session(buildlog_dir)
+    session_id = session.id
+    session_data = session.to_dict()
 
     now = datetime.now(timezone.utc)
     mistake_id = _generate_mistake_id(error_class, now)
@@ -2713,13 +2755,11 @@ def log_mistake(
     # Rules that repeatedly fail will become less likely to be selected.
     # =========================================================================
 
-    selected_rules = session_data.get("selected_rules", []) if session_data else []
+    selected_rules = session.selected_rules
     if selected_rules:
         bandit = get_learning_backend(buildlog_dir)
 
-        bandit_context = (
-            session_data.get("error_class") or "general" if session_data else "general"
-        )
+        bandit_context = session.error_class or "general"
 
         bandit.batch_update(
             rule_ids=selected_rules,
@@ -2737,7 +2777,7 @@ def log_mistake(
         gauntlet_map = _build_skill_to_gauntlet_map(buildlog_dir)
         manifest = _mistake_to_manifest(
             mistake=mistake,
-            session_data=session_data or {},
+            session_data=dict(session_data),
             selected_rules=selected_rules,
             project_id=project_id,
             registry=DEFAULT_REGISTRY,
@@ -4228,26 +4268,13 @@ def commit(
     Returns:
         CommitResult with commit info and entry update status.
     """
-    import os
     import subprocess
     from datetime import date
 
-    # =========================================================================
-    # SESSION: Ensure an active session exists (auto-create if needed)
-    # =========================================================================
-    # The learning loop uses session-scoped data for RMR boundaries.
-    # Instead of blocking, we auto-create a lightweight session when none
-    # exists.  Full Thompson Sampling sessions are created by explicit
-    # ``experiment start`` or the session-start hook — this is the fallback.
-    #
-    # Skip entirely with BUILDLOG_ENFORCE=0.
-    # =========================================================================
-    enforce = os.environ.get("BUILDLOG_ENFORCE", "1") != "0"
-    if enforce and buildlog_dir.exists():
-        try:
-            ensure_session(buildlog_dir)
-        except Exception:
-            pass  # Don't block commits if storage is broken
+    # Session lifecycle is managed by _require_active_session() inside
+    # session-dependent operations (log_mistake, log_reward, end_session)
+    # and explicitly via start_session() / experiment start.  commit() is
+    # a git operation — it does not create or require sessions.
 
     run_kwargs: dict = {"cwd": cwd} if cwd else {}
 

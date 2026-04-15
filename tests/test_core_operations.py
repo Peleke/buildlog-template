@@ -805,19 +805,21 @@ class TestLogMistake:
         assert result.was_repeat
         assert result.similar_prior is not None
 
-    def test_raises_error_if_no_active_session(self, tmp_path: Path):
-        """Should raise ValueError if no active session."""
+    def test_auto_creates_session_if_none_exists(self, tmp_path: Path):
+        """log_mistake auto-creates a session via _require_active_session."""
         from buildlog.core import log_mistake
 
         buildlog_dir = tmp_path / "buildlog"
         buildlog_dir.mkdir()
 
-        with pytest.raises(ValueError, match="No active session"):
-            log_mistake(
-                buildlog_dir,
-                error_class="missing_test",
-                description="Some mistake",
-            )
+        result = log_mistake(
+            buildlog_dir,
+            error_class="missing_test",
+            description="Some mistake",
+        )
+        # Should succeed and have a real session ID
+        assert result.session_id.startswith("session-")
+        assert not result.session_id.startswith("no-session-")
 
 
 class TestLogMistakeValidation:
